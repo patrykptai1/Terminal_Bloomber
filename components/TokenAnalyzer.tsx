@@ -3,7 +3,7 @@
 import { useState, useCallback, useMemo, useEffect } from 'react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Progress } from '@/components/ui/progress'
-import { ChevronDown, ChevronRight, BookmarkPlus, BookmarkCheck, Copy, ExternalLink, Trophy, Zap, TrendingUp, Crown, Loader2, History } from 'lucide-react'
+import { ChevronDown, ChevronRight, BookmarkPlus, BookmarkCheck, Copy, Check, ExternalLink, Trophy, Zap, TrendingUp, Crown, Loader2, History } from 'lucide-react'
 import { addToBook, removeFromBook, isInBook } from '@/lib/walletBook'
 
 // ── Types matching API response ────────────────────────────────────────
@@ -28,10 +28,10 @@ interface InsiderWallet {
   tokens: TokenHit[]
   totalRealizedPnl: number
   totalUnrealizedPnl: number
-  winRate: number
   avgEntryMcap: number
   solBalanceUsd: number
   insiderScore: number
+  walletType: 'HOLDER' | 'TRADER'
   tags: string[]
   labels: string[]
 }
@@ -62,18 +62,8 @@ function scoreColor(score: number): string {
   return 'text-gray-600 bg-gray-50 border-gray-300'
 }
 
-function scoreBg(score: number): string {
-  if (score >= 70) return 'from-emerald-500 to-emerald-600'
-  if (score >= 45) return 'from-amber-500 to-amber-600'
-  return 'from-gray-400 to-gray-500'
-}
-
 function pnlColor(n: number): string {
   return n > 0 ? 'text-emerald-600' : n < 0 ? 'text-red-500' : 'text-gray-500'
-}
-
-function pnlBg(n: number): string {
-  return n > 0 ? 'bg-emerald-50 border-emerald-200' : n < 0 ? 'bg-red-50 border-red-200' : 'bg-gray-50 border-gray-200'
 }
 
 function tokenEarlyLabel(entryMcap: number, currentMcap: number): { text: string; bg: string } | null {
@@ -129,7 +119,6 @@ function TradeHistory({ wallet, tokens }: { wallet: string; tokens: TokenHit[] }
   const [error, setError] = useState<string | null>(null)
   const [expandedToken, setExpandedToken] = useState<Set<string>>(new Set())
 
-  // Auto-load trades on mount
   const fetchTrades = useCallback(async () => {
     if (trades) return
     setLoading(true)
@@ -150,7 +139,6 @@ function TradeHistory({ wallet, tokens }: { wallet: string; tokens: TokenHit[] }
     }
   }, [wallet, tokens, trades])
 
-  // Auto-load on mount
   useEffect(() => { fetchTrades() }, [fetchTrades])
 
   const toggleToken = (mint: string) => {
@@ -184,12 +172,10 @@ function TradeHistory({ wallet, tokens }: { wallet: string; tokens: TokenHit[] }
 
         return (
           <div key={token.mint} className="bg-white rounded-lg border border-gray-200 overflow-hidden">
-            {/* Token header — always visible */}
             <div
               className="cursor-pointer hover:bg-gray-50/80 transition-colors"
               onClick={() => toggleToken(token.mint)}
             >
-              {/* Top row: token name + entry info */}
               <div className="flex items-center gap-2 px-3 pt-2 pb-1">
                 <a
                   href={`https://gmgn.ai/sol/token/${token.mint}`}
@@ -222,9 +208,7 @@ function TradeHistory({ wallet, tokens }: { wallet: string; tokens: TokenHit[] }
                 </span>
               </div>
 
-              {/* Entry summary row */}
               <div className="flex gap-1.5 px-3 pb-2 flex-wrap text-[10px]">
-                {/* Entry date & mcap */}
                 {firstBuy ? (
                   <>
                     <span className="bg-violet-50 text-violet-700 font-medium px-2 py-0.5 rounded">
@@ -267,14 +251,12 @@ function TradeHistory({ wallet, tokens }: { wallet: string; tokens: TokenHit[] }
               </div>
             </div>
 
-            {/* Expanded: full trade table */}
             {isOpen && (
               <div className="border-t border-gray-100 bg-gray-50/50 px-3 py-2">
                 {tokenTrades.length === 0 ? (
                   <p className="text-[11px] text-gray-400 py-1">Brak danych o transakcjach z GMGN</p>
                 ) : (
                   <>
-                    {/* Summary stats */}
                     <div className="grid grid-cols-2 sm:grid-cols-4 gap-1.5 mb-2 text-[10px]">
                       <div className="bg-white rounded border border-gray-200 px-2 py-1.5">
                         <div className="text-[9px] text-gray-400 font-medium">Pierwszy zakup</div>
@@ -300,7 +282,6 @@ function TradeHistory({ wallet, tokens }: { wallet: string; tokens: TokenHit[] }
                       </div>
                     </div>
 
-                    {/* Trade table */}
                     <div className="overflow-x-auto">
                       <table className="w-full text-[10px]">
                         <thead>
@@ -363,13 +344,16 @@ function TradeHistory({ wallet, tokens }: { wallet: string; tokens: TokenHit[] }
 
 type SummaryTab = 'smart' | 'profit' | 'early'
 
-// ── Summary Table Component ────────────────────────────────────────────
+// ── Main Table Component ──────────────────────────────────────────────
 
-function SummaryTable({ wallets, onCopy, onBookmark, bookmarks }: {
+function WalletTable({ wallets, onCopy, onBookmark, bookmarks, copiedAddr, expanded, onToggleExpand }: {
   wallets: InsiderWallet[]
   onCopy: (a: string) => void
   onBookmark: (a: string) => void
   bookmarks: Set<string>
+  copiedAddr: string | null
+  expanded: Set<string>
+  onToggleExpand: (a: string) => void
 }) {
   const [tab, setTab] = useState<SummaryTab>('smart')
 
@@ -377,23 +361,22 @@ function SummaryTable({ wallets, onCopy, onBookmark, bookmarks }: {
     const arr = [...wallets]
     switch (tab) {
       case 'smart':
-        return arr.sort((a, b) => b.insiderScore - a.insiderScore).slice(0, 30)
+        return arr.sort((a, b) => b.insiderScore - a.insiderScore)
       case 'profit':
         return arr.sort((a, b) =>
           (b.totalRealizedPnl + b.totalUnrealizedPnl) - (a.totalRealizedPnl + a.totalUnrealizedPnl)
-        ).slice(0, 30)
+        )
       case 'early':
         return arr
           .filter(w => w.avgEntryMcap > 0)
           .sort((a, b) => a.avgEntryMcap - b.avgEntryMcap)
-          .slice(0, 30)
     }
   }, [wallets, tab])
 
   const tabs: { key: SummaryTab; label: string; icon: typeof Crown }[] = [
     { key: 'smart', label: 'Smart Money', icon: Crown },
     { key: 'profit', label: 'Top Profit', icon: TrendingUp },
-    { key: 'early', label: 'Earliest Entry', icon: Zap },
+    { key: 'early', label: 'Najwczesniejsze wejscia', icon: Zap },
   ]
 
   return (
@@ -401,7 +384,7 @@ function SummaryTable({ wallets, onCopy, onBookmark, bookmarks }: {
       <CardHeader className="pb-2 pt-3 px-3">
         <div className="flex items-center gap-1">
           <Trophy size={14} className="text-orange-500" />
-          <CardTitle className="text-xs font-semibold text-gray-700">Podsumowanie — Top 30</CardTitle>
+          <CardTitle className="text-xs font-semibold text-gray-700">Wyniki — Top {sorted.length}</CardTitle>
         </div>
         <div className="flex gap-1 mt-2">
           {tabs.map(t => (
@@ -427,71 +410,137 @@ function SummaryTable({ wallets, onCopy, onBookmark, bookmarks }: {
               <tr className="border-b border-gray-100 text-gray-400 uppercase text-[10px]">
                 <th className="text-left pl-3 pr-1 py-1.5 font-medium">#</th>
                 <th className="text-left px-1 py-1.5 font-medium">Wallet</th>
+                <th className="text-left px-1 py-1.5 font-medium">Tokeny</th>
                 <th className="text-left px-1 py-1.5 font-medium">Labels</th>
+                <th className="text-center px-1 py-1.5 font-medium">Typ</th>
                 <th className="text-right px-1 py-1.5 font-medium">Score</th>
-                <th className="text-right px-1 py-1.5 font-medium">Tokens</th>
+                <th className="text-right px-1 py-1.5 font-medium">Saldo</th>
                 <th className="text-right px-1 py-1.5 font-medium">Total PnL</th>
                 <th className="text-right px-1 py-1.5 font-medium">Avg Entry</th>
-                <th className="text-right px-1 py-1.5 font-medium">Win%</th>
-                <th className="text-center px-1 pr-3 py-1.5 font-medium">Actions</th>
+                <th className="text-center px-1 pr-3 py-1.5 font-medium">Akcje</th>
               </tr>
             </thead>
             <tbody>
               {sorted.map((w, i) => {
                 const totalPnl = w.totalRealizedPnl + w.totalUnrealizedPnl
                 const isSaved = bookmarks.has(w.address)
+                const isExpanded = expanded.has(w.address)
+                const isCopied = copiedAddr === w.address
                 return (
-                  <tr key={w.address} className="border-b border-gray-50 hover:bg-gray-50/50">
-                    <td className="pl-3 pr-1 py-1.5 text-gray-400 font-medium">{i + 1}</td>
-                    <td className="px-1 py-1.5">
-                      <div className="flex items-center gap-1">
-                        <span className="font-mono text-gray-700">{shortAddr(w.address)}</span>
-                        <button onClick={() => onCopy(w.address)} className="text-gray-300 hover:text-gray-500">
-                          <Copy size={10} />
-                        </button>
-                      </div>
-                    </td>
-                    <td className="px-1 py-1.5">
-                      <div className="flex flex-wrap gap-0.5">
-                        {w.labels.slice(0, 3).map(l => (
-                          <span key={l} className={`text-[9px] font-bold px-1.5 py-0 rounded border ${LABEL_STYLES[l] || 'bg-gray-100 text-gray-500 border-gray-200'}`}>
-                            {l}
+                  <tr key={w.address} className="group">
+                    <td colSpan={10} className="p-0">
+                      {/* Main row */}
+                      <div
+                        className={`grid grid-cols-[auto_1fr_auto_auto_auto_auto_auto_auto_auto_auto] items-center cursor-pointer hover:bg-gray-50/50 border-b border-gray-50 ${isExpanded ? 'bg-orange-50/30' : ''}`}
+                        onClick={() => onToggleExpand(w.address)}
+                      >
+                        <div className="pl-3 pr-1 py-1.5 text-gray-400 font-medium text-[11px]">{i + 1}</div>
+                        <div className="px-1 py-1.5">
+                          <div className="flex items-center gap-1">
+                            <span className="font-mono text-gray-700 text-[11px]">{shortAddr(w.address)}</span>
+                            <button
+                              onClick={e => { e.stopPropagation(); onCopy(w.address) }}
+                              className={`shrink-0 transition-colors ${isCopied ? 'text-emerald-500' : 'text-gray-300 hover:text-gray-500'}`}
+                              title="Kopiuj adres"
+                            >
+                              {isCopied ? <Check size={10} /> : <Copy size={10} />}
+                            </button>
+                          </div>
+                        </div>
+                        <div className="px-1 py-1.5">
+                          <div className="flex flex-wrap gap-0.5 max-w-[120px]">
+                            {w.tokens.slice(0, 3).map(t => (
+                              <span key={t.mint} className="text-[9px] font-bold text-indigo-600 bg-indigo-50 px-1.5 py-0 rounded">
+                                {t.symbol}
+                              </span>
+                            ))}
+                            {w.tokens.length > 3 && (
+                              <span className="text-[9px] text-gray-400">+{w.tokens.length - 3}</span>
+                            )}
+                          </div>
+                        </div>
+                        <div className="px-1 py-1.5">
+                          <div className="flex flex-wrap gap-0.5">
+                            {w.labels.slice(0, 2).map(l => (
+                              <span key={l} className={`text-[9px] font-bold px-1.5 py-0 rounded border ${LABEL_STYLES[l] || 'bg-gray-100 text-gray-500 border-gray-200'}`}>
+                                {l}
+                              </span>
+                            ))}
+                          </div>
+                        </div>
+                        <div className="px-1 py-1.5 text-center">
+                          <span className={`text-[9px] font-bold px-2 py-0.5 rounded ${
+                            w.walletType === 'HOLDER'
+                              ? 'bg-emerald-100 text-emerald-700'
+                              : 'bg-orange-100 text-orange-700'
+                          }`}>
+                            {w.walletType}
                           </span>
-                        ))}
+                        </div>
+                        <div className="px-1 py-1.5 text-right">
+                          <span className={`font-bold px-1.5 py-0.5 rounded text-[10px] border ${scoreColor(w.insiderScore)}`}>
+                            {w.insiderScore}
+                          </span>
+                        </div>
+                        <div className="px-1 py-1.5 text-right text-[11px] text-sky-600 font-medium">
+                          {formatUsd(w.solBalanceUsd)}
+                        </div>
+                        <div className={`px-1 py-1.5 text-right text-[11px] font-bold ${pnlColor(totalPnl)}`}>
+                          {totalPnl > 0 ? '+' : ''}{formatUsd(totalPnl)}
+                        </div>
+                        <div className="px-1 py-1.5 text-right text-[11px] text-violet-600 font-medium">
+                          {formatUsd(w.avgEntryMcap)}
+                        </div>
+                        <div className="px-1 pr-3 py-1.5 text-center">
+                          <div className="flex items-center justify-center gap-1" onClick={e => e.stopPropagation()}>
+                            <a
+                              href={`https://gmgn.ai/sol/address/${w.address}`}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="text-gray-300 hover:text-blue-500"
+                              title="GMGN"
+                            >
+                              <ExternalLink size={11} />
+                            </a>
+                            <button
+                              onClick={() => onBookmark(w.address)}
+                              className={`${isSaved ? 'text-orange-500' : 'text-gray-300 hover:text-orange-400'}`}
+                              title={isSaved ? 'Usun' : 'Dodaj'}
+                            >
+                              {isSaved ? <BookmarkCheck size={12} /> : <BookmarkPlus size={12} />}
+                            </button>
+                            {isExpanded ? <ChevronDown size={12} className="text-gray-400" /> : <ChevronRight size={12} className="text-gray-400" />}
+                          </div>
+                        </div>
                       </div>
-                    </td>
-                    <td className="text-right px-1 py-1.5">
-                      <span className={`font-bold px-1.5 py-0.5 rounded text-[10px] border ${scoreColor(w.insiderScore)}`}>
-                        {w.insiderScore}
-                      </span>
-                    </td>
-                    <td className="text-right px-1 py-1.5 font-medium text-indigo-600">{w.tokensHit}</td>
-                    <td className={`text-right px-1 py-1.5 font-bold ${pnlColor(totalPnl)}`}>
-                      {totalPnl > 0 ? '+' : ''}{formatUsd(totalPnl)}
-                    </td>
-                    <td className="text-right px-1 py-1.5 text-violet-600 font-medium">{formatUsd(w.avgEntryMcap)}</td>
-                    <td className={`text-right px-1 py-1.5 font-medium ${w.winRate >= 60 ? 'text-emerald-600' : w.winRate >= 40 ? 'text-amber-600' : 'text-red-500'}`}>
-                      {w.winRate}%
-                    </td>
-                    <td className="text-center px-1 pr-3 py-1.5">
-                      <div className="flex items-center justify-center gap-1">
-                        <a
-                          href={`https://gmgn.ai/sol/address/${w.address}`}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="text-gray-300 hover:text-blue-500"
-                          title="GMGN"
-                        >
-                          <ExternalLink size={11} />
-                        </a>
-                        <button
-                          onClick={() => onBookmark(w.address)}
-                          className={`${isSaved ? 'text-orange-500' : 'text-gray-300 hover:text-orange-400'}`}
-                          title={isSaved ? 'Usun' : 'Dodaj'}
-                        >
-                          {isSaved ? <BookmarkCheck size={12} /> : <BookmarkPlus size={12} />}
-                        </button>
-                      </div>
+
+                      {/* Expanded: trade history */}
+                      {isExpanded && (
+                        <div className="border-b border-gray-100 bg-gray-50/50 px-3 py-2 space-y-1.5">
+                          <div className="flex items-center justify-between text-[10px] pb-1">
+                            <div className="flex items-center gap-2">
+                              <a
+                                href={`https://gmgn.ai/sol/address/${w.address}`}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="text-blue-500 hover:text-blue-700 font-medium"
+                              >
+                                GMGN
+                              </a>
+                              <a
+                                href={`https://solscan.io/account/${w.address}`}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="text-blue-500 hover:text-blue-700 font-medium"
+                              >
+                                Solscan
+                              </a>
+                            </div>
+                            <span className="text-gray-400">Transakcje dla {w.tokens.length} token{w.tokens.length > 1 ? 'ow' : 'a'}</span>
+                          </div>
+                          <TradeHistory wallet={w.address} tokens={w.tokens} />
+                        </div>
+                      )}
                     </td>
                   </tr>
                 )
@@ -515,6 +564,7 @@ export default function TokenAnalyzer() {
   const [error, setError] = useState<string | null>(null)
   const [expanded, setExpanded] = useState<Set<string>>(new Set())
   const [bookmarks, setBookmarks] = useState<Set<string>>(new Set())
+  const [copiedAddr, setCopiedAddr] = useState<string | null>(null)
 
   const toggleExpand = (addr: string) => {
     setExpanded(prev => {
@@ -534,13 +584,24 @@ export default function TokenAnalyzer() {
     }
   }
 
-  const copyAddr = (addr: string) => {
+  const copyAddr = useCallback((addr: string) => {
+    const doCopy = () => {
+      setCopiedAddr(addr)
+      setTimeout(() => setCopiedAddr(null), 2000)
+    }
+
+    // Try clipboard API first (works on HTTPS and localhost)
     if (navigator.clipboard?.writeText) {
-      navigator.clipboard.writeText(addr).catch(() => fallbackCopy(addr))
+      navigator.clipboard.writeText(addr).then(doCopy).catch(() => {
+        // Fallback for HTTP
+        fallbackCopy(addr)
+        doCopy()
+      })
     } else {
       fallbackCopy(addr)
+      doCopy()
     }
-  }
+  }, [])
 
   const fallbackCopy = (text: string) => {
     const ta = document.createElement('textarea')
@@ -606,9 +667,9 @@ export default function TokenAnalyzer() {
       const data: AnalyzerResponse = await res.json()
       setProgress(100)
 
-      const multiCount = data.wallets.filter(w => w.tokensHit >= 2).length
+      const holderCount = data.wallets.filter(w => w.walletType === 'HOLDER').length
       setStatusText(
-        `Gotowe! ${data.wallets.length} walletow (${multiCount} multi-token) w ${(data.elapsedMs / 1000).toFixed(1)}s`
+        `Gotowe! ${data.wallets.length} walletow (${holderCount} holderow) w ${(data.elapsedMs / 1000).toFixed(1)}s`
       )
       setResult(data)
 
@@ -642,7 +703,7 @@ export default function TokenAnalyzer() {
             disabled={loading}
           />
           <div className="flex items-center justify-between">
-            <p className="text-[10px] text-gray-400">Pokazuje wszystkie wallety — multi-token, high profit, early entry</p>
+            <p className="text-[10px] text-gray-400">Top 50 walletow | min. saldo $15K | bez botow i gield</p>
             <button
               onClick={analyze}
               disabled={loading || !input.trim()}
@@ -678,12 +739,11 @@ export default function TokenAnalyzer() {
       {result && !loading && (
         <>
           {/* Stats */}
-          <div className="grid grid-cols-2 sm:grid-cols-5 gap-2">
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
             {[
-              { label: 'Tokens', value: result.processedTokens },
-              { label: 'Traders', value: result.totalEarlyBuyers },
+              { label: 'Tokeny', value: result.processedTokens },
+              { label: 'Traderzy', value: result.totalEarlyBuyers },
               { label: 'Wyniki', value: result.wallets.length },
-              { label: 'Multi-Token', value: result.wallets.filter(w => w.tokensHit >= 2).length },
               { label: 'Czas', value: `${(result.elapsedMs / 1000).toFixed(1)}s` },
             ].map(s => (
               <div key={s.label} className="bg-white border border-gray-200 rounded-lg p-2.5 text-center shadow-sm">
@@ -706,175 +766,19 @@ export default function TokenAnalyzer() {
           {result.wallets.length === 0 ? (
             <Card className="bg-white border-gray-200 rounded-xl shadow-sm">
               <CardContent className="pt-5 pb-5 text-center text-gray-500 text-xs">
-                Nie znaleziono walletow. Sprobuj dodac wiecej tokenow.
+                Nie znaleziono walletow spelniajacych kryteria (saldo &gt;= $15K, bez botow/gield).
               </CardContent>
             </Card>
           ) : (
-            <>
-              {/* Summary Table */}
-              <SummaryTable
-                wallets={result.wallets}
-                onCopy={copyAddr}
-                onBookmark={toggleBookmark}
-                bookmarks={bookmarks}
-              />
-
-              {/* Full list */}
-              <div className="space-y-2">
-                <h3 className="text-xs font-semibold text-gray-700">
-                  Wszystkie wallety ({result.wallets.length})
-                </h3>
-
-                {result.wallets.map((w, idx) => {
-                  const isExpanded = expanded.has(w.address)
-                  const isSaved = bookmarks.has(w.address)
-                  const totalPnl = w.totalRealizedPnl + w.totalUnrealizedPnl
-
-                  return (
-                    <Card key={w.address} className="bg-white border-gray-200 rounded-lg shadow-sm overflow-hidden hover:shadow-md transition-shadow">
-                      {/* Main wallet row */}
-                      <div
-                        className="cursor-pointer"
-                        onClick={() => toggleExpand(w.address)}
-                      >
-                        {/* Top bar */}
-                        <div className="flex items-center gap-2 px-3 pt-2 pb-1.5">
-                          {/* Rank */}
-                          <div className={`w-6 h-6 rounded bg-gradient-to-br ${scoreBg(w.insiderScore)} flex items-center justify-center text-white font-bold text-[10px] shrink-0`}>
-                            {idx + 1}
-                          </div>
-
-                          {/* Address + labels */}
-                          <div className="flex items-center gap-1.5 min-w-0 flex-1 flex-wrap">
-                            <span className="font-mono text-xs text-gray-800 font-medium">{shortAddr(w.address)}</span>
-                            <button
-                              onClick={e => { e.stopPropagation(); copyAddr(w.address) }}
-                              className="text-gray-300 hover:text-gray-500 shrink-0"
-                            >
-                              <Copy size={11} />
-                            </button>
-                            <a
-                              href={`https://solscan.io/account/${w.address}`}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              onClick={e => e.stopPropagation()}
-                              className="text-gray-300 hover:text-blue-500 shrink-0"
-                            >
-                              <ExternalLink size={11} />
-                            </a>
-
-                            {/* Labels */}
-                            {w.labels.map(l => (
-                              <span key={l} className={`text-[9px] font-bold px-1.5 py-0 rounded border ${LABEL_STYLES[l] || 'bg-gray-100 text-gray-500 border-gray-200'}`}>
-                                {l}
-                              </span>
-                            ))}
-
-                            {w.tags.length > 0 && (
-                              <span className="text-[9px] text-gray-400 bg-gray-100 px-1.5 py-0 rounded">
-                                {w.tags.slice(0, 2).join(', ')}
-                              </span>
-                            )}
-                          </div>
-
-                          {/* Score + bookmark + expand */}
-                          <div className="flex items-center gap-1.5 shrink-0">
-                            <span className={`text-[11px] font-bold px-2 py-0.5 rounded border ${scoreColor(w.insiderScore)}`}>
-                              {w.insiderScore}
-                            </span>
-                            <button
-                              onClick={e => { e.stopPropagation(); toggleBookmark(w.address) }}
-                              className={`${isSaved ? 'text-orange-500' : 'text-gray-300 hover:text-orange-400'} transition-colors`}
-                            >
-                              {isSaved ? <BookmarkCheck size={14} /> : <BookmarkPlus size={14} />}
-                            </button>
-                            {isExpanded ? <ChevronDown size={14} className="text-gray-400" /> : <ChevronRight size={14} className="text-gray-400" />}
-                          </div>
-                        </div>
-
-                        {/* Compact metrics row */}
-                        <div className="flex gap-1.5 px-3 pb-1 text-[10px] flex-wrap">
-                          <span className="bg-indigo-50 text-indigo-600 font-bold px-2 py-0.5 rounded">
-                            {w.tokensHit} token{w.tokensHit > 1 ? 's' : ''}
-                          </span>
-                          <span className={`font-bold px-2 py-0.5 rounded ${totalPnl > 0 ? 'bg-emerald-50 text-emerald-600' : totalPnl < 0 ? 'bg-red-50 text-red-500' : 'bg-gray-50 text-gray-500'}`}>
-                            PnL: {totalPnl > 0 ? '+' : ''}{formatUsd(totalPnl)}
-                          </span>
-                          <span className="bg-violet-50 text-violet-600 font-medium px-2 py-0.5 rounded">
-                            Entry: {formatUsd(w.avgEntryMcap)}
-                          </span>
-                          <span className={`font-medium px-2 py-0.5 rounded ${w.winRate >= 60 ? 'bg-emerald-50 text-emerald-600' : w.winRate >= 40 ? 'bg-amber-50 text-amber-600' : 'bg-red-50 text-red-500'}`}>
-                            Win: {w.winRate}%
-                          </span>
-                          <span className="bg-sky-50 text-sky-600 font-medium px-2 py-0.5 rounded">
-                            SOL: {formatUsd(w.solBalanceUsd)}
-                          </span>
-                        </div>
-
-                        {/* Token purchases summary */}
-                        <div className="flex gap-1 px-3 pb-2 flex-wrap">
-                          {w.tokens.map(t => {
-                            const earlyLabel = tokenEarlyLabel(t.entryMcapUsd, t.currentMcapUsd)
-                            const tPnl = t.realizedPnlUsd + t.unrealizedPnlUsd
-                            return (
-                              <span
-                                key={t.mint}
-                                className={`inline-flex items-center gap-1 text-[9px] font-medium px-1.5 py-0.5 rounded border ${
-                                  earlyLabel
-                                    ? 'bg-violet-50 border-violet-200 text-violet-700'
-                                    : 'bg-gray-50 border-gray-200 text-gray-600'
-                                }`}
-                                title={`${t.symbol}: entry ${formatUsd(t.entryMcapUsd)}, PnL ${tPnl > 0 ? '+' : ''}${formatUsd(tPnl)}`}
-                              >
-                                <span className="font-bold">{t.symbol}</span>
-                                <span className="text-[8px] opacity-75">@{formatUsd(t.entryMcapUsd)}</span>
-                                {t.holdingSince && (
-                                  <span className="text-[8px] opacity-60">{formatDate(t.holdingSince)}</span>
-                                )}
-                                <span className={`text-[8px] font-bold ${tPnl > 0 ? 'text-emerald-600' : tPnl < 0 ? 'text-red-500' : 'text-gray-400'}`}>
-                                  {tPnl > 0 ? '+' : ''}{formatUsd(tPnl)}
-                                </span>
-                              </span>
-                            )
-                          })}
-                        </div>
-                      </div>
-
-                      {/* Expanded: trade history per token (auto-loads) */}
-                      {isExpanded && (
-                        <div className="border-t border-gray-100 bg-gray-50/50 px-3 py-2 space-y-1.5">
-                          {/* Footer links */}
-                          <div className="flex items-center justify-between text-[10px] pb-1">
-                            <div className="flex items-center gap-2">
-                              <a
-                                href={`https://gmgn.ai/sol/address/${w.address}`}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className="text-blue-500 hover:text-blue-700 font-medium"
-                              >
-                                GMGN
-                              </a>
-                              <a
-                                href={`https://solscan.io/account/${w.address}`}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className="text-blue-500 hover:text-blue-700 font-medium"
-                              >
-                                Solscan
-                              </a>
-                            </div>
-                            <span className="text-gray-400">Transakcje dla {w.tokens.length} token{w.tokens.length > 1 ? 'ow' : 'a'}</span>
-                          </div>
-
-                          {/* Trade History — auto-loads */}
-                          <TradeHistory wallet={w.address} tokens={w.tokens} />
-                        </div>
-                      )}
-                    </Card>
-                  )
-                })}
-              </div>
-            </>
+            <WalletTable
+              wallets={result.wallets}
+              onCopy={copyAddr}
+              onBookmark={toggleBookmark}
+              bookmarks={bookmarks}
+              copiedAddr={copiedAddr}
+              expanded={expanded}
+              onToggleExpand={toggleExpand}
+            />
           )}
 
           <p className="text-[9px] text-gray-400 text-center">

@@ -17,7 +17,7 @@ export interface TokenHit {
   buyCount: number
   sellCount: number
   tags: string[]
-  holdingSince: number | null  // Unix timestamp — start of current/last holding
+  holdingSince: number | null
 }
 
 export interface InsiderWallet {
@@ -26,12 +26,12 @@ export interface InsiderWallet {
   tokens: TokenHit[]
   totalRealizedPnl: number
   totalUnrealizedPnl: number
-  winRate: number
   avgEntryMcap: number
   solBalanceUsd: number
   insiderScore: number
+  walletType: 'HOLDER' | 'TRADER'
   tags: string[]
-  labels: string[]  // e.g. ['MULTI-TOKEN', 'HIGH PROFIT', 'EARLY ENTRY', 'SNIPER', 'DIAMOND HANDS']
+  labels: string[]
 }
 
 export interface TokenAnalyzerResponse {
@@ -55,13 +55,71 @@ const EXCHANGE_TAGS = new Set([
   'kucoin', 'gate', 'htx', 'bitget', 'mexc',
 ])
 
+// Known exchange hot wallet addresses (Solana)
+const KNOWN_EXCHANGE_ADDRESSES = new Set([
+  // Binance
+  '5tzFkiKscXHK5ZXCGbXZxdw7gTjjD1mBwuoFbhUvuAi9',
+  '9WzDXwBbmkg8ZTbNMqUxvQRAyrZzDsGYdLVL9zYtAWWM',
+  '2ojv9BAiHUrvsm9gxDe7fJSzbNZSJcxZvf8dqmWGHG8S',
+  'AC5RDfQFmDS1deWZos921JfqscXdByf8BKHs5ACWjtW2',
+  // Coinbase
+  '2AQdpHJ2JpcEgPiATUXjQxA8QmafFegfQwSLWSprPicm',
+  'H8sMJSCQxfKiFTCfDR3DUMLPwcRbM61LGFJ8N4dK3WjS',
+  'GJRs4FwHtemZ5ZE9x3FNvJ8TMwitKTh21yxdRPqn7npE',
+  // OKX
+  '5VCwKtCXgCDuQosQfcz2bU7Qvx5WtPBr4tJFBa9JMmp8',
+  '4jBaxMoJhW5LBEnMEhBwWqGjUQobHSm3FoF8BALFaKBk',
+  // Bybit
+  'AC5RDfQFmDS1deWZos921JfqscXdByf8BKHs5ACWjtW2',
+  // Kraken
+  'FWznbcNXWQuHTawe9RxvQ2LdCENssh12dsznf4RiouN5',
+  'CJsLwbP1iu5DuUikHEJnLfANgKy6stB2uFgvBBHoyxwz',
+  // KuCoin
+  'BmFdpraQhkiDQE6SnfG5PW2vCFtgSbR1RKmhAzk6HN3B',
+  // Gate.io
+  'u6PJ8DtQuPFnfmwHbGFULQ4u4EgjDiyYKjVEsynXq2w',
+])
+
 function isBot(trader: GmgnTrader): boolean {
-  return trader.tags.some(t => BOT_TAGS.has(t.toLowerCase()))
+  if (trader.tags.some(t => BOT_TAGS.has(t.toLowerCase()))) return true
+  // Heuristic: >50 total trades AND very short hold → bot pattern
+  const totalTx = trader.buyCount + trader.sellCount
+  if (totalTx > 50 && trader.startHoldingAt) {
+    const now = Date.now() / 1000
+    const holdMinutes = (now - trader.startHoldingAt) / 60
+    if (holdMinutes < 30 && totalTx > 50) return true
+  }
+  return false
 }
 
 function isExchange(trader: GmgnTrader): boolean {
   if (trader.exchange && trader.exchange.length > 0) return true
+  if (KNOWN_EXCHANGE_ADDRESSES.has(trader.address)) return true
   return trader.tags.some(t => EXCHANGE_TAGS.has(t.toLowerCase()))
+}
+
+// ── Wallet type classification ────────────────────────────────────────
+
+function classifyWalletType(hits: TokenHit[]): 'HOLDER' | 'TRADER' {
+  const totalBuys = hits.reduce((s, h) => s + h.buyCount, 0)
+  const totalSells = hits.reduce((s, h) => s + h.sellCount, 0)
+  const totalTx = totalBuys + totalSells
+
+  // Estimate days active from holdingSince
+  let avgHoldHours = 24 // default
+  const holdTimes = hits
+    .filter(h => h.holdingSince && h.holdingSince > 0)
+    .map(h => (Date.now() / 1000 - h.holdingSince!) / 3600)
+  if (holdTimes.length > 0) {
+    avgHoldHours = holdTimes.reduce((a, b) => a + b, 0) / holdTimes.length
+  }
+
+  const daysActive = Math.max(avgHoldHours / 24, 1)
+  const txPerDay = totalTx / daysActive
+
+  if (txPerDay > 50) return 'TRADER'
+  if (avgHoldHours > 4) return 'HOLDER'
+  return 'TRADER'
 }
 
 // ── InsiderScore calculation ───────────────────────────────────────────
@@ -70,17 +128,16 @@ function calculateInsiderScore(
   tokensHit: number,
   totalTokens: number,
   avgEntryMcap: number,
-  winRate: number,
   totalPnl: number,
   solBalanceUsd: number
 ): number {
-  // Weight 1: Token coverage (0-30) — multi-token wallets get big bonus
+  // Weight 1: Token coverage (0-30)
   const coverageRatio = tokensHit / Math.max(totalTokens, 1)
   const coverageScore = tokensHit >= 2
-    ? Math.min(30, coverageRatio * 30 + 10)  // base 10 bonus for multi-token
+    ? Math.min(30, coverageRatio * 30 + 10)
     : 0
 
-  // Weight 2: Entry quality (0-30) — lower avg entry mcap = better
+  // Weight 2: Entry quality (0-30)
   const entryScore = avgEntryMcap <= 50_000 ? 30
     : avgEntryMcap <= 100_000 ? 24
     : avgEntryMcap <= 250_000 ? 18
@@ -88,23 +145,21 @@ function calculateInsiderScore(
     : avgEntryMcap <= 1_000_000 ? 6
     : 3
 
-  // Weight 3: Profitability (0-25)
+  // Weight 3: Profitability (0-30)
   const pnlLog = totalPnl > 0 ? Math.log10(totalPnl + 1) : 0
-  const pnlScore = Math.min(25, pnlLog * 5)
+  const pnlScore = Math.min(30, pnlLog * 6)
 
-  // Weight 4: Win rate (0-10)
-  const winScore = (winRate / 100) * 10
+  // Weight 4: Active wallet bonus (0-10)
+  const balanceBonus = solBalanceUsd >= 50_000 ? 10
+    : solBalanceUsd >= 25_000 ? 7
+    : solBalanceUsd >= 15_000 ? 5
+    : 2
 
-  // Weight 5: Active wallet bonus (0-5)
-  const balanceBonus = solBalanceUsd >= 50_000 ? 5
-    : solBalanceUsd >= 15_000 ? 3
-    : 1
-
-  return Math.min(100, Math.round(coverageScore + entryScore + pnlScore + winScore + balanceBonus))
+  return Math.min(100, Math.round(coverageScore + entryScore + pnlScore + balanceBonus))
 }
 
 function computeLabels(
-  w: { tokensHit: number; avgEntryMcap: number; totalRealizedPnl: number; totalUnrealizedPnl: number; winRate: number; tokens: TokenHit[] }
+  w: { tokensHit: number; avgEntryMcap: number; totalRealizedPnl: number; totalUnrealizedPnl: number; tokens: TokenHit[] }
 ): string[] {
   const labels: string[] = []
   const totalPnl = w.totalRealizedPnl + w.totalUnrealizedPnl
@@ -118,9 +173,6 @@ function computeLabels(
   else if (w.avgEntryMcap > 0 && w.avgEntryMcap <= 200_000) labels.push('VERY EARLY')
   else if (w.avgEntryMcap > 0 && w.avgEntryMcap <= 500_000) labels.push('EARLY')
 
-  if (w.winRate >= 80 && w.tokensHit >= 2) labels.push('CONSISTENT')
-
-  // Diamond hands: has sells but held through big gains
   const hasHugeMultiplier = w.tokens.some(t =>
     t.entryMcapUsd > 0 && t.currentMcapUsd / t.entryMcapUsd >= 10 && t.sellCount > 0
   )
@@ -151,17 +203,16 @@ export async function POST(req: NextRequest) {
   const tokenInfoMap = await fetchTokenInfoBatch(mints)
   const solPrice = await fetchSolPrice()
 
-  // Step 2: For each token, fetch traders and find early buyers
-  // Map: walletAddress → TokenHit[]
+  // Step 2: For each token, fetch traders
   const walletHits = new Map<string, TokenHit[]>()
-  const walletSolBalance = new Map<string, number>() // lamports
+  const walletSolBalance = new Map<string, number>()
   const walletTags = new Map<string, Set<string>>()
   let processedTokens = 0
 
   for (const mint of mints) {
     const info = tokenInfoMap.get(mint)
     if (!info) {
-      errors.push(`Token ${mint.slice(0, 8)}... not found on DexScreener`)
+      errors.push(`Token ${mint.slice(0, 8)}... nie znaleziony na DexScreener`)
       continue
     }
 
@@ -169,7 +220,7 @@ export async function POST(req: NextRequest) {
     const currentFdv = info.fdv
 
     if (!currentPrice || currentPrice === 0 || !currentFdv || currentFdv === 0) {
-      errors.push(`${info.symbol}: no price/FDV data`)
+      errors.push(`${info.symbol}: brak danych cenowych`)
       continue
     }
 
@@ -178,18 +229,12 @@ export async function POST(req: NextRequest) {
       processedTokens++
 
       for (const trader of traders) {
-        // Filter bots and exchanges
         if (isBot(trader) || isExchange(trader)) continue
 
-        // Estimate mcap at entry: (avgCost / currentPrice) * currentFdv
         const avgCost = trader.avgCostUsd
         const mcapAtEntry = (avgCost && avgCost > 0 && currentPrice > 0)
           ? (avgCost / currentPrice) * currentFdv
           : 0
-
-        // SOL balance — track but don't filter aggressively
-        // (profitable insiders often move SOL out after trading)
-        const solBal = (trader.nativeBalance / 1e9) * solPrice
 
         const hit: TokenHit = {
           mint,
@@ -209,13 +254,11 @@ export async function POST(req: NextRequest) {
         existing.push(hit)
         walletHits.set(trader.address, existing)
 
-        // Track highest SOL balance seen
         const prevBal = walletSolBalance.get(trader.address) ?? 0
         if (trader.nativeBalance > prevBal) {
           walletSolBalance.set(trader.address, trader.nativeBalance)
         }
 
-        // Collect tags
         const tagSet = walletTags.get(trader.address) ?? new Set()
         trader.tags.forEach(t => tagSet.add(t))
         walletTags.set(trader.address, tagSet)
@@ -225,30 +268,31 @@ export async function POST(req: NextRequest) {
       errors.push(`${info.symbol}: ${msg}`)
     }
 
-    // Rate limit between tokens
     if (mints.indexOf(mint) < mints.length - 1) {
       await sleep(400)
     }
   }
 
-  // Step 3: Build all wallets (no minimum token filter)
+  // Step 3: Build wallets, filter by balance >= $15K
   const qualifiedWallets: InsiderWallet[] = []
 
   for (const [address, hits] of walletHits.entries()) {
-    const totalRealized = hits.reduce((s, h) => s + h.realizedPnlUsd, 0)
-    const totalUnrealized = hits.reduce((s, h) => s + h.unrealizedPnlUsd, 0)
-    const wins = hits.filter(h => h.realizedPnlUsd + h.unrealizedPnlUsd > 0).length
-    const winRate = hits.length > 0 ? Math.round((wins / hits.length) * 100) : 0
-    const avgEntryMcap = Math.round(hits.reduce((s, h) => s + h.entryMcapUsd, 0) / hits.length)
     const lamports = walletSolBalance.get(address) ?? 0
     const solBalUsd = Math.round((lamports / 1e9) * solPrice)
+
+    // Filter: exclude wallets with balance < $15K
+    if (solBalUsd < 15_000) continue
+
+    const totalRealized = hits.reduce((s, h) => s + h.realizedPnlUsd, 0)
+    const totalUnrealized = hits.reduce((s, h) => s + h.unrealizedPnlUsd, 0)
+    const avgEntryMcap = Math.round(hits.reduce((s, h) => s + h.entryMcapUsd, 0) / hits.length)
     const tags = Array.from(walletTags.get(address) ?? [])
+    const walletType = classifyWalletType(hits)
 
     const insiderScore = calculateInsiderScore(
       hits.length,
       processedTokens,
       avgEntryMcap,
-      winRate,
       totalRealized + totalUnrealized,
       solBalUsd
     )
@@ -259,10 +303,10 @@ export async function POST(req: NextRequest) {
       tokens: hits.sort((a, b) => a.entryMcapUsd - b.entryMcapUsd),
       totalRealizedPnl: Math.round(totalRealized),
       totalUnrealizedPnl: Math.round(totalUnrealized),
-      winRate,
       avgEntryMcap,
       solBalanceUsd: solBalUsd,
       insiderScore,
+      walletType,
       tags,
       labels: [],
     }
@@ -270,11 +314,10 @@ export async function POST(req: NextRequest) {
     qualifiedWallets.push(wallet)
   }
 
-  // Sort by InsiderScore desc
   qualifiedWallets.sort((a, b) => b.insiderScore - a.insiderScore)
 
   const response: TokenAnalyzerResponse = {
-    wallets: qualifiedWallets.slice(0, 200),
+    wallets: qualifiedWallets.slice(0, 50),
     processedTokens,
     totalEarlyBuyers: walletHits.size,
     elapsedMs: Date.now() - start,
