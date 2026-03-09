@@ -178,7 +178,22 @@ function TradeHistory({ wallet, tokens }: { wallet: string; tokens: TokenHit[] }
         const lastSell = sells[sells.length - 1]
         const totalBuyUsd = buys.reduce((s, t) => s + t.costUsd, 0)
         const totalSellUsd = sells.reduce((s, t) => s + t.costUsd, 0)
+        const totalBuyTokens = buys.reduce((s, t) => s + t.tokenAmount, 0)
         const isOpen = expandedToken.has(token.mint)
+
+        // Weighted average entry: sum(price * tokens) / sum(tokens)
+        const weightedAvgEntry = totalBuyTokens > 0
+          ? buys.reduce((s, t) => s + t.priceUsd * t.tokenAmount, 0) / totalBuyTokens
+          : 0
+
+        // Hold duration
+        const firstBuyTs = firstBuy?.timestamp ?? token.holdingSince ?? 0
+        const lastActionTs = lastSell?.timestamp ?? (Date.now() / 1000)
+        const holdDays = firstBuyTs > 0 ? (lastActionTs - firstBuyTs) / 86400 : 0
+        const holdLabel = holdDays >= 1
+          ? `${holdDays.toFixed(1)} dni`
+          : holdDays > 0 ? `${(holdDays * 24).toFixed(1)} godz.` : '—'
+        const stillHolding = sells.length === 0 || (buys.length > 0 && sells.length < buys.length)
 
         return (
           <div key={token.mint} className="bg-white rounded-lg border border-gray-200 overflow-hidden">
@@ -241,23 +256,12 @@ function TradeHistory({ wallet, tokens }: { wallet: string; tokens: TokenHit[] }
                 <span className="bg-gray-100 text-gray-600 font-medium px-2 py-0.5 rounded">
                   Now: {formatUsd(token.currentMcapUsd)}
                 </span>
-                <span className={`font-bold px-2 py-0.5 rounded ${
-                  token.realizedPnlUsd + token.unrealizedPnlUsd > 0
-                    ? 'bg-emerald-50 text-emerald-600'
-                    : 'bg-red-50 text-red-500'
-                }`}>
-                  PnL: {token.realizedPnlUsd + token.unrealizedPnlUsd > 0 ? '+' : ''}{formatUsd(token.realizedPnlUsd + token.unrealizedPnlUsd)}
+                <span className={`font-bold px-2 py-0.5 rounded ${pnlColor(token.realizedPnlUsd)} ${token.realizedPnlUsd >= 0 ? 'bg-emerald-50' : 'bg-red-50'}`}>
+                  R: {token.realizedPnlUsd > 0 ? '+' : ''}{formatUsd(token.realizedPnlUsd)}
                 </span>
-                {totalBuyUsd > 0 && (
-                  <span className="bg-blue-50 text-blue-600 font-medium px-2 py-0.5 rounded">
-                    Kupiono: {formatUsd(totalBuyUsd)}
-                  </span>
-                )}
-                {totalSellUsd > 0 && (
-                  <span className="bg-amber-50 text-amber-600 font-medium px-2 py-0.5 rounded">
-                    Sprzedano: {formatUsd(totalSellUsd)}
-                  </span>
-                )}
+                <span className={`font-bold px-2 py-0.5 rounded ${pnlColor(token.unrealizedPnlUsd)} ${token.unrealizedPnlUsd >= 0 ? 'bg-blue-50' : 'bg-red-50'}`}>
+                  U: {token.unrealizedPnlUsd > 0 ? '+' : ''}{formatUsd(token.unrealizedPnlUsd)}
+                </span>
               </div>
             </div>
 
@@ -267,16 +271,26 @@ function TradeHistory({ wallet, tokens }: { wallet: string; tokens: TokenHit[] }
                   <p className="text-[11px] text-gray-400 py-1">Brak danych o transakcjach z GMGN</p>
                 ) : (
                   <>
-                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-1.5 mb-2 text-[10px]">
+                    {/* Summary stats */}
+                    <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-1.5 mb-2 text-[10px]">
                       <div className="bg-white rounded border border-gray-200 px-2 py-1.5">
                         <div className="text-[9px] text-gray-400 font-medium">Pierwszy zakup</div>
                         <div className="font-bold text-gray-700">{firstBuy ? formatDate(firstBuy.timestamp) : '—'}</div>
-                        <div className="text-violet-600 font-medium">{firstBuy ? `@ ${formatUsd(firstBuy.mcapUsd)}` : '—'}</div>
+                        <div className="text-violet-600 font-medium">{firstBuy ? `Mcap: ${formatUsd(firstBuy.mcapUsd)}` : '—'}</div>
                       </div>
                       <div className="bg-white rounded border border-gray-200 px-2 py-1.5">
                         <div className="text-[9px] text-gray-400 font-medium">Ostatnia sprzedaz</div>
                         <div className="font-bold text-gray-700">{lastSell ? formatDate(lastSell.timestamp) : '—'}</div>
-                        <div className="text-amber-600 font-medium">{lastSell ? `@ ${formatUsd(lastSell.mcapUsd)}` : '—'}</div>
+                        <div className="text-amber-600 font-medium">{lastSell ? `Mcap: ${formatUsd(lastSell.mcapUsd)}` : '—'}</div>
+                      </div>
+                      <div className="bg-white rounded border border-gray-200 px-2 py-1.5">
+                        <div className="text-[9px] text-gray-400 font-medium">Avg Entry (weighted)</div>
+                        <div className="font-bold text-violet-700">{weightedAvgEntry > 0 ? `$${formatNum(weightedAvgEntry)}` : '—'}</div>
+                      </div>
+                      <div className="bg-white rounded border border-gray-200 px-2 py-1.5">
+                        <div className="text-[9px] text-gray-400 font-medium">Czas trzymania</div>
+                        <div className="font-bold text-gray-700">{holdLabel}</div>
+                        <div className="text-[9px] text-gray-400">{stillHolding ? 'nadal trzyma' : 'zamknieta'}</div>
                       </div>
                       <div className="bg-white rounded border border-gray-200 px-2 py-1.5">
                         <div className="text-[9px] text-gray-400 font-medium">Realized PnL</div>
@@ -292,12 +306,24 @@ function TradeHistory({ wallet, tokens }: { wallet: string; tokens: TokenHit[] }
                       </div>
                     </div>
 
+                    {/* Buy/Sell volumes */}
+                    <div className="flex gap-2 mb-2 text-[10px]">
+                      <span className="bg-emerald-50 text-emerald-600 font-medium px-2 py-0.5 rounded">
+                        Wolumen BUY: {formatUsd(totalBuyUsd)} ({buys.length} tx)
+                      </span>
+                      <span className="bg-red-50 text-red-500 font-medium px-2 py-0.5 rounded">
+                        Wolumen SELL: {formatUsd(totalSellUsd)} ({sells.length} tx)
+                      </span>
+                    </div>
+
+                    {/* Trade table */}
                     <div className="overflow-x-auto">
                       <table className="w-full text-[10px]">
                         <thead>
                           <tr className="text-gray-400 border-b border-gray-200 text-[9px] uppercase">
                             <th className="text-left py-1 pr-2 font-medium">Data</th>
                             <th className="text-left py-1 pr-2 font-medium">Typ</th>
+                            <th className="text-right py-1 pr-2 font-medium">Cena USD</th>
                             <th className="text-right py-1 pr-2 font-medium">Mcap</th>
                             <th className="text-right py-1 pr-2 font-medium">SOL</th>
                             <th className="text-right py-1 pr-2 font-medium">USD</th>
@@ -320,6 +346,7 @@ function TradeHistory({ wallet, tokens }: { wallet: string; tokens: TokenHit[] }
                                   {t.type === 'buy' ? 'BUY' : 'SELL'}
                                 </span>
                               </td>
+                              <td className="py-1 pr-2 text-right text-gray-600 font-medium">{t.priceUsd > 0 ? `$${formatNum(t.priceUsd)}` : '—'}</td>
                               <td className="py-1 pr-2 text-right text-violet-600 font-medium">{formatUsd(t.mcapUsd)}</td>
                               <td className="py-1 pr-2 text-right text-gray-600">{formatNum(t.quoteAmount)}</td>
                               <td className="py-1 pr-2 text-right font-medium text-gray-700">{formatUsd(t.costUsd)}</td>
