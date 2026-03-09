@@ -3,7 +3,7 @@
 import { useState, useCallback, useMemo, useEffect } from 'react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Progress } from '@/components/ui/progress'
-import { ChevronDown, ChevronRight, BookmarkPlus, BookmarkCheck, Copy, Check, ExternalLink, Trophy, Zap, TrendingUp, Crown, Loader2, History } from 'lucide-react'
+import { ChevronDown, ChevronRight, BookmarkPlus, BookmarkCheck, Copy, Check, ExternalLink, Trophy, Zap, TrendingUp, Crown, Loader2 } from 'lucide-react'
 import { addToBook, removeFromBook, isInBook } from '@/lib/walletBook'
 
 // ── Types matching API response ────────────────────────────────────────
@@ -22,6 +22,13 @@ interface TokenHit {
   holdingSince: number | null
 }
 
+interface ScoreBreakdown {
+  earlyEntry: number
+  holdDuration: number
+  pnlScore: number
+  consistency: number
+}
+
 interface InsiderWallet {
   address: string
   tokensHit: number
@@ -29,8 +36,10 @@ interface InsiderWallet {
   totalRealizedPnl: number
   totalUnrealizedPnl: number
   avgEntryMcap: number
+  avgEntryUsd: number
   solBalanceUsd: number
   insiderScore: number
+  scoreBreakdown: ScoreBreakdown
   walletType: 'HOLDER' | 'TRADER'
   tags: string[]
   labels: string[]
@@ -85,6 +94,7 @@ const LABEL_STYLES: Record<string, string> = {
   'EARLY': 'bg-sky-100 text-sky-700 border-sky-300',
   'CONSISTENT': 'bg-blue-100 text-blue-700 border-blue-300',
   'DIAMOND HANDS': 'bg-orange-100 text-orange-700 border-orange-300',
+  'DCA': 'bg-cyan-100 text-cyan-700 border-cyan-300',
 }
 
 interface GmgnTrade {
@@ -415,23 +425,23 @@ function WalletTable({ wallets, onCopy, onBookmark, bookmarks, copiedAddr, expan
                 <th className="text-center px-1 py-1.5 font-medium">Typ</th>
                 <th className="text-right px-1 py-1.5 font-medium">Score</th>
                 <th className="text-right px-1 py-1.5 font-medium">Saldo</th>
-                <th className="text-right px-1 py-1.5 font-medium">Total PnL</th>
+                <th className="text-right px-1 py-1.5 font-medium">Realized</th>
+                <th className="text-right px-1 py-1.5 font-medium">Unrealized</th>
                 <th className="text-right px-1 py-1.5 font-medium">Avg Entry</th>
                 <th className="text-center px-1 pr-3 py-1.5 font-medium">Akcje</th>
               </tr>
             </thead>
             <tbody>
               {sorted.map((w, i) => {
-                const totalPnl = w.totalRealizedPnl + w.totalUnrealizedPnl
                 const isSaved = bookmarks.has(w.address)
                 const isExpanded = expanded.has(w.address)
                 const isCopied = copiedAddr === w.address
                 return (
                   <tr key={w.address} className="group">
-                    <td colSpan={10} className="p-0">
+                    <td colSpan={11} className="p-0">
                       {/* Main row */}
                       <div
-                        className={`grid grid-cols-[auto_1fr_auto_auto_auto_auto_auto_auto_auto_auto] items-center cursor-pointer hover:bg-gray-50/50 border-b border-gray-50 ${isExpanded ? 'bg-orange-50/30' : ''}`}
+                        className={`grid grid-cols-[auto_1fr_auto_auto_auto_auto_auto_auto_auto_auto_auto] items-center cursor-pointer hover:bg-gray-50/50 border-b border-gray-50 ${isExpanded ? 'bg-orange-50/30' : ''}`}
                         onClick={() => onToggleExpand(w.address)}
                       >
                         <div className="pl-3 pr-1 py-1.5 text-gray-400 font-medium text-[11px]">{i + 1}</div>
@@ -477,7 +487,7 @@ function WalletTable({ wallets, onCopy, onBookmark, bookmarks, copiedAddr, expan
                             {w.walletType}
                           </span>
                         </div>
-                        <div className="px-1 py-1.5 text-right">
+                        <div className="px-1 py-1.5 text-right" title={`Wczesne wejscie: ${w.scoreBreakdown.earlyEntry}/30\nTrzymanie: ${w.scoreBreakdown.holdDuration}/35\nPnL: ${w.scoreBreakdown.pnlScore}/25\nKonsekwencja: ${w.scoreBreakdown.consistency}/10`}>
                           <span className={`font-bold px-1.5 py-0.5 rounded text-[10px] border ${scoreColor(w.insiderScore)}`}>
                             {w.insiderScore}
                           </span>
@@ -485,8 +495,11 @@ function WalletTable({ wallets, onCopy, onBookmark, bookmarks, copiedAddr, expan
                         <div className="px-1 py-1.5 text-right text-[11px] text-sky-600 font-medium">
                           {formatUsd(w.solBalanceUsd)}
                         </div>
-                        <div className={`px-1 py-1.5 text-right text-[11px] font-bold ${pnlColor(totalPnl)}`}>
-                          {totalPnl > 0 ? '+' : ''}{formatUsd(totalPnl)}
+                        <div className={`px-1 py-1.5 text-right text-[11px] font-bold ${pnlColor(w.totalRealizedPnl)}`}>
+                          {w.totalRealizedPnl > 0 ? '+' : ''}{formatUsd(w.totalRealizedPnl)}
+                        </div>
+                        <div className={`px-1 py-1.5 text-right text-[11px] font-medium ${pnlColor(w.totalUnrealizedPnl)}`}>
+                          {w.totalUnrealizedPnl > 0 ? '+' : ''}{formatUsd(w.totalUnrealizedPnl)}
                         </div>
                         <div className="px-1 py-1.5 text-right text-[11px] text-violet-600 font-medium">
                           {formatUsd(w.avgEntryMcap)}
@@ -514,9 +527,40 @@ function WalletTable({ wallets, onCopy, onBookmark, bookmarks, copiedAddr, expan
                         </div>
                       </div>
 
-                      {/* Expanded: trade history */}
+                      {/* Expanded: score breakdown + trade history */}
                       {isExpanded && (
-                        <div className="border-b border-gray-100 bg-gray-50/50 px-3 py-2 space-y-1.5">
+                        <div className="border-b border-gray-100 bg-gray-50/50 px-3 py-2 space-y-2">
+                          {/* Score breakdown */}
+                          <div className="grid grid-cols-2 sm:grid-cols-4 gap-1.5 text-[10px]">
+                            <div className="bg-white rounded border border-gray-200 px-2 py-1.5">
+                              <div className="text-[9px] text-gray-400 font-medium">Wczesne wejscie</div>
+                              <div className="font-bold text-gray-700">{w.scoreBreakdown.earlyEntry}<span className="text-gray-400 font-normal">/30</span></div>
+                            </div>
+                            <div className="bg-white rounded border border-gray-200 px-2 py-1.5">
+                              <div className="text-[9px] text-gray-400 font-medium">Czas trzymania</div>
+                              <div className="font-bold text-gray-700">{w.scoreBreakdown.holdDuration}<span className="text-gray-400 font-normal">/35</span></div>
+                            </div>
+                            <div className="bg-white rounded border border-gray-200 px-2 py-1.5">
+                              <div className="text-[9px] text-gray-400 font-medium">PnL %</div>
+                              <div className="font-bold text-gray-700">{w.scoreBreakdown.pnlScore}<span className="text-gray-400 font-normal">/25</span></div>
+                            </div>
+                            <div className="bg-white rounded border border-gray-200 px-2 py-1.5">
+                              <div className="text-[9px] text-gray-400 font-medium">Konsekwencja</div>
+                              <div className="font-bold text-gray-700">{w.scoreBreakdown.consistency}<span className="text-gray-400 font-normal">/10</span></div>
+                            </div>
+                          </div>
+
+                          {/* PnL summary */}
+                          <div className="flex gap-2 text-[10px]">
+                            <span className={`font-bold px-2 py-0.5 rounded ${pnlColor(w.totalRealizedPnl)} ${w.totalRealizedPnl >= 0 ? 'bg-emerald-50' : 'bg-red-50'}`}>
+                              Realized: {w.totalRealizedPnl > 0 ? '+' : ''}{formatUsd(w.totalRealizedPnl)}
+                            </span>
+                            <span className={`font-bold px-2 py-0.5 rounded ${pnlColor(w.totalUnrealizedPnl)} ${w.totalUnrealizedPnl >= 0 ? 'bg-blue-50' : 'bg-red-50'}`}>
+                              Unrealized: {w.totalUnrealizedPnl > 0 ? '+' : ''}{formatUsd(w.totalUnrealizedPnl)}
+                            </span>
+                          </div>
+
+                          {/* Links */}
                           <div className="flex items-center justify-between text-[10px] pb-1">
                             <div className="flex items-center gap-2">
                               <a
