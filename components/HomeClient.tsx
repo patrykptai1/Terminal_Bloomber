@@ -1,31 +1,27 @@
 'use client'
 
 import { useState, useCallback } from 'react'
-import { LayoutDashboard, Wallet, ScanLine, BarChart2, Gem, Activity, Bot, Crosshair } from 'lucide-react'
+import { LayoutDashboard, Wallet, ScanLine, BarChart2, Activity, Crosshair } from 'lucide-react'
 import TokenAnalyzer from '@/components/TokenAnalyzer'
 import WalletInspector from '@/components/WalletInspector'
 import MyWallets from '@/components/MyWallets'
 import MarketScanner from '@/components/MarketScanner'
-import GemScanner from '@/components/GemScanner'
 import WalletActivityDashboard from '@/components/WalletActivityDashboard'
-import AgentChat from '@/components/AgentChat'
 import BarryStrategy from '@/components/BarryStrategy'
 
 const NAV_ITEMS = [
-  { tab: 'dashboard',  label: 'Dashboard',              Icon: LayoutDashboard },
+  { tab: 'dashboard',  label: 'Wallet Radar',           Icon: LayoutDashboard },
   { tab: 'tracking',   label: 'Insider Analyzer',        Icon: Activity        },
   { tab: 'mywallets',  label: 'My Wallets',             Icon: Wallet          },
   { tab: 'wallet',     label: 'Wallet Scanner',         Icon: ScanLine        },
   { tab: 'scanner',    label: 'Market',                 Icon: BarChart2       },
-  { tab: 'gems',       label: 'Gem Hunter',             Icon: Gem             },
   { tab: 'barry',      label: 'Barry Strategy',         Icon: Crosshair       },
-  { tab: 'agent',      label: 'Twój Agent AI',          Icon: Bot             },
 ]
 
 export default function HomeClient() {
   const [activeTab, setActiveTab] = useState('dashboard')
 
-  // Called from MarketScanner / GemScanner — switches to analyzer tab
+  // Called from MarketScanner — switches to analyzer tab
   const handleAnalyzeToken = useCallback((address: string) => {
     void address
     setActiveTab('tracking')
@@ -115,24 +111,12 @@ export default function HomeClient() {
             <MarketScanner onAnalyzeToken={handleAnalyzeToken} />
           </div>
 
-          <div className={activeTab === 'gems' ? '' : 'hidden'}>
-            <div className="space-y-0.5 mb-6">
-              <h1 className="text-xl font-bold text-gray-900">Gem Hunter</h1>
-              <p className="text-gray-500 text-xs">Wykrywaj wczesne sygnały zakupu smart money</p>
-            </div>
-            <GemScanner onAnalyzeToken={handleAnalyzeToken} />
-          </div>
-
           <div className={activeTab === 'barry' ? '' : 'hidden'}>
             <div className="space-y-0.5 mb-6">
               <h1 className="text-xl font-bold text-gray-900">Barry Strategy</h1>
               <p className="text-gray-500 text-xs">6-krokowy pipeline analizy tokena wg strategii 0xBarrry</p>
             </div>
             <BarryStrategy />
-          </div>
-
-          <div className={activeTab === 'agent' ? '' : 'hidden'}>
-            <AgentChat />
           </div>
 
         </div>
