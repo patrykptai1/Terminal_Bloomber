@@ -3,7 +3,7 @@
 import { useState, useCallback, useMemo, useEffect } from 'react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Progress } from '@/components/ui/progress'
-import { ChevronDown, ChevronRight, BookmarkPlus, BookmarkCheck, Copy, Check, ExternalLink, Trophy, Zap, TrendingUp, Crown, Loader2 } from 'lucide-react'
+import { ChevronDown, ChevronRight, UserPlus, Copy, Check, ExternalLink, Trophy, Zap, TrendingUp, Crown, Loader2 } from 'lucide-react'
 import { addToBook, removeFromBook, isInBook } from '@/lib/walletBook'
 
 // ── Types matching API response ────────────────────────────────────────
@@ -59,6 +59,14 @@ function formatUsd(n: number): string {
   if (Math.abs(n) >= 1_000_000) return `$${(n / 1_000_000).toFixed(1)}M`
   if (Math.abs(n) >= 1_000) return `$${(n / 1_000).toFixed(1)}K`
   return `$${n.toLocaleString()}`
+}
+
+function fmtMcap(n: number): string {
+  if (!n || n <= 0) return '—'
+  if (n >= 1_000_000_000) return `$${(n / 1_000_000_000).toFixed(2)}B`
+  if (n >= 1_000_000) return `$${(n / 1_000_000).toFixed(2)}M`
+  if (n >= 1_000) return `$${(n / 1_000).toFixed(1)}K`
+  return `$${n.toFixed(0)}`
 }
 
 function shortAddr(addr: string): string {
@@ -119,6 +127,64 @@ function formatNum(n: number): string {
   if (n >= 1_000) return `${(n / 1_000).toFixed(2)}K`
   if (n >= 1) return n.toFixed(2)
   return n.toFixed(6)
+}
+
+// ── Computed wallet metrics ──────────────────────────────────────────
+
+function getEarliestEntryMcap(w: InsiderWallet): number {
+  const entries = w.tokens.filter(t => t.entryMcapUsd > 0).map(t => t.entryMcapUsd)
+  return entries.length > 0 ? Math.min(...entries) : w.avgEntryMcap
+}
+
+function getHoldDurationSec(w: InsiderWallet): number {
+  const holdTimes = w.tokens
+    .filter(t => t.holdingSince && t.holdingSince > 0)
+    .map(t => t.holdingSince as number)
+  if (holdTimes.length === 0) return 0
+  const earliest = Math.min(...holdTimes)
+  return Math.floor(Date.now() / 1000) - earliest
+}
+
+function getStillHolding(w: InsiderWallet): boolean {
+  return w.tokens.some(t => {
+    if (!t.holdingSince || t.holdingSince <= 0) return false
+    return t.sellCount === 0 || t.buyCount > t.sellCount
+  })
+}
+
+function getPnlPercent(w: InsiderWallet): number | null {
+  const totalCost = w.tokens.reduce((s, t) => s + t.totalCostUsd, 0)
+  if (totalCost <= 0) return null
+  return ((w.totalRealizedPnl + w.totalUnrealizedPnl) / totalCost) * 100
+}
+
+function formatHoldDuration(sec: number): string {
+  if (sec <= 0) return '—'
+  const days = Math.floor(sec / 86400)
+  const hours = Math.floor((sec % 86400) / 3600)
+  if (days > 0) return hours > 0 ? `${days}d ${hours}h` : `${days}d`
+  if (hours > 0) return `${hours}h`
+  const mins = Math.floor(sec / 60)
+  return `${mins}m`
+}
+
+function isSmartMoney(w: InsiderWallet): boolean {
+  const entryMcap = getEarliestEntryMcap(w)
+  const holdSec = getHoldDurationSec(w)
+  const pnl = getPnlPercent(w)
+  return (
+    entryMcap > 0 && entryMcap < 500_000 &&
+    holdSec > 24 * 3600 &&
+    (pnl === null || pnl > 100) &&
+    w.walletType === 'HOLDER'
+  )
+}
+
+function mcapEntryColor(mcap: number): string {
+  if (mcap <= 0) return 'text-gray-500'
+  if (mcap < 500_000) return 'text-emerald-600'
+  if (mcap <= 2_000_000) return 'text-amber-500'
+  return 'text-gray-500'
 }
 
 // ── Trade History Component (auto-loads on mount) ───────────────────
@@ -381,6 +447,45 @@ function TradeHistory({ wallet, tokens }: { wallet: string; tokens: TokenHit[] }
 
 type SummaryTab = 'smart' | 'profit' | 'early'
 
+// ── Filter options ───────────────────────────────────────────────────
+
+const MCAP_ENTRY_OPTIONS = [
+  { value: 0, label: 'Wszystkie' },
+  { value: 100_000, label: '< $100K' },
+  { value: 250_000, label: '< $250K' },
+  { value: 500_000, label: '< $500K' },
+  { value: 1_000_000, label: '< $1M' },
+  { value: 2_000_000, label: '< $2M' },
+]
+
+const HOLD_TIME_OPTIONS = [
+  { value: 0, label: 'Wszystkie' },
+  { value: 3600, label: '> 1h' },
+  { value: 21600, label: '> 6h' },
+  { value: 86400, label: '> 24h' },
+  { value: 259200, label: '> 72h' },
+  { value: 604800, label: '> 7 dni' },
+]
+
+const PNL_OPTIONS = [
+  { value: -Infinity, label: 'Wszystkie' },
+  { value: 0, label: '> 0%' },
+  { value: 50, label: '> 50%' },
+  { value: 100, label: '> 100%' },
+  { value: 500, label: '> 500%' },
+  { value: 1000, label: '> 1000%' },
+]
+
+const TYPE_OPTIONS = [
+  { value: 'all', label: 'Wszystkie' },
+  { value: 'HOLDER', label: 'Tylko HOLDER' },
+  { value: 'TRADER', label: 'Tylko TRADER' },
+]
+
+// ── Sort column type ─────────────────────────────────────────────────
+
+type SortCol = 'score' | 'entryMcap' | 'holdDuration' | 'pnl' | 'realized' | 'unrealized' | 'balance' | 'avgEntry'
+
 // ── Main Table Component ──────────────────────────────────────────────
 
 function WalletTable({ wallets, onCopy, onBookmark, bookmarks, copiedAddr, expanded, onToggleExpand }: {
@@ -394,21 +499,96 @@ function WalletTable({ wallets, onCopy, onBookmark, bookmarks, copiedAddr, expan
 }) {
   const [tab, setTab] = useState<SummaryTab>('smart')
 
-  const sorted = useMemo(() => {
-    const arr = [...wallets]
+  // Filters
+  const [maxMcapEntry, setMaxMcapEntry] = useState(0)
+  const [minHoldTime, setMinHoldTime] = useState(3600)
+  const [minPnl, setMinPnl] = useState(-Infinity)
+  const [typeFilter, setTypeFilter] = useState('HOLDER')
+
+  // Sort
+  const [sortCol, setSortCol] = useState<SortCol>('score')
+  const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc')
+
+  const handleColSort = (col: SortCol) => {
+    if (sortCol === col) {
+      setSortDir(d => d === 'desc' ? 'asc' : 'desc')
+    } else {
+      setSortCol(col)
+      setSortDir(col === 'entryMcap' ? 'asc' : 'desc')
+    }
+  }
+
+  const colSortIcon = (col: SortCol) => {
+    if (sortCol !== col) return null
+    return <span className="text-orange-500 ml-0.5 text-[8px]">{sortDir === 'desc' ? '▼' : '▲'}</span>
+  }
+
+  const filtered = useMemo(() => {
+    let arr = [...wallets]
+
+    // Tab-based pre-sort
     switch (tab) {
-      case 'smart':
-        return arr.sort((a, b) => b.insiderScore - a.insiderScore)
       case 'profit':
-        return arr.sort((a, b) =>
+        arr.sort((a, b) =>
           (b.totalRealizedPnl + b.totalUnrealizedPnl) - (a.totalRealizedPnl + a.totalUnrealizedPnl)
         )
+        break
       case 'early':
-        return arr
-          .filter(w => w.avgEntryMcap > 0)
-          .sort((a, b) => a.avgEntryMcap - b.avgEntryMcap)
+        arr = arr.filter(w => w.avgEntryMcap > 0)
+        arr.sort((a, b) => a.avgEntryMcap - b.avgEntryMcap)
+        break
     }
-  }, [wallets, tab])
+
+    // Apply filters
+    if (maxMcapEntry > 0) {
+      arr = arr.filter(w => {
+        const mcap = getEarliestEntryMcap(w)
+        return mcap > 0 && mcap <= maxMcapEntry
+      })
+    }
+
+    if (minHoldTime > 0) {
+      arr = arr.filter(w => getHoldDurationSec(w) >= minHoldTime)
+    }
+
+    if (minPnl > -Infinity) {
+      arr = arr.filter(w => {
+        const pnl = getPnlPercent(w)
+        return pnl === null || pnl >= minPnl
+      })
+    }
+
+    if (typeFilter !== 'all') {
+      arr = arr.filter(w => w.walletType === typeFilter)
+    }
+
+    // Column sort
+    const getSortVal = (w: InsiderWallet): number => {
+      switch (sortCol) {
+        case 'score': return w.insiderScore
+        case 'entryMcap': return getEarliestEntryMcap(w)
+        case 'holdDuration': return getHoldDurationSec(w)
+        case 'pnl': return getPnlPercent(w) ?? -Infinity
+        case 'realized': return w.totalRealizedPnl
+        case 'unrealized': return w.totalUnrealizedPnl
+        case 'balance': return w.solBalanceUsd
+        case 'avgEntry': return w.avgEntryMcap
+        default: return 0
+      }
+    }
+
+    // Smart badge wallets always on top, then sort by column
+    arr.sort((a, b) => {
+      const aS = isSmartMoney(a) ? 1 : 0
+      const bS = isSmartMoney(b) ? 1 : 0
+      if (aS !== bS) return bS - aS
+      const va = getSortVal(a)
+      const vb = getSortVal(b)
+      return sortDir === 'desc' ? vb - va : va - vb
+    })
+
+    return arr
+  }, [wallets, tab, maxMcapEntry, minHoldTime, minPnl, typeFilter, sortCol, sortDir])
 
   const tabs: { key: SummaryTab; label: string; icon: typeof Crown }[] = [
     { key: 'smart', label: 'Smart Money', icon: Crown },
@@ -421,7 +601,7 @@ function WalletTable({ wallets, onCopy, onBookmark, bookmarks, copiedAddr, expan
       <CardHeader className="pb-2 pt-3 px-3">
         <div className="flex items-center gap-1">
           <Trophy size={14} className="text-orange-500" />
-          <CardTitle className="text-xs font-semibold text-gray-700">Wyniki — Top {sorted.length}</CardTitle>
+          <CardTitle className="text-xs font-semibold text-gray-700">Wyniki — Top {wallets.length}</CardTitle>
         </div>
         <div className="flex gap-1 mt-2">
           {tabs.map(t => (
@@ -439,6 +619,75 @@ function WalletTable({ wallets, onCopy, onBookmark, bookmarks, copiedAddr, expan
             </button>
           ))}
         </div>
+
+        {/* ── Filters ── */}
+        <div className="mt-3 p-2.5 bg-gray-50 rounded-lg border border-gray-200">
+          <div className="flex flex-wrap gap-3 items-end">
+            <div className="space-y-0.5">
+              <label className="text-[9px] text-gray-400 font-medium uppercase" title="Pokaż tylko wallety które kupiły gdy kapitalizacja była poniżej X">
+                Maks. mcap przy wejściu
+              </label>
+              <select
+                value={maxMcapEntry}
+                onChange={e => setMaxMcapEntry(Number(e.target.value))}
+                className="block px-2 py-1 text-[11px] border border-gray-200 rounded-md bg-white text-gray-700 focus:outline-none focus:ring-1 focus:ring-orange-400"
+              >
+                {MCAP_ENTRY_OPTIONS.map(o => (
+                  <option key={o.value} value={o.value}>{o.label}</option>
+                ))}
+              </select>
+            </div>
+
+            <div className="space-y-0.5">
+              <label className="text-[9px] text-gray-400 font-medium uppercase" title="Wyklucz wallety które sprzedały szybciej niż X">
+                Min. czas trzymania
+              </label>
+              <select
+                value={minHoldTime}
+                onChange={e => setMinHoldTime(Number(e.target.value))}
+                className="block px-2 py-1 text-[11px] border border-gray-200 rounded-md bg-white text-gray-700 focus:outline-none focus:ring-1 focus:ring-orange-400"
+              >
+                {HOLD_TIME_OPTIONS.map(o => (
+                  <option key={o.value} value={o.value}>{o.label}</option>
+                ))}
+              </select>
+            </div>
+
+            <div className="space-y-0.5">
+              <label className="text-[9px] text-gray-400 font-medium uppercase" title="Pokaż tylko wallety które zarobiły minimum X na tym tokenie">
+                Min. PnL%
+              </label>
+              <select
+                value={minPnl}
+                onChange={e => setMinPnl(Number(e.target.value))}
+                className="block px-2 py-1 text-[11px] border border-gray-200 rounded-md bg-white text-gray-700 focus:outline-none focus:ring-1 focus:ring-orange-400"
+              >
+                {PNL_OPTIONS.map(o => (
+                  <option key={o.value} value={o.value}>{o.label}</option>
+                ))}
+              </select>
+            </div>
+
+            <div className="space-y-0.5">
+              <label className="text-[9px] text-gray-400 font-medium uppercase">
+                Typ walletu
+              </label>
+              <select
+                value={typeFilter}
+                onChange={e => setTypeFilter(e.target.value)}
+                className="block px-2 py-1 text-[11px] border border-gray-200 rounded-md bg-white text-gray-700 focus:outline-none focus:ring-1 focus:ring-orange-400"
+              >
+                {TYPE_OPTIONS.map(o => (
+                  <option key={o.value} value={o.value}>{o.label}</option>
+                ))}
+              </select>
+            </div>
+          </div>
+
+          <div className="mt-1.5 text-[10px] text-gray-400">
+            Pokazuję <span className="font-semibold text-gray-600">{filtered.length}</span> z <span className="font-semibold text-gray-600">{wallets.length}</span> walletów
+          </div>
+        </div>
       </CardHeader>
       <CardContent className="px-0 pb-2 pt-1">
         <div className="overflow-x-auto">
@@ -450,30 +699,57 @@ function WalletTable({ wallets, onCopy, onBookmark, bookmarks, copiedAddr, expan
                 <th className="text-left px-1 py-1.5 font-medium">Tokeny</th>
                 <th className="text-left px-1 py-1.5 font-medium">Labels</th>
                 <th className="text-center px-1 py-1.5 font-medium">Typ</th>
-                <th className="text-right px-1 py-1.5 font-medium">Score</th>
-                <th className="text-right px-1 py-1.5 font-medium">Saldo</th>
-                <th className="text-right px-1 py-1.5 font-medium">Realized</th>
-                <th className="text-right px-1 py-1.5 font-medium">Unrealized</th>
-                <th className="text-right px-1 py-1.5 font-medium">Avg Entry</th>
+                <th className="text-right px-1 py-1.5 font-medium cursor-pointer hover:text-gray-600" onClick={() => handleColSort('entryMcap')}>
+                  Mcap wej.{colSortIcon('entryMcap')}
+                </th>
+                <th className="text-right px-1 py-1.5 font-medium cursor-pointer hover:text-gray-600" onClick={() => handleColSort('holdDuration')}>
+                  Trzyma{colSortIcon('holdDuration')}
+                </th>
+                <th className="text-right px-1 py-1.5 font-medium cursor-pointer hover:text-gray-600" onClick={() => handleColSort('score')}>
+                  Score{colSortIcon('score')}
+                </th>
+                <th className="text-right px-1 py-1.5 font-medium cursor-pointer hover:text-gray-600" onClick={() => handleColSort('balance')}>
+                  Saldo{colSortIcon('balance')}
+                </th>
+                <th className="text-right px-1 py-1.5 font-medium cursor-pointer hover:text-gray-600" onClick={() => handleColSort('realized')}>
+                  Realized{colSortIcon('realized')}
+                </th>
+                <th className="text-right px-1 py-1.5 font-medium cursor-pointer hover:text-gray-600" onClick={() => handleColSort('unrealized')}>
+                  Unrealized{colSortIcon('unrealized')}
+                </th>
+                <th className="text-right px-1 py-1.5 font-medium cursor-pointer hover:text-gray-600" onClick={() => handleColSort('avgEntry')}>
+                  Avg Entry{colSortIcon('avgEntry')}
+                </th>
                 <th className="text-center px-1 pr-3 py-1.5 font-medium">Akcje</th>
               </tr>
             </thead>
             <tbody>
-              {sorted.map((w, i) => {
+              {filtered.map((w, i) => {
                 const isSaved = bookmarks.has(w.address)
                 const isExpanded = expanded.has(w.address)
                 const isCopied = copiedAddr === w.address
+                const smart = isSmartMoney(w)
+                const entryMcap = getEarliestEntryMcap(w)
+                const holdSec = getHoldDurationSec(w)
+                const stillHolding = getStillHolding(w)
+                const pnlPct = getPnlPercent(w)
+
                 return (
                   <tr key={w.address} className="group">
-                    <td colSpan={11} className="p-0">
+                    <td colSpan={13} className="p-0">
                       {/* Main row */}
                       <div
-                        className={`grid grid-cols-[auto_1fr_auto_auto_auto_auto_auto_auto_auto_auto_auto] items-center cursor-pointer hover:bg-gray-50/50 border-b border-gray-50 ${isExpanded ? 'bg-orange-50/30' : ''}`}
+                        className={`grid grid-cols-[auto_1fr_auto_auto_auto_auto_auto_auto_auto_auto_auto_auto_auto] items-center cursor-pointer hover:bg-gray-50/50 border-b border-gray-50 ${isExpanded ? 'bg-orange-50/30' : ''}`}
                         onClick={() => onToggleExpand(w.address)}
                       >
                         <div className="pl-3 pr-1 py-1.5 text-gray-400 font-medium text-[11px]">{i + 1}</div>
                         <div className="px-1 py-1.5">
                           <div className="flex items-center gap-1">
+                            {smart && (
+                              <span className="text-[8px] font-bold px-1 py-0 rounded bg-orange-100 text-orange-700 shrink-0">
+                                ⭐ Smart
+                              </span>
+                            )}
                             <span className="font-mono text-gray-700 text-[11px]">{shortAddr(w.address)}</span>
                             <button
                               onClick={e => { e.stopPropagation(); onCopy(w.address) }}
@@ -514,6 +790,20 @@ function WalletTable({ wallets, onCopy, onBookmark, bookmarks, copiedAddr, expan
                             {w.walletType}
                           </span>
                         </div>
+
+                        {/* Mcap wejście */}
+                        <div className={`px-1 py-1.5 text-right text-[11px] font-medium ${mcapEntryColor(entryMcap)}`}>
+                          {fmtMcap(entryMcap)}
+                        </div>
+
+                        {/* Czas trzymania */}
+                        <div className="px-1 py-1.5 text-right text-[11px]">
+                          <span className="text-gray-600 font-medium">{formatHoldDuration(holdSec)}</span>
+                          {stillHolding && (
+                            <span className="text-[8px] text-emerald-500 ml-0.5">(aktywny)</span>
+                          )}
+                        </div>
+
                         <div className="px-1 py-1.5 text-right" title={`Wczesne wejscie: ${w.scoreBreakdown.earlyEntry}/30\nTrzymanie: ${w.scoreBreakdown.holdDuration}/35\nPnL: ${w.scoreBreakdown.pnlScore}/25\nKonsekwencja: ${w.scoreBreakdown.consistency}/10`}>
                           <span className={`font-bold px-1.5 py-0.5 rounded text-[10px] border ${scoreColor(w.insiderScore)}`}>
                             {w.insiderScore}
@@ -544,10 +834,10 @@ function WalletTable({ wallets, onCopy, onBookmark, bookmarks, copiedAddr, expan
                             </a>
                             <button
                               onClick={() => onBookmark(w.address)}
-                              className={`${isSaved ? 'text-orange-500' : 'text-gray-300 hover:text-orange-400'}`}
-                              title={isSaved ? 'Usun' : 'Dodaj'}
+                              className={`transition-colors ${isSaved ? 'text-emerald-500' : 'text-gray-300 hover:text-orange-400'}`}
+                              title={isSaved ? 'Już obserwowany' : 'Dodaj do obserwowanych'}
                             >
-                              {isSaved ? <BookmarkCheck size={12} /> : <BookmarkPlus size={12} />}
+                              {isSaved ? <Check size={12} /> : <UserPlus size={12} />}
                             </button>
                             {isExpanded ? <ChevronDown size={12} className="text-gray-400" /> : <ChevronRight size={12} className="text-gray-400" />}
                           </div>
@@ -558,7 +848,7 @@ function WalletTable({ wallets, onCopy, onBookmark, bookmarks, copiedAddr, expan
                       {isExpanded && (
                         <div className="border-b border-gray-100 bg-gray-50/50 px-3 py-2 space-y-2">
                           {/* Score breakdown */}
-                          <div className="grid grid-cols-2 sm:grid-cols-4 gap-1.5 text-[10px]">
+                          <div className="grid grid-cols-2 sm:grid-cols-5 gap-1.5 text-[10px]">
                             <div className="bg-white rounded border border-gray-200 px-2 py-1.5">
                               <div className="text-[9px] text-gray-400 font-medium">Wczesne wejscie</div>
                               <div className="font-bold text-gray-700">{w.scoreBreakdown.earlyEntry}<span className="text-gray-400 font-normal">/30</span></div>
@@ -568,12 +858,18 @@ function WalletTable({ wallets, onCopy, onBookmark, bookmarks, copiedAddr, expan
                               <div className="font-bold text-gray-700">{w.scoreBreakdown.holdDuration}<span className="text-gray-400 font-normal">/35</span></div>
                             </div>
                             <div className="bg-white rounded border border-gray-200 px-2 py-1.5">
-                              <div className="text-[9px] text-gray-400 font-medium">PnL %</div>
+                              <div className="text-[9px] text-gray-400 font-medium">PnL Score</div>
                               <div className="font-bold text-gray-700">{w.scoreBreakdown.pnlScore}<span className="text-gray-400 font-normal">/25</span></div>
                             </div>
                             <div className="bg-white rounded border border-gray-200 px-2 py-1.5">
                               <div className="text-[9px] text-gray-400 font-medium">Konsekwencja</div>
                               <div className="font-bold text-gray-700">{w.scoreBreakdown.consistency}<span className="text-gray-400 font-normal">/10</span></div>
+                            </div>
+                            <div className="bg-white rounded border border-gray-200 px-2 py-1.5">
+                              <div className="text-[9px] text-gray-400 font-medium">PnL %</div>
+                              <div className={`font-bold ${pnlPct !== null && pnlPct > 0 ? 'text-emerald-600' : pnlPct !== null && pnlPct < 0 ? 'text-red-500' : 'text-gray-500'}`}>
+                                {pnlPct !== null ? `${pnlPct > 0 ? '+' : ''}${pnlPct.toFixed(0)}%` : '—'}
+                              </div>
                             </div>
                           </div>
 
