@@ -1,21 +1,23 @@
 'use client'
 
 import { useState, useCallback } from 'react'
-import { LayoutDashboard, Wallet, ScanLine, BarChart2, Activity, Crosshair } from 'lucide-react'
+import { LayoutDashboard, Wallet, ScanLine, BarChart2, Activity, Crosshair, Search } from 'lucide-react'
 import TokenAnalyzer from '@/components/TokenAnalyzer'
 import WalletInspector from '@/components/WalletInspector'
 import MyWallets from '@/components/MyWallets'
 import MarketScanner from '@/components/MarketScanner'
 import WalletActivityDashboard from '@/components/WalletActivityDashboard'
 import BarryStrategy from '@/components/BarryStrategy'
+import TokenScanner from '@/components/TokenScanner'
 
 const NAV_ITEMS = [
-  { tab: 'dashboard',  label: 'Wallet Radar',           Icon: LayoutDashboard },
-  { tab: 'tracking',   label: 'Insider Analyzer',        Icon: Activity        },
-  { tab: 'mywallets',  label: 'My Wallets',             Icon: Wallet          },
-  { tab: 'wallet',     label: 'Wallet Scanner',         Icon: ScanLine        },
-  { tab: 'scanner',    label: 'Market',                 Icon: BarChart2       },
-  { tab: 'barry',      label: 'Barry Strategy',         Icon: Crosshair       },
+  { tab: 'dashboard',     label: 'Wallet Radar',           Icon: LayoutDashboard },
+  { tab: 'tracking',      label: 'Insider Analyzer',        Icon: Activity        },
+  { tab: 'tokenscanner',  label: 'Token Scanner',           Icon: Search          },
+  { tab: 'mywallets',     label: 'My Wallets',             Icon: Wallet          },
+  { tab: 'wallet',        label: 'Wallet Scanner',         Icon: ScanLine        },
+  { tab: 'scanner',       label: 'Market',                 Icon: BarChart2       },
+  { tab: 'barry',         label: 'Barry Strategy',         Icon: Crosshair       },
 ]
 
 export default function HomeClient() {
@@ -85,6 +87,14 @@ export default function HomeClient() {
               </div>
               <TokenAnalyzer />
             </div>
+          </div>
+
+          <div className={activeTab === 'tokenscanner' ? '' : 'hidden'}>
+            <div className="space-y-0.5 mb-6">
+              <h1 className="text-xl font-bold text-gray-900">Token Scanner</h1>
+              <p className="text-gray-500 text-xs">Przeszukaj rynek Solana z filtrami ATH/ATL mcap, holderów, wolumenu i wieku</p>
+            </div>
+            <TokenScanner />
           </div>
 
           <div className={activeTab === 'mywallets' ? '' : 'hidden'}>
