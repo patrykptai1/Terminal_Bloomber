@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useCallback } from 'react'
-import { LayoutDashboard, Wallet, ScanLine, BarChart2, Activity, Crosshair, Search } from 'lucide-react'
+import { LayoutDashboard, Wallet, ScanLine, BarChart2, Activity, Crosshair, Search, Radar } from 'lucide-react'
 import TokenAnalyzer from '@/components/TokenAnalyzer'
 import WalletInspector from '@/components/WalletInspector'
 import MyWallets from '@/components/MyWallets'
@@ -9,6 +9,7 @@ import MarketScanner from '@/components/MarketScanner'
 import WalletActivityDashboard from '@/components/WalletActivityDashboard'
 import BarryStrategy from '@/components/BarryStrategy'
 import TokenScanner from '@/components/TokenScanner'
+import CieloScout from '@/components/CieloScout'
 
 const NAV_ITEMS = [
   { tab: 'dashboard',     label: 'Wallet Radar',           Icon: LayoutDashboard },
@@ -18,6 +19,7 @@ const NAV_ITEMS = [
   { tab: 'wallet',        label: 'Wallet Scanner',         Icon: ScanLine        },
   { tab: 'scanner',       label: 'Market',                 Icon: BarChart2       },
   { tab: 'barry',         label: 'Barry Strategy',         Icon: Crosshair       },
+  { tab: 'cielo',         label: 'Cielo Scout',            Icon: Radar           },
 ]
 
 export default function HomeClient() {
@@ -127,6 +129,14 @@ export default function HomeClient() {
               <p className="text-gray-500 text-xs">6-krokowy pipeline analizy tokena wg strategii 0xBarrry</p>
             </div>
             <BarryStrategy />
+          </div>
+
+          <div className={activeTab === 'cielo' ? '' : 'hidden'}>
+            <div className="space-y-0.5 mb-6">
+              <h1 className="text-xl font-bold text-gray-900">Cielo Scout</h1>
+              <p className="text-gray-500 text-xs">Monitoruj first buys i convergence smart money walletów — Cielo Finance</p>
+            </div>
+            <CieloScout />
           </div>
 
         </div>

@@ -13,6 +13,32 @@ import { loadBook, SavedWallet } from '@/lib/walletBook'
 import type { WalletPositionsResult, WalletPosition } from '@/app/api/wallet-positions/route'
 import { EnrichedTransaction, WalletTransactionsResult } from '@/app/api/wallet-transactions/route'
 
+// ── Stablecoin / wrapped SOL addresses to exclude ───────────────────────────
+const EXCLUDED_MINTS = new Set([
+  'EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v', // USDC
+  'Es9vMFrzaCERmJfrF4H2FYD4KCoNkY11McCe8BenwNYB', // USDT
+  'So11111111111111111111111111111111111111112',      // Wrapped SOL
+  'mSoLzYCxHdYgdzU16g5QSh3i5K3z3KZK7ytfqcJm7So',  // mSOL
+  'J1toso1uCk3RLmjorhTtrVwY9HJ7X8V9yYac6Y7kGCPn', // JitoSOL
+  '7dHbWXmci3dT8UFYWYZweBLXgycu7Y3iL6trKn1Y7ARj', // stSOL
+  'bSo13r4TkiE4KumL71LsHTPpL2euBYLFx6h9HP3piy1',  // bSOL
+  'EKpQGSJtjMFqKZ9KQanSqYXRcF8fBopzLHYxdM65zcjm', // WIF (wrapped)
+  'USDhTjkUXFfigLELiFpbBQ6XUQN9Fnt2qWFBz9SUQr',   // USDh
+  '2b1kV6DkPAnxd5ixfnxCpjxmKwqjjaYmCZfHsFu24GXo', // PYUSD
+])
+
+const EXCLUDED_SYMBOLS = new Set([
+  'USDC', 'USDT', 'BUSD', 'DAI', 'TUSD', 'USDP', 'FRAX', 'LUSD', 'USDD',
+  'USDe', 'USDh', 'PYUSD', 'GUSD', 'sUSD', 'cUSD', 'WBTC', 'WSOL',
+])
+
+function isStablecoinOrWrapped(tokenAddress: string, symbol: string): boolean {
+  if (EXCLUDED_MINTS.has(tokenAddress)) return true
+  const upper = symbol.toUpperCase()
+  if (EXCLUDED_SYMBOLS.has(upper)) return true
+  return false
+}
+
 // ── helpers ──────────────────────────────────────────────────────────────────
 
 function avatarColor(address: string): string {
@@ -64,6 +90,48 @@ function lastUpdatedLabel(ts: number | null): string {
   if (diff < 60) return 'przed chwilą'
   if (diff < 3600) return `${Math.floor(diff / 60)} min temu`
   return `${Math.floor(diff / 3600)}h temu`
+}
+
+// ── sessionStorage cache ──────────────────────────────────────────────────
+const CACHE_KEY = 'smwd_radar_data'
+
+interface CachedRadarData {
+  positionsEntries: [string, WalletPositionsResult][]
+  txResults: WalletTransactionsResult[]
+  lastUpdated: number
+}
+
+function saveRadarCache(
+  positionsMap: Map<string, WalletPositionsResult>,
+  txResults: WalletTransactionsResult[],
+  lastUpdated: number,
+): void {
+  try {
+    const data: CachedRadarData = {
+      positionsEntries: [...positionsMap.entries()],
+      txResults,
+      lastUpdated,
+    }
+    sessionStorage.setItem(CACHE_KEY, JSON.stringify(data))
+  } catch (e) {
+    console.warn('[radar-cache] save failed:', e)
+  }
+}
+
+function loadRadarCache(): CachedRadarData | null {
+  try {
+    const raw = sessionStorage.getItem(CACHE_KEY)
+    if (!raw) return null
+    const data = JSON.parse(raw) as CachedRadarData
+    if (!data.positionsEntries || !data.txResults || !data.lastUpdated) return null
+    return data
+  } catch {
+    return null
+  }
+}
+
+function clearRadarCache(): void {
+  try { sessionStorage.removeItem(CACHE_KEY) } catch { /* ignore */ }
 }
 
 // Performance color for heat map tile
@@ -165,10 +233,21 @@ function HeatMapTile({
 
 // ── Activity Bar Chart ───────────────────────────────────────────────────────
 
-function ActivityChart({ data }: { data: { label: string; buys: number }[] }) {
+interface ActivityDayData {
+  label: string
+  buys: number
+  tokens: { symbol: string; solAmount: number; marketCapAtBuy: number; tokenAddress: string }[]
+}
+
+function ActivityChart({ data }: { data: ActivityDayData[] }) {
+  const [selectedIdx, setSelectedIdx] = useState<number | null>(null)
+
   if (data.length === 0) return null
+
+  const selected = selectedIdx !== null ? data[selectedIdx] : null
+
   return (
-    <div className="bg-white border border-gray-200 rounded-xl p-4 shadow-sm">
+    <div className="bg-white border border-gray-200 rounded-xl p-4 shadow-sm relative">
       <div className="text-[10px] text-gray-400 uppercase tracking-wider font-medium mb-3">Aktywność zakupowa (ostatnie 7 dni)</div>
       <ResponsiveContainer width="100%" height={160}>
         <BarChart data={data} margin={{ top: 4, right: 4, left: 0, bottom: 0 }}>
@@ -178,13 +257,39 @@ function ActivityChart({ data }: { data: { label: string; buys: number }[] }) {
             contentStyle={{ fontSize: 11, border: '1px solid #e5e7eb', borderRadius: 8 }}
             formatter={(value: number | undefined) => [`${value ?? 0} zakupów`, 'Zakupy']}
           />
-          <Bar dataKey="buys" radius={[4, 4, 0, 0]}>
+          <Bar
+            dataKey="buys"
+            radius={[4, 4, 0, 0]}
+            onClick={(_: unknown, idx: number) => setSelectedIdx(prev => prev === idx ? null : idx)}
+            className="cursor-pointer"
+          >
             {data.map((entry, idx) => (
-              <Cell key={idx} fill={entry.buys > 0 ? '#f97316' : '#e5e7eb'} />
+              <Cell key={idx} fill={selectedIdx === idx ? '#ea580c' : entry.buys > 0 ? '#f97316' : '#e5e7eb'} />
             ))}
           </Bar>
         </BarChart>
       </ResponsiveContainer>
+
+      {/* Day detail popup */}
+      {selected && selected.tokens.length > 0 && (
+        <div className="mt-2 bg-gray-50 border border-gray-200 rounded-lg p-3">
+          <div className="flex items-center justify-between mb-2">
+            <div className="text-[10px] text-gray-400 uppercase font-medium">{selected.label} — {selected.tokens.length} zakupów</div>
+            <button onClick={() => setSelectedIdx(null)} className="text-gray-400 hover:text-gray-600 text-xs font-bold">✕</button>
+          </div>
+          <div className="space-y-1 max-h-[200px] overflow-y-auto">
+            {selected.tokens.map((tok, i) => (
+              <div key={i} className="flex items-center justify-between text-xs px-2 py-1.5 bg-white rounded-md">
+                <div>
+                  <span className="font-medium text-gray-700">{tok.symbol}</span>
+                  <span className="text-gray-400 ml-1.5">{fmtMcap(tok.marketCapAtBuy)}</span>
+                </div>
+                <span className="font-mono text-gray-600">{tok.solAmount.toFixed(2)} SOL</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
     </div>
   )
 }
@@ -305,6 +410,7 @@ function WalletDetailPanel({
 }) {
   const w = walletMap.get(address)
   const label = walletLabel(w, address)
+  const [expandedTxIdx, setExpandedTxIdx] = useState<number | null>(null)
 
   return (
     <div className="bg-white border border-gray-200 rounded-xl shadow-sm overflow-hidden">
@@ -352,40 +458,63 @@ function WalletDetailPanel({
             </div>
           </div>
 
-          {/* Top positions */}
-          {positions.positions.length > 0 && (
+          {/* Top positions (≥$500, no stablecoins) */}
+          {positions.positions.filter(p => p.usdValue >= 500 && !isStablecoinOrWrapped(p.tokenAddress, p.symbol)).length > 0 && (
             <div>
-              <div className="text-[10px] text-gray-400 uppercase tracking-wider font-medium mb-2">Pozycje</div>
+              <div className="text-[10px] text-gray-400 uppercase tracking-wider font-medium mb-2">Pozycje (&ge;$500)</div>
               <div className="space-y-1">
-                {positions.positions.slice(0, 8).map(pos => (
-                  <div key={pos.tokenAddress} className="flex items-center justify-between text-xs px-2 py-1.5 bg-gray-50 rounded-lg">
-                    <span className="font-medium text-gray-700">{pos.symbol}</span>
-                    <span className="font-mono text-gray-800 font-semibold">{fmtUsd(pos.usdValue)}</span>
+                {positions.positions.filter(p => p.usdValue >= 500 && !isStablecoinOrWrapped(p.tokenAddress, p.symbol)).slice(0, 8).map(pos => (
+                  <div key={pos.tokenAddress} className="text-xs px-2 py-1.5 bg-gray-50 rounded-lg">
+                    <div className="flex items-center justify-between">
+                      <span className="font-medium text-gray-700">{pos.symbol}</span>
+                      <span className="font-mono text-gray-800 font-semibold">{fmtUsd(pos.usdValue)}</span>
+                    </div>
+                    <button
+                      className="text-[9px] font-mono text-gray-400 hover:text-orange-500 transition-colors mt-0.5"
+                      onClick={() => navigator.clipboard.writeText(pos.tokenAddress)}
+                      title="Kliknij aby skopiować CA"
+                    >
+                      CA: {pos.tokenAddress.slice(0, 6)}…{pos.tokenAddress.slice(-4)}
+                    </button>
                   </div>
                 ))}
               </div>
             </div>
           )}
 
-          {/* Recent transactions */}
-          {transactions.length > 0 && (
+          {/* Recent transactions (no stablecoins) */}
+          {transactions.filter(tx => !isStablecoinOrWrapped(tx.tokenAddress, tx.tokenSymbol)).length > 0 && (
             <div>
               <div className="text-[10px] text-gray-400 uppercase tracking-wider font-medium mb-2">Ostatnie zakupy</div>
               <div className="space-y-1">
-                {transactions.slice(0, 5).map((tx, i) => (
-                  <div key={i} className="flex items-center justify-between text-xs px-2 py-1.5 bg-gray-50 rounded-lg">
-                    <div className="flex items-center gap-1.5">
-                      <span className="font-medium text-gray-700">{tx.tokenSymbol}</span>
-                      <span className="text-gray-400">{timeAgo(tx.timestamp)}</span>
+                {transactions.filter(tx => !isStablecoinOrWrapped(tx.tokenAddress, tx.tokenSymbol)).slice(0, 5).map((tx, i) => (
+                  <div key={i}>
+                    <div
+                      className="flex items-center justify-between text-xs px-2 py-1.5 bg-gray-50 rounded-lg cursor-pointer hover:bg-gray-100 transition-colors"
+                      onClick={() => setExpandedTxIdx(prev => prev === i ? null : i)}
+                    >
+                      <div className="flex items-center gap-1.5">
+                        <span className="font-medium text-gray-700">{tx.tokenSymbol}</span>
+                        <span className="text-gray-400">{timeAgo(tx.timestamp)}</span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <span className="font-mono text-gray-500">{fmtMcap(tx.marketCapAtBuy)}</span>
+                        {tx.pnlPercent !== 0 && (
+                          <span className={`font-mono font-semibold ${tx.pnlPercent >= 0 ? 'text-emerald-600' : 'text-red-500'}`}>
+                            {tx.pnlPercent >= 0 ? '+' : ''}{tx.pnlPercent.toFixed(1)}%
+                          </span>
+                        )}
+                      </div>
                     </div>
-                    <div className="flex items-center gap-2">
-                      <span className="font-mono text-gray-500">{fmtMcap(tx.marketCapAtBuy)}</span>
-                      {tx.pnlPercent !== 0 && (
-                        <span className={`font-mono font-semibold ${tx.pnlPercent >= 0 ? 'text-emerald-600' : 'text-red-500'}`}>
-                          {tx.pnlPercent >= 0 ? '+' : ''}{tx.pnlPercent.toFixed(1)}%
-                        </span>
-                      )}
-                    </div>
+                    {expandedTxIdx === i && (
+                      <button
+                        className="w-full text-left text-[9px] font-mono text-gray-400 hover:text-orange-500 transition-colors px-2 py-1 bg-gray-100 rounded-b-lg -mt-0.5"
+                        onClick={(e) => { e.stopPropagation(); navigator.clipboard.writeText(tx.tokenAddress) }}
+                        title="Kliknij aby skopiować CA"
+                      >
+                        CA: {tx.tokenAddress}
+                      </button>
+                    )}
                   </div>
                 ))}
               </div>
@@ -581,10 +710,33 @@ export default function WalletActivityDashboard() {
   const [progress, setProgress] = useState(0)
   const [progressLabel, setProgressLabel] = useState('')
   const [lastUpdated, setLastUpdated] = useState<number | null>(null)
+  const [fromCache, setFromCache] = useState(false)
 
   useEffect(() => {
     setWallets(loadBook())
-    const onUpdate = () => setWallets(loadBook())
+
+    // Restore cached radar data on mount
+    const cached = loadRadarCache()
+    if (cached) {
+      setPositionsMap(new Map(cached.positionsEntries))
+      setTxResults(cached.txResults)
+      setLastUpdated(cached.lastUpdated)
+      setFromCache(true)
+    }
+
+    const onUpdate = () => {
+      const newWallets = loadBook()
+      setWallets(newWallets)
+      // If wallet list changed, invalidate cache
+      const c = loadRadarCache()
+      if (c) {
+        const cachedAddrs = new Set(c.positionsEntries.map(([addr]) => addr))
+        const currentAddrs = new Set(newWallets.map(w => w.address))
+        if (cachedAddrs.size !== currentAddrs.size || [...cachedAddrs].some(a => !currentAddrs.has(a))) {
+          clearRadarCache()
+        }
+      }
+    }
     window.addEventListener('wallet-book-updated', onUpdate)
     return () => window.removeEventListener('wallet-book-updated', onUpdate)
   }, [])
@@ -604,8 +756,9 @@ export default function WalletActivityDashboard() {
 
     return wallets.map(w => {
       const pos = positionsMap.get(w.address)
-      const txs = txByWallet.get(w.address) ?? []
-      const topPos = pos?.positions?.[0]
+      const txs = (txByWallet.get(w.address) ?? []).filter(tx => !isStablecoinOrWrapped(tx.tokenAddress, tx.tokenSymbol))
+      const filteredPositions = pos?.positions?.filter(p => !isStablecoinOrWrapped(p.tokenAddress, p.symbol) && p.usdValue >= 500) ?? []
+      const topPos = filteredPositions[0]
 
       return {
         address: w.address,
@@ -613,7 +766,7 @@ export default function WalletActivityDashboard() {
         totalValueUsd: pos?.totalValueUsd ?? 0,
         solBalance: pos?.solBalance ?? 0,
         solValueUsd: pos?.solValueUsd ?? 0,
-        positionsCount: pos?.positions?.length ?? 0,
+        positionsCount: filteredPositions.length,
         recentBuys: txs.length,
         topToken: topPos?.symbol ?? '',
         topTokenValue: topPos?.usdValue ?? 0,
@@ -636,6 +789,9 @@ export default function WalletActivityDashboard() {
     const byToken = new Map<string, AggregatedToken>()
     for (const [addr, posResult] of positionsMap.entries()) {
       for (const pos of posResult.positions) {
+        // Skip stablecoins and positions < $500
+        if (isStablecoinOrWrapped(pos.tokenAddress, pos.symbol)) continue
+        if (pos.usdValue < 500) continue
         const existing = byToken.get(pos.tokenAddress)
         if (existing) {
           existing.totalValueUsd += pos.usdValue
@@ -663,21 +819,33 @@ export default function WalletActivityDashboard() {
   }, [positionsMap])
 
   const allTransactions = useMemo(
-    () => txResults.flatMap(r => r.transactions).sort((a, b) => b.timestamp - a.timestamp),
+    () => txResults
+      .flatMap(r => r.transactions)
+      .filter(tx => !isStablecoinOrWrapped(tx.tokenAddress, tx.tokenSymbol))
+      .sort((a, b) => b.timestamp - a.timestamp),
     [txResults],
   )
 
-  // Activity chart: group buys by day
+  // Activity chart: group buys by day (with token details for click popup)
   const activityData = useMemo(() => {
-    const days: { label: string; buys: number }[] = []
+    const days: { label: string; buys: number; tokens: { symbol: string; solAmount: number; marketCapAtBuy: number; tokenAddress: string }[] }[] = []
     const now = Date.now()
     for (let i = 6; i >= 0; i--) {
       const dayStart = new Date(now - i * 86400_000)
       const dayLabel = dayStart.toLocaleDateString('pl-PL', { weekday: 'short' })
       const dayStartTs = Math.floor(dayStart.setHours(0, 0, 0, 0) / 1000)
       const dayEndTs = dayStartTs + 86400
-      const count = allTransactions.filter(tx => tx.timestamp >= dayStartTs && tx.timestamp < dayEndTs).length
-      days.push({ label: dayLabel, buys: count })
+      const dayTxs = allTransactions.filter(tx => tx.timestamp >= dayStartTs && tx.timestamp < dayEndTs)
+      days.push({
+        label: dayLabel,
+        buys: dayTxs.length,
+        tokens: dayTxs.map(tx => ({
+          symbol: tx.tokenSymbol,
+          solAmount: tx.solAmount,
+          marketCapAtBuy: tx.marketCapAtBuy,
+          tokenAddress: tx.tokenAddress,
+        })),
+      })
     }
     return days
   }, [allTransactions])
@@ -701,46 +869,77 @@ export default function WalletActivityDashboard() {
     const newPositions = new Map<string, WalletPositionsResult>()
     const newTx: WalletTransactionsResult[] = []
 
-    // Fetch positions (batch of 5)
+    // ── Phase 1 (0-40%): Fetch positions in batches of 5 ──
     for (let i = 0; i < wallets.length; i += 5) {
       const batch = wallets.slice(i, i + 5)
       const addrs = batch.map(w => w.address).join(',')
       setProgressLabel(`Pozycje ${Math.min(i + 5, total)}/${total}…`)
-      setProgress(Math.round(((i + 5) / total) * 40))
+      setProgress(Math.round(((Math.min(i + 5, total)) / total) * 40))
 
       try {
-        const res = await fetch(`/api/wallet-positions?addresses=${addrs}`)
+        const controller = new AbortController()
+        const timeoutId = setTimeout(() => controller.abort(), 30_000)
+        const res = await fetch(`/api/wallet-positions?addresses=${addrs}`, { signal: controller.signal })
+        clearTimeout(timeoutId)
         const data = await res.json()
         if (res.ok && data.wallets) {
           for (const wr of data.wallets as WalletPositionsResult[]) {
             newPositions.set(wr.address, wr)
           }
         }
-      } catch { /* skip */ }
+      } catch (e) {
+        console.warn('[radar] positions batch failed:', e)
+      }
     }
     setPositionsMap(newPositions)
 
-    // Fetch recent transactions (1d)
-    for (let i = 0; i < wallets.length; i++) {
-      const w = wallets[i]
-      const label = w.label || `${w.address.slice(0, 6)}…`
-      setProgressLabel(`Transakcje ${i + 1}/${total}: ${label}`)
-      setProgress(40 + Math.round((i / total) * 60))
+    // ── Phase 2 (40-100%): Fetch transactions in parallel batches of 3 ──
+    const TX_BATCH = 3
+    let completedTx = 0
 
-      try {
-        const res = await fetch(`/api/wallet-transactions?addresses=${w.address}&period=7d`)
-        const data = await res.json()
-        if (res.ok && data.wallets) {
-          newTx.push(...data.wallets)
-          setTxResults([...newTx])
+    for (let i = 0; i < wallets.length; i += TX_BATCH) {
+      const batch = wallets.slice(i, i + TX_BATCH)
+
+      const promises = batch.map(async (w) => {
+        try {
+          const controller = new AbortController()
+          const timeoutId = setTimeout(() => controller.abort(), 45_000)
+          const res = await fetch(
+            `/api/wallet-transactions?addresses=${w.address}&period=7d`,
+            { signal: controller.signal },
+          )
+          clearTimeout(timeoutId)
+          const data = await res.json()
+          if (res.ok && data.wallets) {
+            return data.wallets as WalletTransactionsResult[]
+          }
+        } catch (e) {
+          console.warn(`[radar] tx fetch failed for ${w.label || w.address.slice(0, 8)}:`, e)
         }
-      } catch { /* skip */ }
+        return [] as WalletTransactionsResult[]
+      })
+
+      const results = await Promise.allSettled(promises)
+      for (const result of results) {
+        if (result.status === 'fulfilled') {
+          newTx.push(...result.value)
+        }
+        completedTx++
+      }
+
+      setProgressLabel(`Transakcje ${Math.min(completedTx, total)}/${total}…`)
+      setProgress(40 + Math.round((completedTx / total) * 60))
+      setTxResults([...newTx])
     }
 
+    // ── Done: save to cache ──
+    const now = Date.now()
     setProgress(100)
     setProgressLabel('Gotowe!')
-    setLastUpdated(Date.now())
+    setLastUpdated(now)
+    setFromCache(false)
     setLoading(false)
+    saveRadarCache(newPositions, newTx, now)
   }, [wallets])
 
   // ── EMPTY STATE ──────────────────────────────────────────────────────────
@@ -771,7 +970,7 @@ export default function WalletActivityDashboard() {
         <div className="flex items-center gap-3 shrink-0">
           {lastUpdated && !loading && (
             <span className="text-gray-400 text-xs hidden sm:inline">
-              {lastUpdatedLabel(lastUpdated)}
+              {lastUpdatedLabel(lastUpdated)}{fromCache ? ' (z cache)' : ''}
             </span>
           )}
           <button
@@ -811,7 +1010,7 @@ export default function WalletActivityDashboard() {
       )}
 
       {/* ── Dashboard content ── */}
-      {hasData && !loading && (
+      {hasData && (
         <div className="space-y-5">
 
           {/* Stat cards */}

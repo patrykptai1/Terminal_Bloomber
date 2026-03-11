@@ -932,6 +932,9 @@ export default function TokenAnalyzer() {
   const [expanded, setExpanded] = useState<Set<string>>(new Set())
   const [bookmarks, setBookmarks] = useState<Set<string>>(new Set())
   const [copiedAddr, setCopiedAddr] = useState<string | null>(null)
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const [enrichment, setEnrichment] = useState<any>(null)
+  const [enrichLoading, setEnrichLoading] = useState(false)
 
   const toggleExpand = (addr: string) => {
     setExpanded(prev => {
@@ -980,6 +983,27 @@ export default function TokenAnalyzer() {
     document.execCommand('copy')
     document.body.removeChild(ta)
   }
+
+  const fetchEnrichment = useCallback(async (
+    address: string, symbol: string, name: string, priceUsd: number,
+  ) => {
+    setEnrichLoading(true)
+    try {
+      const params = new URLSearchParams({
+        address, symbol, name,
+        price: priceUsd.toString(),
+        validatePrice: 'true',
+      })
+      const res = await fetch(`/api/enrich-token?${params}`, { signal: AbortSignal.timeout(25000) })
+      if (!res.ok) throw new Error('HTTP ' + res.status)
+      const data = await res.json()
+      setEnrichment(data)
+    } catch {
+      setEnrichment(null)
+    } finally {
+      setEnrichLoading(false)
+    }
+  }, [])
 
   const analyze = useCallback(async () => {
     const mints = input
@@ -1054,6 +1078,21 @@ export default function TokenAnalyzer() {
     }
   }, [input])
 
+  // Auto-enrich first token when analysis completes
+  useEffect(() => {
+    if (!result || result.wallets.length === 0) { setEnrichment(null); return }
+    // Find the first token from the input
+    const firstMint = input.split(/[\n,\s]+/).map(s => s.trim()).filter(s => s.length >= 20)[0]
+    if (!firstMint) return
+    // Try to find symbol/name from result wallets
+    const hit = result.wallets[0]?.tokens?.[0]
+    const symbol = hit?.symbol ?? 'UNKNOWN'
+    const mcap = hit?.currentMcapUsd ?? 0
+    // Estimate price from mcap (rough)
+    fetchEnrichment(firstMint, symbol, symbol, mcap > 0 ? mcap / 1e9 : 0)
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [result])
+
   return (
     <div className="space-y-3">
       {/* Input */}
@@ -1127,6 +1166,200 @@ export default function TokenAnalyzer() {
               {result.errors.map((e, i) => (
                 <p key={i} className="text-yellow-600 text-[11px]">{e}</p>
               ))}
+            </div>
+          )}
+
+          {/* Enrichment Panel */}
+          {enrichLoading && (
+            <div className="p-4 bg-white border border-gray-200 rounded-xl shadow-sm animate-pulse">
+              <div className="h-4 bg-gray-100 rounded w-1/3 mb-3" />
+              <div className="grid grid-cols-3 gap-2">
+                {[1,2,3].map(i => <div key={i} className="h-8 bg-gray-100 rounded" />)}
+              </div>
+            </div>
+          )}
+
+          {enrichment && !enrichLoading && (
+            <div className="space-y-2">
+              {/* Price warning */}
+              {enrichment.priceValidation?.warning && (
+                <div className="p-2.5 bg-yellow-50 border border-yellow-200 rounded-lg text-yellow-700 text-xs">
+                  {enrichment.priceValidation.warning}
+                </div>
+              )}
+
+              {/* Liquidity warning */}
+              {enrichment.liquidityWarning && (
+                <div className="p-2.5 bg-red-50 border border-red-200 rounded-lg text-red-600 text-xs">
+                  Niska likwidnosc — price impact przy $5k: {enrichment.priceImpact5kUsd?.toFixed(1)}%
+                </div>
+              )}
+
+              {/* Token too new */}
+              {enrichment.isNewToken && (
+                <div className="p-2.5 bg-gray-50 border border-gray-200 rounded-lg text-gray-500 text-xs text-center">
+                  Token zbyt nowy — brak danych w zewnetrznych bazach (CoinGecko, Messari)
+                </div>
+              )}
+
+              {enrichment.hasData && (
+                <>
+                  {/* Social Metrics */}
+                  {(enrichment.twitterFollowers || enrichment.telegramUsers || enrichment.sentimentVotesUp) && (
+                    <div className="p-3 bg-white border border-gray-200 rounded-xl shadow-sm">
+                      <h3 className="text-[10px] font-semibold text-gray-400 mb-2 uppercase tracking-wider">
+                        Social & Sentiment
+                        <span className="ml-2 text-gray-300 normal-case">via {enrichment.dataSources?.join(', ')}</span>
+                      </h3>
+                      <div className="grid grid-cols-3 gap-3">
+                        {enrichment.twitterFollowers != null && (
+                          <div className="text-center">
+                            <div className="text-gray-900 font-mono text-sm font-semibold">
+                              {enrichment.twitterFollowers >= 1000
+                                ? `${(enrichment.twitterFollowers / 1000).toFixed(1)}K`
+                                : enrichment.twitterFollowers}
+                            </div>
+                            <div className="text-gray-400 text-[10px] mt-0.5">Twitter</div>
+                          </div>
+                        )}
+                        {enrichment.telegramUsers != null && (
+                          <div className="text-center">
+                            <div className="text-gray-900 font-mono text-sm font-semibold">
+                              {enrichment.telegramUsers >= 1000
+                                ? `${(enrichment.telegramUsers / 1000).toFixed(1)}K`
+                                : enrichment.telegramUsers}
+                            </div>
+                            <div className="text-gray-400 text-[10px] mt-0.5">Telegram</div>
+                          </div>
+                        )}
+                        {enrichment.sentimentVotesUp != null && (
+                          <div className="text-center">
+                            <div className={`font-mono text-sm font-semibold ${
+                              enrichment.sentimentVotesUp > 60 ? 'text-emerald-600' : 'text-red-500'
+                            }`}>
+                              {enrichment.sentimentVotesUp.toFixed(0)}%
+                            </div>
+                            <div className="text-gray-400 text-[10px] mt-0.5">Bullish</div>
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Narrative sentiment */}
+                      {enrichment.narrativeSentiment !== null && (
+                        <div className="mt-2.5 flex items-center gap-2">
+                          <span className="text-[10px] text-gray-400">Narracja:</span>
+                          <div className="flex-1 h-1.5 bg-gray-100 rounded-full overflow-hidden">
+                            <div
+                              className={`h-full rounded-full transition-all ${
+                                enrichment.narrativeSentiment > 60 ? 'bg-emerald-500' :
+                                enrichment.narrativeSentiment > 40 ? 'bg-yellow-500' : 'bg-red-500'
+                              }`}
+                              style={{ width: `${enrichment.narrativeSentiment}%` }}
+                            />
+                          </div>
+                          <span className="text-[10px] text-gray-400">{enrichment.narrativeSentiment}/100</span>
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  {/* Dev Activity */}
+                  {(enrichment.githubStars || enrichment.githubCommits4w) && (
+                    <div className="p-2.5 bg-white border border-gray-200 rounded-xl shadow-sm">
+                      <h3 className="text-[10px] font-semibold text-gray-400 mb-1.5 uppercase tracking-wider">Developer Activity</h3>
+                      <div className="flex gap-4 text-xs">
+                        {enrichment.githubStars !== null && (
+                          <span className="text-gray-500">{enrichment.githubStars} GitHub stars</span>
+                        )}
+                        {enrichment.githubCommits4w !== null && (
+                          <span className={enrichment.githubCommits4w > 10 ? 'text-emerald-600' : 'text-gray-400'}>
+                            {enrichment.githubCommits4w} commitow/4tyg
+                          </span>
+                        )}
+                        {enrichment.githubUrl && (
+                          <a href={enrichment.githubUrl} target="_blank" rel="noopener noreferrer"
+                            className="text-blue-500 hover:text-blue-400">GitHub</a>
+                        )}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* ATH & ROI */}
+                  {(enrichment.athUsd || enrichment.roi90d) && (
+                    <div className="p-2.5 bg-white border border-gray-200 rounded-xl shadow-sm">
+                      <h3 className="text-[10px] font-semibold text-gray-400 mb-1.5 uppercase tracking-wider">ATH & ROI</h3>
+                      <div className="flex gap-4 text-xs flex-wrap">
+                        {enrichment.athUsd && (
+                          <span className="text-gray-500">
+                            ATH: <span className="text-gray-900 font-mono">${enrichment.athUsd.toFixed(6)}</span>
+                            {enrichment.athDate && (
+                              <span className="text-gray-300 ml-1">({enrichment.athDate.split('T')[0]})</span>
+                            )}
+                          </span>
+                        )}
+                        {enrichment.athChangePercent && (
+                          <span className={enrichment.athChangePercent > -50 ? 'text-yellow-600' : 'text-red-500'}>
+                            {enrichment.athChangePercent.toFixed(1)}% od ATH
+                          </span>
+                        )}
+                        {enrichment.roi90d && (
+                          <span className={enrichment.roi90d > 0 ? 'text-emerald-600' : 'text-red-500'}>
+                            ROI 90d: {enrichment.roi90d > 0 ? '+' : ''}{enrichment.roi90d.toFixed(0)}%
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* News */}
+                  {enrichment.recentNews?.length > 0 && (
+                    <div className="p-2.5 bg-white border border-gray-200 rounded-xl shadow-sm">
+                      <h3 className="text-[10px] font-semibold text-gray-400 mb-1.5 uppercase tracking-wider flex items-center justify-between">
+                        <span>Ostatnie newsy</span>
+                        <span className="normal-case font-normal">
+                          <span className="text-emerald-600">{enrichment.newsPositiveCount}</span>
+                          {' / '}
+                          <span className="text-red-500">{enrichment.newsNegativeCount}</span>
+                        </span>
+                      </h3>
+                      <div className="space-y-1.5">
+                        {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
+                        {enrichment.recentNews.slice(0, 3).map((n: any, i: number) => (
+                          <a key={i} href={n.url} target="_blank" rel="noopener noreferrer"
+                            className="block text-xs text-gray-500 hover:text-gray-900 transition-colors">
+                            <span className={`mr-1 ${
+                              n.sentiment === 'positive' ? 'text-emerald-500' :
+                              n.sentiment === 'negative' ? 'text-red-500' : 'text-gray-300'
+                            }`}>
+                              {n.sentiment === 'positive' ? '+' : n.sentiment === 'negative' ? '-' : '~'}
+                            </span>
+                            {n.title.substring(0, 80)}{n.title.length > 80 ? '...' : ''}
+                            <span className="text-gray-300 ml-1">{n.source}</span>
+                          </a>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Categories */}
+                  {enrichment.categories?.length > 0 && (
+                    <div className="flex flex-wrap gap-1.5">
+                      {enrichment.categories.slice(0, 4).map((cat: string, i: number) => (
+                        <span key={i} className="px-2 py-0.5 bg-gray-100 text-gray-500 text-[10px] rounded-full border border-gray-200">
+                          {cat}
+                        </span>
+                      ))}
+                    </div>
+                  )}
+                </>
+              )}
+
+              {/* Duration */}
+              {enrichment.enrichmentDurationMs && (
+                <div className="text-right text-[10px] text-gray-300">
+                  Enrichment: {enrichment.enrichmentDurationMs}ms | {enrichment.dataSources?.length ?? 0} zrodel
+                </div>
+              )}
             </div>
           )}
 
