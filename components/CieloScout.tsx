@@ -15,7 +15,8 @@ interface CieloTx {
   token_address: string
   token_symbol: string
   token_name: string
-  action: string
+  tx_type: string
+  is_buy: boolean
   amount_token: number
   amount_usd: number
   price_usd: number
@@ -23,6 +24,8 @@ interface CieloTx {
   first_interaction: boolean
   token_logo?: string
   dex?: string
+  sold_token_symbol?: string
+  sold_amount_usd?: number
 }
 
 interface ConvergenceToken {
@@ -447,14 +450,12 @@ function FeedTab() {
                   <td className="py-1.5 pr-3">
                     <span
                       className={`px-1.5 py-0.5 rounded text-[10px] font-medium ${
-                        tx.action === 'buy'
+                        tx.is_buy
                           ? 'bg-green-50 text-green-700'
-                          : tx.action === 'sell'
-                            ? 'bg-red-50 text-red-700'
-                            : 'bg-gray-100 text-gray-600'
+                          : 'bg-red-50 text-red-700'
                       }`}
                     >
-                      {tx.action.toUpperCase()}
+                      {tx.is_buy ? 'BUY' : 'SELL'}
                     </span>
                   </td>
                   <td className="py-1.5 pr-3">
