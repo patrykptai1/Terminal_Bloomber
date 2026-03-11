@@ -136,6 +136,19 @@ function getEarliestEntryMcap(w: InsiderWallet): number {
   return entries.length > 0 ? Math.min(...entries) : w.avgEntryMcap
 }
 
+function getFirstBuyInfo(w: InsiderWallet): { mcap: number; symbol: string; timestamp: number } | null {
+  const withTime = w.tokens.filter(t => t.holdingSince && t.holdingSince > 0 && t.entryMcapUsd > 0)
+  if (withTime.length === 0) {
+    // fallback: just pick the one with lowest mcap entry
+    const withMcap = w.tokens.filter(t => t.entryMcapUsd > 0)
+    if (withMcap.length === 0) return null
+    const earliest = withMcap.reduce((a, b) => a.entryMcapUsd < b.entryMcapUsd ? a : b)
+    return { mcap: earliest.entryMcapUsd, symbol: earliest.symbol, timestamp: 0 }
+  }
+  const earliest = withTime.reduce((a, b) => (a.holdingSince as number) < (b.holdingSince as number) ? a : b)
+  return { mcap: earliest.entryMcapUsd, symbol: earliest.symbol, timestamp: earliest.holdingSince as number }
+}
+
 function getHoldDurationSec(w: InsiderWallet): number {
   const holdTimes = w.tokens
     .filter(t => t.holdingSince && t.holdingSince > 0)
@@ -727,6 +740,7 @@ function WalletTable({ wallets, onCopy, onBookmark, bookmarks, copiedAddr, expan
             const stillHolding = getStillHolding(w)
             const pnlPct = getPnlPercent(w)
             const totalPnl = w.totalRealizedPnl + w.totalUnrealizedPnl
+            const firstBuyInfo = getFirstBuyInfo(w)
 
             return (
               <div key={w.address}>
@@ -815,11 +829,14 @@ function WalletTable({ wallets, onCopy, onBookmark, bookmarks, copiedAddr, expan
 
                     <span className="text-gray-200">|</span>
 
-                    {/* Mcap entry */}
-                    <div className="text-[10px]">
-                      <span className="text-gray-400">Mcap:</span>
-                      <span className={`ml-0.5 font-semibold ${mcapEntryColor(entryMcap)}`}>{fmtMcap(entryMcap)}</span>
-                    </div>
+                    {/* Pierwszy zakup */}
+                    {firstBuyInfo && (
+                      <div className="text-[10px]">
+                        <span className="text-gray-400">1. zakup:</span>
+                        <span className={`ml-0.5 font-semibold ${mcapEntryColor(firstBuyInfo.mcap)}`}>{fmtMcap(firstBuyInfo.mcap)}</span>
+                        <span className="text-gray-400 ml-0.5">({firstBuyInfo.symbol})</span>
+                      </div>
+                    )}
 
                     {/* Hold duration */}
                     <div className="text-[10px]">
