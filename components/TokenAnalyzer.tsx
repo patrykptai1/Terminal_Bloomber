@@ -136,17 +136,26 @@ function getEarliestEntryMcap(w: InsiderWallet): number {
   return entries.length > 0 ? Math.min(...entries) : w.avgEntryMcap
 }
 
-function getFirstBuyInfo(w: InsiderWallet): { mcap: number; symbol: string; timestamp: number } | null {
+function getFirstBuyInfo(w: InsiderWallet): { mcap: number; currentMcap: number; symbol: string; timestamp: number; growthPct: number } | null {
   const withTime = w.tokens.filter(t => t.holdingSince && t.holdingSince > 0 && t.entryMcapUsd > 0)
+  let earliest: TokenHit
   if (withTime.length === 0) {
-    // fallback: just pick the one with lowest mcap entry
     const withMcap = w.tokens.filter(t => t.entryMcapUsd > 0)
     if (withMcap.length === 0) return null
-    const earliest = withMcap.reduce((a, b) => a.entryMcapUsd < b.entryMcapUsd ? a : b)
-    return { mcap: earliest.entryMcapUsd, symbol: earliest.symbol, timestamp: 0 }
+    earliest = withMcap.reduce((a, b) => a.entryMcapUsd < b.entryMcapUsd ? a : b)
+  } else {
+    earliest = withTime.reduce((a, b) => (a.holdingSince as number) < (b.holdingSince as number) ? a : b)
   }
-  const earliest = withTime.reduce((a, b) => (a.holdingSince as number) < (b.holdingSince as number) ? a : b)
-  return { mcap: earliest.entryMcapUsd, symbol: earliest.symbol, timestamp: earliest.holdingSince as number }
+  const growthPct = earliest.entryMcapUsd > 0 && earliest.currentMcapUsd > 0
+    ? ((earliest.currentMcapUsd - earliest.entryMcapUsd) / earliest.entryMcapUsd) * 100
+    : 0
+  return {
+    mcap: earliest.entryMcapUsd,
+    currentMcap: earliest.currentMcapUsd,
+    symbol: earliest.symbol,
+    timestamp: (earliest.holdingSince as number) || 0,
+    growthPct,
+  }
 }
 
 function getHoldDurationSec(w: InsiderWallet): number {
@@ -829,12 +838,19 @@ function WalletTable({ wallets, onCopy, onBookmark, bookmarks, copiedAddr, expan
 
                     <span className="text-gray-200">|</span>
 
-                    {/* Pierwszy zakup */}
+                    {/* Pierwszy zakup + wzrost */}
                     {firstBuyInfo && (
                       <div className="text-[10px]">
                         <span className="text-gray-400">1. zakup:</span>
                         <span className={`ml-0.5 font-semibold ${mcapEntryColor(firstBuyInfo.mcap)}`}>{fmtMcap(firstBuyInfo.mcap)}</span>
-                        <span className="text-gray-400 ml-0.5">({firstBuyInfo.symbol})</span>
+                        <span className="text-gray-400 mx-0.5">&rarr;</span>
+                        <span className="font-medium text-gray-600">{fmtMcap(firstBuyInfo.currentMcap)}</span>
+                        {firstBuyInfo.growthPct !== 0 && (
+                          <span className={`ml-0.5 font-bold ${firstBuyInfo.growthPct > 0 ? 'text-emerald-600' : 'text-red-500'}`}>
+                            ({firstBuyInfo.growthPct > 0 ? '+' : ''}{firstBuyInfo.growthPct >= 1000 ? `${(firstBuyInfo.growthPct / 100).toFixed(0)}x` : `${firstBuyInfo.growthPct.toFixed(0)}%`})
+                          </span>
+                        )}
+                        <span className="text-gray-400 ml-0.5 text-[9px]">{firstBuyInfo.symbol}</span>
                       </div>
                     )}
 
