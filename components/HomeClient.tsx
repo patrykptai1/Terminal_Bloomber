@@ -40,7 +40,7 @@ export default function HomeClient() {
         <div className="flex items-center gap-2.5 px-5 h-14 border-b border-gray-200 shrink-0">
           <span className="w-2 h-2 rounded-full bg-orange-500 shrink-0" />
           <span className="text-gray-900 font-bold text-sm tracking-widest">SMD</span>
-          <span className="ml-auto text-[10px] text-gray-400">v0.3</span>
+          <span className="ml-auto text-[10px] text-gray-400">v0.4</span>
         </div>
 
         {/* Nav */}
@@ -65,6 +65,13 @@ export default function HomeClient() {
       {/* ── Main Content ── */}
       <main className="flex-1 md:ml-[220px]">
         <div className="relative max-w-5xl mx-auto px-4 py-6 pb-20 md:pb-8">
+
+          {/* Build indicator — visible on mobile too */}
+          <div className="md:hidden flex items-center gap-2 mb-4">
+            <span className="w-2 h-2 rounded-full bg-orange-500" />
+            <span className="text-gray-900 font-bold text-sm tracking-widest">SMD</span>
+            <span className="text-[10px] text-gray-400">v0.4</span>
+          </div>
 
           {/* All tabs rendered but only active one visible — preserves state when switching */}
 
