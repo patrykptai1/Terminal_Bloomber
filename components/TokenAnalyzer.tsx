@@ -739,7 +739,7 @@ function WalletTable({ wallets, onCopy, onBookmark, bookmarks, copiedAddr, expan
                     <td colSpan={13} className="p-0">
                       {/* Main row */}
                       <div
-                        className={`grid grid-cols-[auto_1fr_auto_auto_auto_auto_auto_auto_auto_auto_auto_auto_auto] items-center cursor-pointer hover:bg-gray-50/50 border-b border-gray-50 ${isExpanded ? 'bg-orange-50/30' : ''}`}
+                        className={`grid grid-cols-[auto_minmax(80px,1fr)_auto_auto_auto_auto_auto_auto_auto_auto_auto_auto_auto] items-center cursor-pointer hover:bg-gray-50/50 border-b border-gray-50 ${isExpanded ? 'bg-orange-50/30' : ''}`}
                         onClick={() => onToggleExpand(w.address)}
                       >
                         <div className="pl-3 pr-1 py-1.5 text-gray-400 font-medium text-[11px]">{i + 1}</div>
@@ -1180,187 +1180,182 @@ export default function TokenAnalyzer() {
           )}
 
           {enrichment && !enrichLoading && (
-            <div className="space-y-2">
-              {/* Price warning */}
-              {enrichment.priceValidation?.warning && (
-                <div className="p-2.5 bg-yellow-50 border border-yellow-200 rounded-lg text-yellow-700 text-xs">
-                  {enrichment.priceValidation.warning}
-                </div>
-              )}
+            <Card className="bg-white border-gray-200 rounded-xl shadow-sm overflow-hidden">
+              <CardContent className="p-0">
+                {/* Warnings */}
+                {enrichment.priceValidation?.warning && (
+                  <div className="px-4 py-2 bg-yellow-50 border-b border-yellow-200 text-yellow-700 text-xs">
+                    {enrichment.priceValidation.warning}
+                  </div>
+                )}
+                {enrichment.liquidityWarning && (
+                  <div className="px-4 py-2 bg-red-50 border-b border-red-200 text-red-600 text-xs">
+                    Niska likwidnosc — price impact przy $5k: {enrichment.priceImpact5kUsd?.toFixed(1)}%
+                  </div>
+                )}
 
-              {/* Liquidity warning */}
-              {enrichment.liquidityWarning && (
-                <div className="p-2.5 bg-red-50 border border-red-200 rounded-lg text-red-600 text-xs">
-                  Niska likwidnosc — price impact przy $5k: {enrichment.priceImpact5kUsd?.toFixed(1)}%
-                </div>
-              )}
+                {/* Token too new */}
+                {enrichment.isNewToken && (
+                  <div className="px-4 py-6 text-center text-gray-400 text-xs">
+                    Token zbyt nowy — brak danych w zewnetrznych bazach
+                  </div>
+                )}
 
-              {/* Token too new */}
-              {enrichment.isNewToken && (
-                <div className="p-2.5 bg-gray-50 border border-gray-200 rounded-lg text-gray-500 text-xs text-center">
-                  Token zbyt nowy — brak danych w zewnetrznych bazach (CoinGecko, Messari)
-                </div>
-              )}
-
-              {enrichment.hasData && (
-                <>
-                  {/* Social Metrics */}
-                  {(enrichment.twitterFollowers || enrichment.telegramUsers || enrichment.sentimentVotesUp) && (
-                    <div className="p-3 bg-white border border-gray-200 rounded-xl shadow-sm">
-                      <h3 className="text-[10px] font-semibold text-gray-400 mb-2 uppercase tracking-wider">
-                        Social & Sentiment
-                        <span className="ml-2 text-gray-300 normal-case">via {enrichment.dataSources?.join(', ')}</span>
-                      </h3>
-                      <div className="grid grid-cols-3 gap-3">
-                        {enrichment.twitterFollowers != null && (
-                          <div className="text-center">
-                            <div className="text-gray-900 font-mono text-sm font-semibold">
-                              {enrichment.twitterFollowers >= 1000
-                                ? `${(enrichment.twitterFollowers / 1000).toFixed(1)}K`
-                                : enrichment.twitterFollowers}
-                            </div>
-                            <div className="text-gray-400 text-[10px] mt-0.5">Twitter</div>
-                          </div>
-                        )}
-                        {enrichment.telegramUsers != null && (
-                          <div className="text-center">
-                            <div className="text-gray-900 font-mono text-sm font-semibold">
-                              {enrichment.telegramUsers >= 1000
-                                ? `${(enrichment.telegramUsers / 1000).toFixed(1)}K`
-                                : enrichment.telegramUsers}
-                            </div>
-                            <div className="text-gray-400 text-[10px] mt-0.5">Telegram</div>
-                          </div>
-                        )}
-                        {enrichment.sentimentVotesUp != null && (
-                          <div className="text-center">
-                            <div className={`font-mono text-sm font-semibold ${
-                              enrichment.sentimentVotesUp > 60 ? 'text-emerald-600' : 'text-red-500'
-                            }`}>
-                              {enrichment.sentimentVotesUp.toFixed(0)}%
-                            </div>
-                            <div className="text-gray-400 text-[10px] mt-0.5">Bullish</div>
-                          </div>
-                        )}
-                      </div>
-
-                      {/* Narrative sentiment */}
-                      {enrichment.narrativeSentiment !== null && (
-                        <div className="mt-2.5 flex items-center gap-2">
-                          <span className="text-[10px] text-gray-400">Narracja:</span>
-                          <div className="flex-1 h-1.5 bg-gray-100 rounded-full overflow-hidden">
-                            <div
-                              className={`h-full rounded-full transition-all ${
-                                enrichment.narrativeSentiment > 60 ? 'bg-emerald-500' :
-                                enrichment.narrativeSentiment > 40 ? 'bg-yellow-500' : 'bg-red-500'
-                              }`}
-                              style={{ width: `${enrichment.narrativeSentiment}%` }}
-                            />
-                          </div>
-                          <span className="text-[10px] text-gray-400">{enrichment.narrativeSentiment}/100</span>
+                {enrichment.hasData && (
+                  <div className="divide-y divide-gray-100">
+                    {/* Social & Sentiment */}
+                    {(enrichment.twitterFollowers != null || enrichment.telegramUsers != null || enrichment.sentimentVotesUp != null) && (
+                      <div className="px-4 py-3">
+                        <div className="flex items-center justify-between mb-2">
+                          <h3 className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider">Social & Sentiment</h3>
+                          <span className="text-[10px] text-gray-300">via {enrichment.dataSources?.join(', ')}</span>
                         </div>
-                      )}
-                    </div>
-                  )}
-
-                  {/* Dev Activity */}
-                  {(enrichment.githubStars || enrichment.githubCommits4w) && (
-                    <div className="p-2.5 bg-white border border-gray-200 rounded-xl shadow-sm">
-                      <h3 className="text-[10px] font-semibold text-gray-400 mb-1.5 uppercase tracking-wider">Developer Activity</h3>
-                      <div className="flex gap-4 text-xs">
-                        {enrichment.githubStars !== null && (
-                          <span className="text-gray-500">{enrichment.githubStars} GitHub stars</span>
-                        )}
-                        {enrichment.githubCommits4w !== null && (
-                          <span className={enrichment.githubCommits4w > 10 ? 'text-emerald-600' : 'text-gray-400'}>
-                            {enrichment.githubCommits4w} commitow/4tyg
-                          </span>
-                        )}
-                        {enrichment.githubUrl && (
-                          <a href={enrichment.githubUrl} target="_blank" rel="noopener noreferrer"
-                            className="text-blue-500 hover:text-blue-400">GitHub</a>
+                        <div className="flex gap-6">
+                          {enrichment.twitterFollowers != null && (
+                            <div>
+                              <div className="text-sm font-bold text-gray-900 font-mono">
+                                {enrichment.twitterFollowers >= 1000
+                                  ? `${(enrichment.twitterFollowers / 1000).toFixed(1)}K`
+                                  : String(enrichment.twitterFollowers)}
+                              </div>
+                              <div className="text-[10px] text-gray-400">Twitter</div>
+                            </div>
+                          )}
+                          {enrichment.telegramUsers != null && (
+                            <div>
+                              <div className="text-sm font-bold text-gray-900 font-mono">
+                                {enrichment.telegramUsers >= 1000
+                                  ? `${(enrichment.telegramUsers / 1000).toFixed(1)}K`
+                                  : String(enrichment.telegramUsers)}
+                              </div>
+                              <div className="text-[10px] text-gray-400">Telegram</div>
+                            </div>
+                          )}
+                          {enrichment.sentimentVotesUp != null && (
+                            <div>
+                              <div className={`text-sm font-bold font-mono ${
+                                enrichment.sentimentVotesUp > 60 ? 'text-emerald-600' : 'text-red-500'
+                              }`}>
+                                {enrichment.sentimentVotesUp.toFixed(0)}%
+                              </div>
+                              <div className="text-[10px] text-gray-400">Bullish</div>
+                            </div>
+                          )}
+                        </div>
+                        {enrichment.narrativeSentiment != null && (
+                          <div className="mt-2 flex items-center gap-2">
+                            <span className="text-[10px] text-gray-400 shrink-0">Narracja</span>
+                            <div className="flex-1 h-1.5 bg-gray-100 rounded-full overflow-hidden">
+                              <div
+                                className={`h-full rounded-full ${
+                                  enrichment.narrativeSentiment > 60 ? 'bg-emerald-500' :
+                                  enrichment.narrativeSentiment > 40 ? 'bg-yellow-500' : 'bg-red-500'
+                                }`}
+                                style={{ width: `${enrichment.narrativeSentiment}%` }}
+                              />
+                            </div>
+                            <span className="text-[10px] text-gray-400 font-mono">{enrichment.narrativeSentiment}</span>
+                          </div>
                         )}
                       </div>
-                    </div>
-                  )}
+                    )}
 
-                  {/* ATH & ROI */}
-                  {(enrichment.athUsd || enrichment.roi90d) && (
-                    <div className="p-2.5 bg-white border border-gray-200 rounded-xl shadow-sm">
-                      <h3 className="text-[10px] font-semibold text-gray-400 mb-1.5 uppercase tracking-wider">ATH & ROI</h3>
-                      <div className="flex gap-4 text-xs flex-wrap">
-                        {enrichment.athUsd && (
-                          <span className="text-gray-500">
-                            ATH: <span className="text-gray-900 font-mono">${enrichment.athUsd.toFixed(6)}</span>
-                            {enrichment.athDate && (
-                              <span className="text-gray-300 ml-1">({enrichment.athDate.split('T')[0]})</span>
-                            )}
-                          </span>
-                        )}
-                        {enrichment.athChangePercent && (
-                          <span className={enrichment.athChangePercent > -50 ? 'text-yellow-600' : 'text-red-500'}>
-                            {enrichment.athChangePercent.toFixed(1)}% od ATH
-                          </span>
-                        )}
-                        {enrichment.roi90d && (
-                          <span className={enrichment.roi90d > 0 ? 'text-emerald-600' : 'text-red-500'}>
-                            ROI 90d: {enrichment.roi90d > 0 ? '+' : ''}{enrichment.roi90d.toFixed(0)}%
-                          </span>
-                        )}
-                      </div>
-                    </div>
-                  )}
-
-                  {/* News */}
-                  {enrichment.recentNews?.length > 0 && (
-                    <div className="p-2.5 bg-white border border-gray-200 rounded-xl shadow-sm">
-                      <h3 className="text-[10px] font-semibold text-gray-400 mb-1.5 uppercase tracking-wider flex items-center justify-between">
-                        <span>Ostatnie newsy</span>
-                        <span className="normal-case font-normal">
-                          <span className="text-emerald-600">{enrichment.newsPositiveCount}</span>
-                          {' / '}
-                          <span className="text-red-500">{enrichment.newsNegativeCount}</span>
-                        </span>
-                      </h3>
-                      <div className="space-y-1.5">
-                        {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
-                        {enrichment.recentNews.slice(0, 3).map((n: any, i: number) => (
-                          <a key={i} href={n.url} target="_blank" rel="noopener noreferrer"
-                            className="block text-xs text-gray-500 hover:text-gray-900 transition-colors">
-                            <span className={`mr-1 ${
-                              n.sentiment === 'positive' ? 'text-emerald-500' :
-                              n.sentiment === 'negative' ? 'text-red-500' : 'text-gray-300'
-                            }`}>
-                              {n.sentiment === 'positive' ? '+' : n.sentiment === 'negative' ? '-' : '~'}
+                    {/* Dev Activity — FIX: use > 0 to avoid rendering "0" */}
+                    {(Number(enrichment.githubStars) > 0 || Number(enrichment.githubCommits4w) > 0) && (
+                      <div className="px-4 py-3">
+                        <h3 className="text-[10px] font-semibold text-gray-400 mb-1.5 uppercase tracking-wider">Developer</h3>
+                        <div className="flex gap-4 text-xs">
+                          {Number(enrichment.githubStars) > 0 && (
+                            <span className="text-gray-600">{enrichment.githubStars} stars</span>
+                          )}
+                          {Number(enrichment.githubCommits4w) > 0 && (
+                            <span className={enrichment.githubCommits4w > 10 ? 'text-emerald-600' : 'text-gray-500'}>
+                              {enrichment.githubCommits4w} commits/4w
                             </span>
-                            {n.title.substring(0, 80)}{n.title.length > 80 ? '...' : ''}
-                            <span className="text-gray-300 ml-1">{n.source}</span>
-                          </a>
+                          )}
+                          {enrichment.githubUrl && (
+                            <a href={enrichment.githubUrl} target="_blank" rel="noopener noreferrer"
+                              className="text-blue-500 hover:text-blue-600">GitHub</a>
+                          )}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* ATH & ROI */}
+                    {(enrichment.athUsd != null || enrichment.roi90d != null) && (
+                      <div className="px-4 py-3">
+                        <h3 className="text-[10px] font-semibold text-gray-400 mb-1.5 uppercase tracking-wider">ATH & ROI</h3>
+                        <div className="flex gap-4 text-xs flex-wrap items-center">
+                          {enrichment.athUsd != null && (
+                            <span className="text-gray-600">
+                              ATH: <span className="text-gray-900 font-mono font-semibold">${enrichment.athUsd.toFixed(6)}</span>
+                              {enrichment.athDate && (
+                                <span className="text-gray-300 ml-1">({enrichment.athDate.split('T')[0]})</span>
+                              )}
+                            </span>
+                          )}
+                          {enrichment.athChangePercent != null && (
+                            <span className={`font-medium ${enrichment.athChangePercent > -50 ? 'text-yellow-600' : 'text-red-500'}`}>
+                              {enrichment.athChangePercent.toFixed(1)}% od ATH
+                            </span>
+                          )}
+                          {enrichment.roi90d != null && (
+                            <span className={`font-medium ${enrichment.roi90d > 0 ? 'text-emerald-600' : 'text-red-500'}`}>
+                              ROI 90d: {enrichment.roi90d > 0 ? '+' : ''}{enrichment.roi90d.toFixed(0)}%
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* News */}
+                    {enrichment.recentNews?.length > 0 && (
+                      <div className="px-4 py-3">
+                        <div className="flex items-center justify-between mb-1.5">
+                          <h3 className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider">Newsy</h3>
+                          <span className="text-[10px]">
+                            <span className="text-emerald-600">{enrichment.newsPositiveCount}+</span>
+                            {' / '}
+                            <span className="text-red-500">{enrichment.newsNegativeCount}-</span>
+                          </span>
+                        </div>
+                        <div className="space-y-1">
+                          {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
+                          {enrichment.recentNews.slice(0, 3).map((n: any, i: number) => (
+                            <a key={i} href={n.url} target="_blank" rel="noopener noreferrer"
+                              className="flex items-start gap-1.5 text-xs text-gray-500 hover:text-gray-900 transition-colors">
+                              <span className={`shrink-0 mt-0.5 ${
+                                n.sentiment === 'positive' ? 'text-emerald-500' :
+                                n.sentiment === 'negative' ? 'text-red-500' : 'text-gray-300'
+                              }`}>
+                                {n.sentiment === 'positive' ? '+' : n.sentiment === 'negative' ? '-' : '~'}
+                              </span>
+                              <span className="line-clamp-1">{n.title}</span>
+                            </a>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Categories + footer */}
+                    <div className="px-4 py-2.5 flex items-center justify-between">
+                      <div className="flex flex-wrap gap-1">
+                        {enrichment.categories?.slice(0, 4).map((cat: string, i: number) => (
+                          <span key={i} className="px-2 py-0.5 bg-gray-100 text-gray-500 text-[10px] rounded-full">
+                            {cat}
+                          </span>
                         ))}
                       </div>
-                    </div>
-                  )}
-
-                  {/* Categories */}
-                  {enrichment.categories?.length > 0 && (
-                    <div className="flex flex-wrap gap-1.5">
-                      {enrichment.categories.slice(0, 4).map((cat: string, i: number) => (
-                        <span key={i} className="px-2 py-0.5 bg-gray-100 text-gray-500 text-[10px] rounded-full border border-gray-200">
-                          {cat}
+                      {enrichment.enrichmentDurationMs != null && (
+                        <span className="text-[10px] text-gray-300 shrink-0 ml-2">
+                          {enrichment.enrichmentDurationMs}ms · {enrichment.dataSources?.length ?? 0} src
                         </span>
-                      ))}
+                      )}
                     </div>
-                  )}
-                </>
-              )}
-
-              {/* Duration */}
-              {enrichment.enrichmentDurationMs && (
-                <div className="text-right text-[10px] text-gray-300">
-                  Enrichment: {enrichment.enrichmentDurationMs}ms | {enrichment.dataSources?.length ?? 0} zrodel
-                </div>
-              )}
-            </div>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
           )}
 
           {result.wallets.length === 0 ? (
