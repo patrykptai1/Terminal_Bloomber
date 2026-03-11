@@ -12,14 +12,14 @@ import TokenScanner from '@/components/TokenScanner'
 import CieloScout from '@/components/CieloScout'
 
 const NAV_ITEMS = [
-  { tab: 'dashboard',     label: 'Wallet Radar',           Icon: LayoutDashboard },
-  { tab: 'tracking',      label: 'Insider Analyzer',        Icon: Activity        },
-  { tab: 'tokenscanner',  label: 'Token Scanner',           Icon: Search          },
-  { tab: 'mywallets',     label: 'My Wallets',             Icon: Wallet          },
-  { tab: 'wallet',        label: 'Wallet Scanner',         Icon: ScanLine        },
-  { tab: 'scanner',       label: 'Market',                 Icon: BarChart2       },
-  { tab: 'barry',         label: 'Barry Strategy',         Icon: Crosshair       },
-  { tab: 'cielo',         label: 'Cielo Scout',            Icon: Radar           },
+  { tab: 'dashboard',     label: 'Wallet Radar',     Icon: LayoutDashboard },
+  { tab: 'tracking',      label: 'Insider Analyzer',  Icon: Activity        },
+  { tab: 'cielo',         label: 'Cielo Scout',       Icon: Radar           },
+  { tab: 'tokenscanner',  label: 'Token Scanner',     Icon: Search          },
+  { tab: 'mywallets',     label: 'My Wallets',        Icon: Wallet          },
+  { tab: 'wallet',        label: 'Wallet Scanner',    Icon: ScanLine        },
+  { tab: 'scanner',       label: 'Market',            Icon: BarChart2       },
+  { tab: 'barry',         label: 'Barry Strategy',    Icon: Crosshair       },
 ]
 
 export default function HomeClient() {
@@ -37,21 +37,22 @@ export default function HomeClient() {
       {/* ── Left Sidebar (desktop) ── */}
       <aside className="hidden md:flex flex-col fixed inset-y-0 left-0 w-[220px] bg-white border-r border-gray-200 z-40">
         {/* Brand */}
-        <div className="flex items-center gap-2.5 px-5 h-16 border-b border-gray-200 shrink-0">
+        <div className="flex items-center gap-2.5 px-5 h-14 border-b border-gray-200 shrink-0">
           <span className="w-2 h-2 rounded-full bg-orange-500 shrink-0" />
           <span className="text-gray-900 font-bold text-sm tracking-widest">SMD</span>
+          <span className="ml-auto text-[10px] text-gray-400">v0.3</span>
         </div>
 
         {/* Nav */}
-        <nav className="flex-1 py-4 space-y-0.5 overflow-y-auto">
+        <nav className="flex-1 py-3 space-y-0.5 overflow-y-auto">
           {NAV_ITEMS.map(({ tab, label, Icon }) => (
             <button
               key={tab}
               onClick={() => setActiveTab(tab)}
-              className={`w-full flex items-center gap-3 px-5 py-2.5 text-sm transition-all duration-150 text-left border-l-2 ${
+              className={`w-full flex items-center gap-3 px-5 py-2 text-[13px] transition-all duration-150 text-left border-l-2 ${
                 activeTab === tab
-                  ? 'border-orange-500 bg-orange-50 text-orange-600'
-                  : 'border-transparent text-gray-500 hover:text-gray-700 hover:bg-gray-100'
+                  ? 'border-orange-500 bg-orange-50 text-orange-600 font-medium'
+                  : 'border-transparent text-gray-500 hover:text-gray-700 hover:bg-gray-50'
               }`}
             >
               <Icon size={15} className="shrink-0" />
@@ -59,19 +60,11 @@ export default function HomeClient() {
             </button>
           ))}
         </nav>
-
-        {/* Version */}
-        <div className="px-5 py-4 border-t border-gray-200 shrink-0">
-          <span className="text-[10px] text-gray-400">v0.2</span>
-        </div>
       </aside>
 
       {/* ── Main Content ── */}
       <main className="flex-1 md:ml-[220px]">
-        {/* Decorative top gradient */}
-        <div className="pointer-events-none fixed top-0 left-0 md:left-[220px] right-0 h-48 bg-gradient-to-b from-gray-100/50 to-transparent z-10" />
-
-        <div className="relative max-w-5xl mx-auto px-4 py-8 pb-24 md:pb-10">
+        <div className="relative max-w-5xl mx-auto px-4 py-6 pb-20 md:pb-8">
 
           {/* All tabs rendered but only active one visible — preserves state when switching */}
 
@@ -80,7 +73,7 @@ export default function HomeClient() {
           </div>
 
           <div className={activeTab === 'tracking' ? '' : 'hidden'}>
-            <div className="space-y-6">
+            <div className="space-y-5">
               <div className="space-y-0.5">
                 <h1 className="text-xl font-bold text-gray-900">Insider Wallet Analyzer</h1>
                 <p className="text-gray-500 text-xs">
@@ -91,8 +84,12 @@ export default function HomeClient() {
             </div>
           </div>
 
+          <div className={activeTab === 'cielo' ? '' : 'hidden'}>
+            <CieloScout />
+          </div>
+
           <div className={activeTab === 'tokenscanner' ? '' : 'hidden'}>
-            <div className="space-y-0.5 mb-6">
+            <div className="space-y-0.5 mb-5">
               <h1 className="text-xl font-bold text-gray-900">Token Scanner</h1>
               <p className="text-gray-500 text-xs">Przeszukaj rynek Solana z filtrami ATH/ATL mcap, holderów, wolumenu i wieku</p>
             </div>
@@ -100,7 +97,7 @@ export default function HomeClient() {
           </div>
 
           <div className={activeTab === 'mywallets' ? '' : 'hidden'}>
-            <div className="space-y-0.5 mb-6">
+            <div className="space-y-0.5 mb-5">
               <h1 className="text-xl font-bold text-gray-900">My Wallets</h1>
               <p className="text-gray-500 text-xs">Zarządzaj listą smart money walletów i skanuj aktywność</p>
             </div>
@@ -108,7 +105,7 @@ export default function HomeClient() {
           </div>
 
           <div className={activeTab === 'wallet' ? '' : 'hidden'}>
-            <div className="space-y-0.5 mb-6">
+            <div className="space-y-0.5 mb-5">
               <h1 className="text-xl font-bold text-gray-900">Wallet Scanner</h1>
               <p className="text-gray-500 text-xs">Analizuj portfele i historię transakcji</p>
             </div>
@@ -116,7 +113,7 @@ export default function HomeClient() {
           </div>
 
           <div className={activeTab === 'scanner' ? '' : 'hidden'}>
-            <div className="space-y-0.5 mb-6">
+            <div className="space-y-0.5 mb-5">
               <h1 className="text-xl font-bold text-gray-900">Market</h1>
               <p className="text-gray-500 text-xs">Przeglądaj tokeny według wolumenu i aktywności</p>
             </div>
@@ -124,36 +121,29 @@ export default function HomeClient() {
           </div>
 
           <div className={activeTab === 'barry' ? '' : 'hidden'}>
-            <div className="space-y-0.5 mb-6">
+            <div className="space-y-0.5 mb-5">
               <h1 className="text-xl font-bold text-gray-900">Barry Strategy</h1>
               <p className="text-gray-500 text-xs">6-krokowy pipeline analizy tokena wg strategii 0xBarrry</p>
             </div>
             <BarryStrategy />
           </div>
 
-          <div className={activeTab === 'cielo' ? '' : 'hidden'}>
-            <div className="space-y-0.5 mb-6">
-              <h1 className="text-xl font-bold text-gray-900">Cielo Scout</h1>
-              <p className="text-gray-500 text-xs">Monitoruj first buys i convergence smart money walletów — Cielo Finance</p>
-            </div>
-            <CieloScout />
-          </div>
-
         </div>
       </main>
 
-      {/* ── Bottom Tab Bar (mobile) ── */}
+      {/* ── Bottom Tab Bar (mobile) — horizontal scroll ── */}
       <nav className="md:hidden fixed bottom-0 inset-x-0 bg-white/95 backdrop-blur-sm border-t border-gray-200 z-40">
-        <div className="flex">
-          {NAV_ITEMS.map(({ tab, Icon }) => (
+        <div className="flex overflow-x-auto scrollbar-hide">
+          {NAV_ITEMS.map(({ tab, label, Icon }) => (
             <button
               key={tab}
               onClick={() => setActiveTab(tab)}
-              className={`flex-1 flex items-center justify-center py-3.5 transition-colors ${
+              className={`flex flex-col items-center justify-center min-w-[72px] py-2 px-2 gap-0.5 transition-colors shrink-0 ${
                 activeTab === tab ? 'text-orange-500' : 'text-gray-400'
               }`}
             >
-              <Icon size={20} />
+              <Icon size={18} />
+              <span className="text-[9px] leading-tight whitespace-nowrap">{label}</span>
             </button>
           ))}
         </div>
