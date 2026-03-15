@@ -10,6 +10,7 @@ import HorizontalBar from "@/components/charts/HorizontalBar"
 import type { FullAnalysis } from "@/lib/analysis"
 import type { QuoteData, KeyStatistics, HistoricalPrice } from "@/lib/yahoo"
 import type { NewsItem } from "@/lib/news"
+import { fmtPrice as fmtCurrencyPrice, fmtBigValue, currencySymbol } from "@/lib/currency"
 
 // ── Helpers ──────────────────────────────────────────────────
 
@@ -18,12 +19,9 @@ function fmt(v: number | null | undefined, suffix = ""): string {
   return v.toFixed(2) + suffix
 }
 
-function fmtB(v: number | null | undefined): string {
+function fmtB(v: number | null | undefined, currency = "USD"): string {
   if (v == null) return "N/A"
-  if (Math.abs(v) >= 1e12) return `$${(v / 1e12).toFixed(2)}T`
-  if (Math.abs(v) >= 1e9) return `$${(v / 1e9).toFixed(2)}B`
-  if (Math.abs(v) >= 1e6) return `$${(v / 1e6).toFixed(2)}M`
-  return `$${v.toLocaleString()}`
+  return fmtBigValue(v, currency)
 }
 
 function fmtPct(v: number | null | undefined): string {
@@ -222,22 +220,22 @@ export default function StockAnalysis() {
 
             {/* Key Levels */}
             <div className="grid grid-cols-2 sm:grid-cols-6 gap-3 mb-5">
-              <LevelBox label="ENTRY" value={`$${fmt(a.entry)}`} sub="" color="text-foreground" />
+              <LevelBox label="ENTRY" value={a.entry != null ? fmtCurrencyPrice(a.entry, q.currency) : "N/A"} sub="" color="text-foreground" />
               <LevelBox
                 label="STOP-LOSS"
-                value={`$${fmt(a.stopLoss)}`}
+                value={a.stopLoss != null ? fmtCurrencyPrice(a.stopLoss, q.currency) : "N/A"}
                 sub={`${fmt(a.stopLossPct)}%`}
                 color="text-bloomberg-red"
               />
               <LevelBox
                 label="TARGET 1"
-                value={`$${fmt(a.target1)}`}
+                value={a.target1 != null ? fmtCurrencyPrice(a.target1, q.currency) : "N/A"}
                 sub={`+${fmt(a.target1Pct)}%`}
                 color="text-bloomberg-green"
               />
               <LevelBox
                 label="TARGET 2"
-                value={`$${fmt(a.target2)}`}
+                value={a.target2 != null ? fmtCurrencyPrice(a.target2, q.currency) : "N/A"}
                 sub={`+${fmt(a.target2Pct)}%`}
                 color="text-bloomberg-green"
               />
@@ -281,9 +279,7 @@ export default function StockAnalysis() {
               </div>
               <div className="text-right">
                 <div className="text-3xl font-bold">
-                  {q.currency === "USD" ? "$" : ""}
-                  {q.price.toFixed(2)}
-                  <span className="text-xs text-muted-foreground ml-1">{q.currency}</span>
+                  {fmtCurrencyPrice(q.price, q.currency)}
                 </div>
                 <div
                   className={`flex items-center justify-end gap-1 text-sm ${
@@ -299,7 +295,7 @@ export default function StockAnalysis() {
                   {q.change.toFixed(2)} ({q.changePercent.toFixed(2)}%)
                 </div>
                 <div className="text-xs text-muted-foreground mt-1">
-                  MCap {fmtB(q.marketCap)} | Vol {q.volume.toLocaleString()} | 52W {`$${q.low52.toFixed(2)} - $${q.high52.toFixed(2)}`}
+                  MCap {fmtB(q.marketCap, q.currency)} | Vol {q.volume.toLocaleString()} | 52W {`${fmtCurrencyPrice(q.low52, q.currency)} - ${fmtCurrencyPrice(q.high52, q.currency)}`}
                 </div>
               </div>
             </div>
@@ -312,12 +308,12 @@ export default function StockAnalysis() {
                 PRICE CHART — 1Y
                 {a.ma50 != null && (
                   <span className="text-muted-foreground font-normal ml-3">
-                    MA50: ${a.ma50.toFixed(2)} ({fmtPct(a.distanceFromMA50Pct)})
+                    MA50: {fmtCurrencyPrice(a.ma50, q.currency)} ({fmtPct(a.distanceFromMA50Pct)})
                   </span>
                 )}
                 {a.ma200 != null && (
                   <span className="text-muted-foreground font-normal ml-3">
-                    MA200: ${a.ma200.toFixed(2)} ({fmtPct(a.distanceFromMA200Pct)})
+                    MA200: {fmtCurrencyPrice(a.ma200, q.currency)} ({fmtPct(a.distanceFromMA200Pct)})
                   </span>
                 )}
                 {a.rsi != null && (
@@ -511,6 +507,7 @@ export default function StockAnalysis() {
                 price={a.bullCase.price}
                 color="bg-bloomberg-green"
                 textColor="text-bloomberg-green"
+                currency={q.currency}
               />
               <ScenarioBar
                 label="BASE"
@@ -519,6 +516,7 @@ export default function StockAnalysis() {
                 price={a.baseCase.price}
                 color="bg-bloomberg-amber"
                 textColor="text-bloomberg-amber"
+                currency={q.currency}
               />
               <ScenarioBar
                 label="BEAR"
@@ -527,6 +525,7 @@ export default function StockAnalysis() {
                 price={a.bearCase.price}
                 color="bg-bloomberg-red"
                 textColor="text-bloomberg-red"
+                currency={q.currency}
               />
             </div>
             <div className="mt-3 pt-3 border-t border-bloomberg-border flex justify-between text-xs">
@@ -642,6 +641,7 @@ function ScenarioBar({
   price,
   color,
   textColor,
+  currency = "USD",
 }: {
   label: string
   probability: number
@@ -649,13 +649,14 @@ function ScenarioBar({
   price: number
   color: string
   textColor: string
+  currency?: string
 }) {
   return (
     <div>
       <div className="flex justify-between text-xs mb-1">
         <span className={`font-bold ${textColor}`}>{label}</span>
         <span className="text-muted-foreground">
-          ${price.toFixed(2)} ({returnPct >= 0 ? "+" : ""}
+          {fmtCurrencyPrice(price, currency)} ({returnPct >= 0 ? "+" : ""}
           {returnPct.toFixed(1)}%)
         </span>
       </div>

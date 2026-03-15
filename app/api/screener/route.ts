@@ -11,9 +11,20 @@ const US_TICKERS = [
   "INTC", "AMD", "CRM", "ORCL", "NFLX", "ADBE", "PYPL", "IBM", "GE", "CAT",
 ]
 
+// GPW Main Market
 const PL_TICKERS = [
   "CDR.WA", "PKN.WA", "PKO.WA", "PZU.WA", "KGH.WA", "PEO.WA", "DNP.WA", "ALE.WA",
-  "SPL.WA", "CPS.WA", "LPP.WA", "MBK.WA", "OPL.WA",
+  "SPL.WA", "CPS.WA", "LPP.WA", "MBK.WA", "OPL.WA", "ING.WA", "BNP.WA", "MIL.WA",
+  "BDX.WA", "ALR.WA", "BFT.WA", "CAR.WA", "KRU.WA", "DVL.WA", "ASB.WA", "APR.WA",
+  "ECH.WA", "RBW.WA", "GEA.WA", "WPL.WA", "TOR.WA", "VRG.WA", "ENT.WA", "ZEP.WA",
+  "AMC.WA", "MNC.WA", "ATC.WA", "PCR.WA", "BIO.WA", "VOX.WA", "INK.WA", "GPP.WA",
+]
+
+// NewConnect (smaller / growth companies)
+const NC_TICKERS = [
+  "CRJ.WA", "TEN.WA", "BLO.WA", "CIG.WA", "CLN.WA", "TXT.WA", "PCF.WA", "IMC.WA",
+  "NVT.WA", "DCR.WA", "UNI.WA", "ERB.WA", "WTN.WA", "PBX.WA", "SES.WA", "MAB.WA",
+  "NTT.WA", "MLG.WA", "GRN.WA", "MDG.WA", "NVG.WA", "SUN.WA", "PHR.WA", "HRP.WA",
 ]
 
 export async function POST(req: NextRequest) {
@@ -22,7 +33,8 @@ export async function POST(req: NextRequest) {
 
     const tickers = market === "PL" ? PL_TICKERS
       : market === "US" ? US_TICKERS
-      : [...US_TICKERS, ...PL_TICKERS]
+      : market === "NC" ? NC_TICKERS
+      : [...US_TICKERS, ...PL_TICKERS, ...NC_TICKERS]
 
     // Fetch quotes in parallel (batches of 10)
     const results: { quote: QuoteData; stats: KeyStatistics | null }[] = []

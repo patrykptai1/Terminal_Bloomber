@@ -5,6 +5,7 @@ import { CheckCircle, XCircle, Minus, AlertTriangle, TrendingUp, TrendingDown } 
 import TerminalInput from "@/components/TerminalInput"
 import BarCompareChart from "@/components/charts/BarCompareChart"
 import type { QuoteData, EarningsData } from "@/lib/yahoo"
+import { fmtBigValue } from "@/lib/currency"
 
 export default function EarningsReport() {
   const [loading, setLoading] = useState(false)
@@ -157,7 +158,7 @@ export default function EarningsReport() {
                         <div className="flex-1 bg-bloomberg-blue rounded-t transition-all" style={{ height: `${h}%` }} />
                       </div>
                       <div className="text-[10px] text-muted-foreground font-bold">{row.date}</div>
-                      <div className="text-[10px] text-muted-foreground">{row.revenue != null ? fmtB(row.revenue) : "N/A"}</div>
+                      <div className="text-[10px] text-muted-foreground">{row.revenue != null ? fmtBigValue(row.revenue, q.currency) : "N/A"}</div>
                     </div>
                   )
                 })}
@@ -190,9 +191,9 @@ export default function EarningsReport() {
                       return (
                         <tr key={i} className="border-b border-bloomberg-border/50">
                           <td className="py-2 font-bold">{row.date}</td>
-                          <td className="py-2 text-right">{row.revenue != null ? fmtB(row.revenue) : "N/A"}</td>
+                          <td className="py-2 text-right">{row.revenue != null ? fmtBigValue(row.revenue, q.currency) : "N/A"}</td>
                           <td className={`py-2 text-right font-bold ${row.earnings && row.earnings > 0 ? "text-bloomberg-green" : "text-bloomberg-red"}`}>
-                            {row.earnings != null ? fmtB(row.earnings) : "N/A"}
+                            {row.earnings != null ? fmtBigValue(row.earnings, q.currency) : "N/A"}
                           </td>
                           <td className={`py-2 text-right font-bold ${margin != null && margin > 0 ? "text-bloomberg-green" : "text-bloomberg-red"}`}>
                             {margin != null ? margin.toFixed(1) + "%" : "N/A"}
@@ -331,9 +332,4 @@ export default function EarningsReport() {
   )
 }
 
-function fmtB(v: number): string {
-  if (Math.abs(v) >= 1e12) return `$${(v / 1e12).toFixed(2)}T`
-  if (Math.abs(v) >= 1e9) return `$${(v / 1e9).toFixed(2)}B`
-  if (Math.abs(v) >= 1e6) return `$${(v / 1e6).toFixed(0)}M`
-  return `$${v.toLocaleString()}`
-}
+// fmtB removed — using fmtBigValue from @/lib/currency

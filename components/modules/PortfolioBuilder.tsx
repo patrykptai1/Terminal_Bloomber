@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react"
 import { Plus, Trash2, AlertTriangle, TrendingUp, TrendingDown, RefreshCw } from "lucide-react"
 import type { QuoteData } from "@/lib/yahoo"
+import { fmtPrice as fmtCurrencyPrice, currencySymbol } from "@/lib/currency"
 
 interface PortfolioEntry {
   ticker: string
@@ -92,13 +93,17 @@ export default function PortfolioBuilder() {
   // Calculate totals
   let totalCost = 0
   let totalValue = 0
+  const currencies = new Set<string>()
   entries.forEach((e) => {
     const q = quotes[e.ticker]
     totalCost += e.shares * e.avgPrice
     totalValue += e.shares * (q?.price ?? e.avgPrice)
+    if (q?.currency) currencies.add(q.currency)
   })
   const totalPnl = totalValue - totalCost
   const totalPnlPct = totalCost > 0 ? (totalPnl / totalCost * 100) : 0
+  // Use single currency if all positions share one, otherwise default to USD
+  const portfolioCurrency = currencies.size === 1 ? [...currencies][0] : "USD"
 
   return (
     <div className="space-y-4">
@@ -172,16 +177,16 @@ export default function PortfolioBuilder() {
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 text-center">
               <div>
                 <div className="text-xs text-muted-foreground">TOTAL COST</div>
-                <div className="text-lg font-bold">${totalCost.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
+                <div className="text-lg font-bold">{fmtCurrencyPrice(totalCost, portfolioCurrency)}</div>
               </div>
               <div>
                 <div className="text-xs text-muted-foreground">MARKET VALUE</div>
-                <div className="text-lg font-bold">${totalValue.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
+                <div className="text-lg font-bold">{fmtCurrencyPrice(totalValue, portfolioCurrency)}</div>
               </div>
               <div>
                 <div className="text-xs text-muted-foreground">TOTAL P&L</div>
                 <div className={`text-lg font-bold ${totalPnl >= 0 ? "text-bloomberg-green" : "text-bloomberg-red"}`}>
-                  {totalPnl >= 0 ? "+" : ""}${totalPnl.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                  {totalPnl >= 0 ? "+" : "-"}{fmtCurrencyPrice(Math.abs(totalPnl), portfolioCurrency)}
                 </div>
               </div>
               <div>
@@ -226,8 +231,8 @@ export default function PortfolioBuilder() {
                           {q && <span className="text-muted-foreground ml-1 text-[10px]">{alloc.toFixed(1)}%</span>}
                         </td>
                         <td className="py-2 px-3 text-right">{entry.shares}</td>
-                        <td className="py-2 px-3 text-right">${entry.avgPrice.toFixed(2)}</td>
-                        <td className="py-2 px-3 text-right font-bold">{q ? `$${q.price.toFixed(2)}` : "..."}</td>
+                        <td className="py-2 px-3 text-right">{q ? fmtCurrencyPrice(entry.avgPrice, q.currency) : `$${entry.avgPrice.toFixed(2)}`}</td>
+                        <td className="py-2 px-3 text-right font-bold">{q ? fmtCurrencyPrice(q.price, q.currency) : "..."}</td>
                         <td className={`py-2 px-3 text-right ${(q?.changePercent ?? 0) >= 0 ? "text-bloomberg-green" : "text-bloomberg-red"}`}>
                           {q ? (
                             <span className="inline-flex items-center gap-0.5">
@@ -236,9 +241,9 @@ export default function PortfolioBuilder() {
                             </span>
                           ) : "..."}
                         </td>
-                        <td className="py-2 px-3 text-right">${value.toFixed(2)}</td>
+                        <td className="py-2 px-3 text-right">{q ? fmtCurrencyPrice(value, q.currency) : `$${value.toFixed(2)}`}</td>
                         <td className={`py-2 px-3 text-right font-bold ${pnl >= 0 ? "text-bloomberg-green" : "text-bloomberg-red"}`}>
-                          {pnl >= 0 ? "+" : ""}{pnl.toFixed(2)}
+                          {pnl >= 0 ? "+" : "-"}{q ? fmtCurrencyPrice(Math.abs(pnl), q.currency) : Math.abs(pnl).toFixed(2)}
                         </td>
                         <td className={`py-2 px-3 text-right ${pnlPct >= 0 ? "text-bloomberg-green" : "text-bloomberg-red"}`}>
                           {pnlPct >= 0 ? "+" : ""}{pnlPct.toFixed(2)}%

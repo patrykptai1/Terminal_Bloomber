@@ -6,6 +6,7 @@ import TerminalInput from "@/components/TerminalInput"
 import GaugeChart from "@/components/charts/GaugeChart"
 import type { QuoteData, KeyStatistics } from "@/lib/yahoo"
 import type { FullAnalysis } from "@/lib/analysis"
+import { fmtPrice as fmtCurrencyPrice, fmtBigValue } from "@/lib/currency"
 
 // ── Bloomberg Colors ─────────────────────────────────────────────
 const GREEN = "oklch(0.75 0.15 145)"
@@ -24,15 +25,12 @@ interface ApiResponse {
 
 // ── Helpers ──────────────────────────────────────────────────────
 
-function fmtB(v: number): string {
-  if (Math.abs(v) >= 1e12) return `$${(v / 1e12).toFixed(2)}T`
-  if (Math.abs(v) >= 1e9) return `$${(v / 1e9).toFixed(2)}B`
-  if (Math.abs(v) >= 1e6) return `$${(v / 1e6).toFixed(0)}M`
-  return `$${v.toLocaleString()}`
+function fmtB(v: number, currency = "USD"): string {
+  return fmtBigValue(v, currency)
 }
 
-function fmtPrice(v: number): string {
-  return v >= 1000 ? `$${v.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : `$${v.toFixed(2)}`
+function fmtPrice(v: number, currency = "USD"): string {
+  return fmtCurrencyPrice(v, currency)
 }
 
 function fmtPct(v: number | null): string {
@@ -156,21 +154,21 @@ export default function RiskAssessment() {
             <div className="grid grid-cols-2 sm:grid-cols-5 gap-3 text-xs">
               <div>
                 <div className="text-muted-foreground">ENTRY</div>
-                <div className="font-bold text-lg">{fmtPrice(a.entry)}</div>
+                <div className="font-bold text-lg">{fmtPrice(a.entry, q.currency)}</div>
               </div>
               <div className="bg-bloomberg-red/20 border border-bloomberg-red/30 rounded px-2 py-1">
                 <div className="text-bloomberg-red font-bold">STOP-LOSS</div>
-                <div className="font-bold text-lg text-bloomberg-red">{fmtPrice(a.stopLoss)}</div>
+                <div className="font-bold text-lg text-bloomberg-red">{fmtPrice(a.stopLoss, q.currency)}</div>
                 <div className="text-bloomberg-red/70">{fmtPct(a.stopLossPct)}</div>
               </div>
               <div>
                 <div className="text-muted-foreground">TARGET 1</div>
-                <div className="font-bold text-lg text-bloomberg-green">{fmtPrice(a.target1)}</div>
+                <div className="font-bold text-lg text-bloomberg-green">{fmtPrice(a.target1, q.currency)}</div>
                 <div className="text-bloomberg-green/70">{fmtPct(a.target1Pct)}</div>
               </div>
               <div>
                 <div className="text-muted-foreground">TARGET 2</div>
-                <div className="font-bold text-lg text-bloomberg-green">{fmtPrice(a.target2)}</div>
+                <div className="font-bold text-lg text-bloomberg-green">{fmtPrice(a.target2, q.currency)}</div>
                 <div className="text-bloomberg-green/70">{fmtPct(a.target2Pct)}</div>
               </div>
               <div>
@@ -252,6 +250,7 @@ export default function RiskAssessment() {
                 price={a.bullCase.price}
                 color={GREEN}
                 maxPct={Math.max(Math.abs(a.bullCase.returnPct), Math.abs(a.bearCase.returnPct))}
+                currency={q.currency}
               />
               {/* Base Case */}
               <ScenarioBar
@@ -261,6 +260,7 @@ export default function RiskAssessment() {
                 price={a.baseCase.price}
                 color={AMBER}
                 maxPct={Math.max(Math.abs(a.bullCase.returnPct), Math.abs(a.bearCase.returnPct))}
+                currency={q.currency}
               />
               {/* Bear Case */}
               <ScenarioBar
@@ -270,6 +270,7 @@ export default function RiskAssessment() {
                 price={a.bearCase.price}
                 color={RED}
                 maxPct={Math.max(Math.abs(a.bullCase.returnPct), Math.abs(a.bearCase.returnPct))}
+                currency={q.currency}
               />
             </div>
 
@@ -290,12 +291,12 @@ export default function RiskAssessment() {
             </div>
             <div className="flex items-start gap-4">
               <div className="text-center">
-                <div className="text-3xl font-black text-bloomberg-red">{fmtPrice(a.bearCase.price)}</div>
+                <div className="text-3xl font-black text-bloomberg-red">{fmtPrice(a.bearCase.price, q.currency)}</div>
                 <div className="text-xs text-bloomberg-red/70">{fmtPct(a.bearCase.returnPct)}</div>
                 <div className="text-xs text-muted-foreground mt-1">{a.bearCase.probability}% probability</div>
               </div>
               <div className="flex-1 text-xs text-muted-foreground leading-relaxed space-y-1.5">
-                <WorstCaseChain analysis={a} stats={s ?? null} />
+                <WorstCaseChain analysis={a} stats={s ?? null} currency={q.currency} />
               </div>
             </div>
           </div>
@@ -340,16 +341,16 @@ export default function RiskAssessment() {
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 text-xs mt-4 pt-3 border-t border-bloomberg-border/50">
               <div>
                 <div className="text-muted-foreground">TOTAL DEBT</div>
-                <div className="font-bold">{s?.totalDebt ? fmtB(s.totalDebt) : "N/A"}</div>
+                <div className="font-bold">{s?.totalDebt ? fmtB(s.totalDebt, q.currency) : "N/A"}</div>
               </div>
               <div>
                 <div className="text-muted-foreground">TOTAL CASH</div>
-                <div className="font-bold">{s?.totalCash ? fmtB(s.totalCash) : "N/A"}</div>
+                <div className="font-bold">{s?.totalCash ? fmtB(s.totalCash, q.currency) : "N/A"}</div>
               </div>
               <div>
                 <div className="text-muted-foreground">FCF</div>
                 <div className={`font-bold ${s?.freeCashFlow && s.freeCashFlow > 0 ? "text-bloomberg-green" : "text-bloomberg-red"}`}>
-                  {s?.freeCashFlow ? fmtB(s.freeCashFlow) : "N/A"}
+                  {s?.freeCashFlow ? fmtB(s.freeCashFlow, q.currency) : "N/A"}
                 </div>
               </div>
               <div>
@@ -373,6 +374,7 @@ function ScenarioBar({
   price,
   color,
   maxPct,
+  currency = "USD",
 }: {
   label: string
   probability: number
@@ -380,6 +382,7 @@ function ScenarioBar({
   price: number
   color: string
   maxPct: number
+  currency?: string
 }) {
   const barWidth = maxPct > 0 ? Math.abs(returnPct) / maxPct * 100 : 0
 
@@ -407,7 +410,7 @@ function ScenarioBar({
         </div>
       </div>
       <div className="w-20 text-xs text-right font-mono shrink-0" style={{ color }}>
-        {fmtPrice(price)}
+        {fmtPrice(price, currency)}
       </div>
     </div>
   )
@@ -422,7 +425,7 @@ function MetricCard({ label, value, warn }: { label: string; value: string; warn
   )
 }
 
-function WorstCaseChain({ analysis: a, stats: s }: { analysis: FullAnalysis; stats: KeyStatistics | null }) {
+function WorstCaseChain({ analysis: a, stats: s, currency = "USD" }: { analysis: FullAnalysis; stats: KeyStatistics | null; currency?: string }) {
   const events: string[] = []
 
   // Build a chain of events based on actual risk factors
@@ -454,7 +457,7 @@ function WorstCaseChain({ analysis: a, stats: s }: { analysis: FullAnalysis; sta
     events.push("Cascading sell-off breaks key technical support levels")
   }
 
-  events.push(`Price reaches bear-case target of ${fmtPrice(a.bearCase.price)} (${fmtPct(a.bearCase.returnPct)})`)
+  events.push(`Price reaches bear-case target of ${fmtPrice(a.bearCase.price, currency)} (${fmtPct(a.bearCase.returnPct)})`)
 
   return (
     <div className="space-y-1">

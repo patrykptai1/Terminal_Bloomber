@@ -3,9 +3,10 @@
 import { useState } from "react"
 import { Filter, AlertTriangle, TrendingUp, TrendingDown } from "lucide-react"
 import type { QuoteData, KeyStatistics } from "@/lib/yahoo"
+import { fmtPrice as fmtCurrencyPrice, fmtBigValue } from "@/lib/currency"
 
 const STRATEGIES = ["growth", "value", "dividend", "momentum", "quality", "small-cap"]
-const MARKETS = ["ALL", "US", "PL"]
+const MARKETS = ["ALL", "US", "PL", "NC"]
 
 const STRATEGY_DESC: Record<string, string> = {
   growth: "Revenue growth > 10%, positive earnings growth",
@@ -53,7 +54,7 @@ export default function StockScreener() {
   return (
     <div className="space-y-4">
       <div className="text-xs text-muted-foreground mb-2">
-        Screen 60+ stocks (US + GPW) by strategy — real-time Yahoo Finance data
+        Screen 110+ stocks (US + GPW + NewConnect) by strategy — real-time Yahoo Finance data
       </div>
 
       <div className="bg-bloomberg-card border border-bloomberg-border rounded p-4 space-y-4">
@@ -156,14 +157,14 @@ export default function StockScreener() {
                       <tr key={i} className="border-b border-bloomberg-border/30 hover:bg-bloomberg-bg/50">
                         <td className="py-2 px-3 font-bold text-bloomberg-green">{q.symbol}</td>
                         <td className="py-2 px-3 text-muted-foreground truncate max-w-[150px]">{q.name}</td>
-                        <td className="py-2 px-3 text-right font-bold">${q.price.toFixed(2)}</td>
+                        <td className="py-2 px-3 text-right font-bold">{fmtCurrencyPrice(q.price, q.currency)}</td>
                         <td className={`py-2 px-3 text-right ${q.changePercent >= 0 ? "text-bloomberg-green" : "text-bloomberg-red"}`}>
                           <span className="inline-flex items-center gap-0.5">
                             {q.changePercent >= 0 ? <TrendingUp className="w-3 h-3" /> : <TrendingDown className="w-3 h-3" />}
                             {q.changePercent.toFixed(2)}%
                           </span>
                         </td>
-                        <td className="py-2 px-3 text-right">{fmtB(q.marketCap)}</td>
+                        <td className="py-2 px-3 text-right">{fmtBigValue(q.marketCap, q.currency)}</td>
                         <td className="py-2 px-3 text-right">{q.peRatio?.toFixed(1) ?? "N/A"}</td>
                         <td className="py-2 px-3 text-right font-bold text-bloomberg-amber">{keyMetric}</td>
                       </tr>
@@ -185,9 +186,4 @@ export default function StockScreener() {
   )
 }
 
-function fmtB(v: number): string {
-  if (v >= 1e12) return `$${(v / 1e12).toFixed(1)}T`
-  if (v >= 1e9) return `$${(v / 1e9).toFixed(1)}B`
-  if (v >= 1e6) return `$${(v / 1e6).toFixed(0)}M`
-  return `$${v.toLocaleString()}`
-}
+// fmtB removed — using fmtBigValue from @/lib/currency

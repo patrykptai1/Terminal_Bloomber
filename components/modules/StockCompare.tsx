@@ -5,6 +5,7 @@ import { AlertTriangle, Trophy, Target, Shield, TrendingUp, Zap, Award, ArrowRig
 import type { QuoteData, KeyStatistics } from "@/lib/yahoo"
 import type { FullAnalysis } from "@/lib/analysis"
 import BarCompareChart from "@/components/charts/BarCompareChart"
+import { fmtPrice as fmtCurrencyPrice } from "@/lib/currency"
 
 import {
   RadarChart as RechartsRadarChart,
@@ -191,7 +192,7 @@ function DecisionDashboard({ q, a, color, borderColor }: { q: QuoteData; a: Full
           <span className="text-xs text-muted-foreground ml-2">{q.name}</span>
         </div>
         <div className="text-right">
-          <div className="text-xl font-bold">${q.price.toFixed(2)}</div>
+          <div className="text-xl font-bold">{fmtCurrencyPrice(q.price, q.currency)}</div>
           <div className={`text-xs ${q.change >= 0 ? "text-bloomberg-green" : "text-bloomberg-red"}`}>
             {q.change >= 0 ? "+" : ""}{q.change.toFixed(2)} ({q.changePercent.toFixed(2)}%)
           </div>
@@ -208,16 +209,16 @@ function DecisionDashboard({ q, a, color, borderColor }: { q: QuoteData; a: Full
       <div className="grid grid-cols-3 gap-2 text-center text-xs">
         <div className="bg-bloomberg-bg rounded p-2">
           <div className="text-muted-foreground">Entry</div>
-          <div className="font-bold">${a.entry.toFixed(2)}</div>
+          <div className="font-bold">{fmtCurrencyPrice(a.entry, q.currency)}</div>
         </div>
         <div className="bg-bloomberg-bg rounded p-2">
           <div className="text-muted-foreground">Target</div>
-          <div className="font-bold text-bloomberg-green">${a.target1.toFixed(2)}</div>
+          <div className="font-bold text-bloomberg-green">{fmtCurrencyPrice(a.target1, q.currency)}</div>
           <div className="text-bloomberg-green text-[10px]">+{a.target1Pct.toFixed(1)}%</div>
         </div>
         <div className="bg-bloomberg-bg rounded p-2">
           <div className="text-muted-foreground">Stop</div>
-          <div className="font-bold text-bloomberg-red">${a.stopLoss.toFixed(2)}</div>
+          <div className="font-bold text-bloomberg-red">{fmtCurrencyPrice(a.stopLoss, q.currency)}</div>
           <div className="text-bloomberg-red text-[10px]">{a.stopLossPct.toFixed(1)}%</div>
         </div>
       </div>
