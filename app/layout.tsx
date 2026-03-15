@@ -1,18 +1,16 @@
-import { Geist, Geist_Mono } from "next/font/google"
-
+import { JetBrains_Mono } from "next/font/google"
 import "./globals.css"
-import { ThemeProvider } from "@/components/theme-provider"
-import { cn } from "@/lib/utils";
+import { cn } from "@/lib/utils"
 
-const fontSans = Geist({
-  subsets: ["latin"],
-  variable: "--font-sans",
-})
-
-const fontMono = Geist_Mono({
-  subsets: ["latin"],
+const fontMono = JetBrains_Mono({
+  subsets: ["latin", "latin-ext"],
   variable: "--font-mono",
 })
+
+export const metadata = {
+  title: "Terminal Bloomberg",
+  description: "Stock market terminal for US & Polish markets",
+}
 
 export default function RootLayout({
   children,
@@ -20,13 +18,9 @@ export default function RootLayout({
   children: React.ReactNode
 }>) {
   return (
-    <html
-      lang="en"
-      suppressHydrationWarning
-      className={cn("antialiased", fontMono.variable, "font-sans", fontSans.variable)}
-    >
-      <body>
-        <ThemeProvider>{children}</ThemeProvider>
+    <html lang="pl" className="dark">
+      <body className={cn("antialiased min-h-screen bg-background", fontMono.variable, "font-mono")}>
+        {children}
       </body>
     </html>
   )
