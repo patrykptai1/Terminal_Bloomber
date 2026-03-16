@@ -340,7 +340,15 @@ export async function fetchEarnings(symbol: string): Promise<EarningsData> {
       netIncome: num(s.netIncome),
       grossProfit: num(s.grossProfit),
       operatingIncome: num(s.operatingIncome),
-      totalExpenses: num(s.totalExpenses ?? s.totalOperatingExpenses),
+      totalExpenses: (() => {
+        const raw = num(s.totalExpenses ?? s.totalOperatingExpenses)
+        if (raw != null && raw !== 0) return raw
+        // Fallback: Revenue - Operating Income
+        const rev = num(s.totalRevenue)
+        const opInc = num(s.operatingIncome)
+        if (rev != null && opInc != null && rev > 0) return rev - opInc
+        return null
+      })(),
       dilutedEPS: num(s.dilutedEPS),
       depreciation: null,
     }))
@@ -383,7 +391,15 @@ export async function fetchEarnings(symbol: string): Promise<EarningsData> {
           netIncome: basic?.netIncome ?? num(ftsItem?.netIncome) ?? null,
           grossProfit: basic?.grossProfit ?? num(ftsItem?.grossProfit) ?? null,
           operatingIncome: opInc ?? null,
-          totalExpenses: basic?.totalExpenses ?? num(ftsItem?.totalExpenses) ?? null,
+          totalExpenses: (() => {
+            // Yahoo sometimes returns 0 for totalExpenses — treat as unavailable
+            const raw = basic?.totalExpenses ?? num(ftsItem?.totalExpenses) ?? null
+            if (raw != null && raw !== 0) return raw
+            // Fallback: Revenue - Operating Income = total expenses (COGS + OpEx)
+            const rev = basic?.revenue ?? num(ftsItem?.totalRevenue)
+            if (rev != null && opInc != null && rev > 0) return rev - opInc
+            return null
+          })(),
           dilutedEPS: basic?.dilutedEPS ?? num(ftsItem?.dilutedEPS) ?? null,
           depreciation: da ?? null,
         })

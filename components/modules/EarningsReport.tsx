@@ -365,20 +365,47 @@ export default function EarningsReport() {
 
             {/* OPERATING LEVERAGE */}
             {revenueTTM.length >= 1 && totalExpensesTTM.length >= 1 && (() => {
+              const isValidNum = (n: number | null | undefined): n is number =>
+                n !== null && n !== undefined && !isNaN(n) && isFinite(n) && n !== 0
+
               const revL = revenueTTM[revenueTTM.length - 1]
-              const revP = revenueTTM.find((r) => parseInt(yearFromDate(r.date)) === parseInt(yearFromDate(revL.date)) - 1) ?? annualRevenue.filter((a) => a.value != null).slice(-1).map((a) => ({ date: a.date, label: `FY${yearFromDate(a.date)}`, value: a.value!, quarters: [] }))[0]
+              const revP = revenueTTM.find((r) => parseInt(yearFromDate(r.date)) === parseInt(yearFromDate(revL.date)) - 1)
+                ?? annualRevenue.filter((a) => a.value != null).slice(-1).map((a) => ({ date: a.date, label: `FY${yearFromDate(a.date)}`, value: a.value!, quarters: [] }))[0]
               const expL = totalExpensesTTM[totalExpensesTTM.length - 1]
               const expP = totalExpensesTTM.find((r) => parseInt(yearFromDate(r.date)) === parseInt(yearFromDate(expL.date)) - 1)
+
+              // Validate all 4 values exist and are non-zero
               if (!revP || !expP) return null
+              if (!isValidNum(revL.value) || !isValidNum(revP.value) || !isValidNum(expL.value) || !isValidNum(expP.value)) {
+                return (
+                  <div className="bg-bloomberg-card border border-bloomberg-border rounded p-4">
+                    <div className="text-xs text-bloomberg-amber font-bold mb-1">OPERATING LEVERAGE</div>
+                    <div className="text-xs text-muted-foreground mt-2">Operating data unavailable for this period</div>
+                  </div>
+                )
+              }
+
               const rg = ((revL.value - revP.value) / Math.abs(revP.value)) * 100
               const eg = ((expL.value - expP.value) / Math.abs(expP.value)) * 100
-              const spread = rg - eg; const isPos = spread > 0
+              const spread = rg - eg
+
+              // Sanity check: if spread is extreme (>50pp or <-50pp), data is likely unreliable
+              if (Math.abs(spread) > 50 || Math.abs(rg) > 200 || Math.abs(eg) > 200) {
+                return (
+                  <div className="bg-bloomberg-card border border-bloomberg-border rounded p-4">
+                    <div className="text-xs text-bloomberg-amber font-bold mb-1">OPERATING LEVERAGE</div>
+                    <div className="text-xs text-muted-foreground mt-2">Insufficient data for leverage calculation</div>
+                  </div>
+                )
+              }
+
+              const isPos = spread > 0
               return (
                 <div className="bg-bloomberg-card border border-bloomberg-border rounded p-4">
                   <div className="text-xs text-bloomberg-amber font-bold mb-1">OPERATING LEVERAGE — {revL.label} vs {revP.label}</div>
                   <div className="grid grid-cols-4 gap-4 text-xs mt-3">
-                    <div><div className="text-muted-foreground">Revenue Growth</div><div className={`font-bold text-sm ${rg >= 0 ? "text-bloomberg-green" : "text-bloomberg-red"}`}>{rg >= 0 ? "+" : ""}{rg.toFixed(1)}% ▲</div></div>
-                    <div><div className="text-muted-foreground">OpEx Growth</div><div className={`font-bold text-sm ${eg <= 0 ? "text-bloomberg-green" : "text-bloomberg-red"}`}>{eg >= 0 ? "+" : ""}{eg.toFixed(1)}% ▲</div></div>
+                    <div><div className="text-muted-foreground">Revenue Growth</div><div className={`font-bold text-sm ${rg >= 0 ? "text-bloomberg-green" : "text-bloomberg-red"}`}>{rg >= 0 ? "+" : ""}{rg.toFixed(1)}%</div></div>
+                    <div><div className="text-muted-foreground">OpEx Growth</div><div className={`font-bold text-sm ${eg <= 0 ? "text-bloomberg-green" : "text-bloomberg-red"}`}>{eg >= 0 ? "+" : ""}{eg.toFixed(1)}%</div></div>
                     <div><div className="text-muted-foreground">Leverage Spread</div><div className={`font-bold text-sm ${isPos ? "text-bloomberg-green" : "text-bloomberg-red"}`}>{spread >= 0 ? "+" : ""}{spread.toFixed(1)} pp</div></div>
                     <div><div className="text-muted-foreground">Status</div><div className={`font-bold text-sm ${isPos ? "text-bloomberg-green" : "text-bloomberg-red"}`}>{isPos ? "POSITIVE ✓" : "NEGATIVE ✗"}</div></div>
                   </div>
@@ -555,32 +582,91 @@ export default function EarningsReport() {
               )}
 
               {/* Insider Activity */}
-              <div className="bg-bloomberg-card border border-bloomberg-border rounded p-4">
-                <div className="text-xs text-bloomberg-amber font-bold mb-3">INSIDER ACTIVITY (6M)</div>
-                {/* Summary bar */}
-                <div className="flex items-center gap-4 mb-3 text-xs">
-                  <span className="text-bloomberg-green font-bold">Bought: {ow.netInsiderBuyCount} tx, {fmtShares(ow.netInsiderBuyShares)} shares</span>
-                  <span className="text-bloomberg-red font-bold">Sold: {ow.netInsiderSellCount} tx, {fmtShares(ow.netInsiderSellShares)} shares</span>
-                  {(() => {
-                    const net = ow.netInsiderBuyShares - ow.netInsiderSellShares
-                    return <span className={`font-bold ${net > 0 ? "text-bloomberg-green" : net < 0 ? "text-bloomberg-red" : "text-muted-foreground"}`}>Net: {net > 0 ? "+" : ""}{fmtShares(net)} shares</span>
-                  })()}
-                </div>
-                {/* Signal */}
-                <div className="text-xs mb-3">
-                  {ow.netInsiderBuyShares > ow.netInsiderSellShares ? <span className="text-bloomberg-green">🟢 Insider buying — bullish signal</span> : ow.netInsiderSellShares > ow.netInsiderBuyShares ? <span className="text-bloomberg-red">🔴 Insider selling — monitor closely</span> : <span className="text-muted-foreground">⚪ No significant insider activity</span>}
-                </div>
-                {/* Transaction table */}
-                {ow.insiderTransactions.length > 0 && (
-                  <div className="overflow-x-auto"><table className="w-full text-xs"><thead><tr className="border-b border-bloomberg-border"><th className="text-left py-2 text-muted-foreground">NAME</th><th className="text-left py-2 text-muted-foreground">ROLE</th><th className="text-left py-2 text-muted-foreground">TYPE</th><th className="text-right py-2 text-muted-foreground">SHARES</th><th className="text-right py-2 text-muted-foreground">VALUE</th><th className="text-right py-2 text-muted-foreground">DATE</th></tr></thead>
-                  <tbody>{ow.insiderTransactions.slice(0, 10).map((tx, i) => {
-                    const isSale = tx.transactionType.toLowerCase().includes("sale")
-                    const isBuy = tx.transactionType.toLowerCase().includes("purchase")
-                    return (<tr key={i} className="border-b border-bloomberg-border/50"><td className="py-1.5 font-bold">{tx.name}</td><td className="py-1.5 text-muted-foreground">{tx.relation}</td><td className={`py-1.5 ${isSale ? "text-bloomberg-red" : isBuy ? "text-bloomberg-green" : "text-muted-foreground"}`}>{tx.transactionType.split(" at ")[0]}</td><td className="py-1.5 text-right">{tx.shares != null ? fmtShares(tx.shares) : "N/A"}</td><td className="py-1.5 text-right">{tx.value != null && tx.value > 0 ? fmtBigValue(tx.value, q.currency) : "—"}</td><td className="py-1.5 text-right text-muted-foreground">{tx.date}</td></tr>)
-                  })}</tbody></table></div>
-                )}
-                <Explainer text="Insider sales mogą być rutynowe (RSU vesting). Kupno insiderów jest silniejszym sygnałem niż sprzedaż." />
-              </div>
+              {(() => {
+                // Classify insider transactions
+                const classifyTx = (type: string): "sale" | "purchase" | "award" | "other" => {
+                  const t = type.toLowerCase()
+                  if (t.includes("sale") || t.includes("sell")) return "sale"
+                  if (t.includes("purchase") || t.includes("buy")) return "purchase"
+                  if (t.includes("award") || t.includes("grant") || t.includes("rsu") || t.includes("vesting")) return "award"
+                  return "other" // Option Exercise, Gift, etc.
+                }
+
+                const allTx = ow.insiderTransactions
+                const openMarket = allTx.filter((tx) => { const c = classifyTx(tx.transactionType); return c === "sale" || c === "purchase" })
+                const awards = allTx.filter((tx) => classifyTx(tx.transactionType) === "award")
+                const other = allTx.filter((tx) => classifyTx(tx.transactionType) === "other")
+
+                // Calculate Net Flow ONLY from open market transactions
+                const omBuyShares = openMarket.filter((tx) => classifyTx(tx.transactionType) === "purchase").reduce((s, tx) => s + (tx.shares ?? 0), 0)
+                const omSellShares = openMarket.filter((tx) => classifyTx(tx.transactionType) === "sale").reduce((s, tx) => s + (tx.shares ?? 0), 0)
+                const omBuyCount = openMarket.filter((tx) => classifyTx(tx.transactionType) === "purchase").length
+                const omSellCount = openMarket.filter((tx) => classifyTx(tx.transactionType) === "sale").length
+                const netFlow = omBuyShares - omSellShares
+                const hasOpenMarket = openMarket.length > 0
+
+                const TxTable = ({ txs, caption }: { txs: typeof allTx; caption?: string }) => (
+                  <div className="overflow-x-auto">
+                    {caption && <div className="text-[10px] text-muted-foreground mb-1 italic">{caption}</div>}
+                    <table className="w-full text-xs"><thead><tr className="border-b border-bloomberg-border"><th className="text-left py-2 text-muted-foreground">NAME</th><th className="text-left py-2 text-muted-foreground">ROLE</th><th className="text-left py-2 text-muted-foreground">TYPE</th><th className="text-right py-2 text-muted-foreground">SHARES</th><th className="text-right py-2 text-muted-foreground">VALUE</th><th className="text-right py-2 text-muted-foreground">DATE</th></tr></thead>
+                    <tbody>{txs.map((tx, i) => {
+                      const c = classifyTx(tx.transactionType)
+                      return (<tr key={i} className="border-b border-bloomberg-border/50"><td className="py-1.5 font-bold">{tx.name}</td><td className="py-1.5 text-muted-foreground">{tx.relation}</td><td className={`py-1.5 ${c === "sale" ? "text-bloomberg-red" : c === "purchase" ? "text-bloomberg-green" : "text-muted-foreground"}`}>{tx.transactionType.split(" at ")[0]}</td><td className="py-1.5 text-right">{tx.shares != null ? fmtShares(tx.shares) : "N/A"}</td><td className="py-1.5 text-right">{tx.value != null && tx.value > 0 ? fmtBigValue(tx.value, q.currency) : "—"}</td><td className="py-1.5 text-right text-muted-foreground">{tx.date}</td></tr>)
+                    })}</tbody></table>
+                  </div>
+                )
+
+                return (
+                  <div className="bg-bloomberg-card border border-bloomberg-border rounded p-4">
+                    <div className="text-xs text-bloomberg-amber font-bold mb-3">INSIDER ACTIVITY (6M)</div>
+
+                    {/* Summary bar — based ONLY on open market */}
+                    <div className="flex flex-wrap items-center gap-4 mb-2 text-xs">
+                      <span className="text-muted-foreground font-bold">Open Market:</span>
+                      <span className="text-bloomberg-green font-bold">{omBuyCount} buy, {fmtShares(omBuyShares)} shares</span>
+                      <span className="text-bloomberg-red font-bold">{omSellCount} sell, {fmtShares(omSellShares)} shares</span>
+                      <span className={`font-bold ${netFlow > 0 ? "text-bloomberg-green" : netFlow < 0 ? "text-bloomberg-red" : "text-muted-foreground"}`}>Net: {netFlow > 0 ? "+" : ""}{fmtShares(netFlow)} shares</span>
+                    </div>
+                    {awards.length > 0 && (
+                      <div className="flex items-center gap-2 mb-2 text-xs text-muted-foreground">
+                        <span>Stock Awards: {awards.length} tx (RSU vesting — not indicative)</span>
+                      </div>
+                    )}
+
+                    {/* Signal — based ONLY on open market transactions */}
+                    <div className="text-xs mb-3">
+                      {!hasOpenMarket
+                        ? <span className="text-muted-foreground">⚪ No open market activity</span>
+                        : netFlow > 0
+                          ? <span className="text-bloomberg-green">🟢 Insider buying — bullish signal</span>
+                          : netFlow < 0
+                            ? <span className="text-bloomberg-red">🔴 Insider selling — monitor closely</span>
+                            : <span className="text-muted-foreground">⚪ No significant insider activity</span>
+                      }
+                    </div>
+
+                    {/* Open Market Transactions */}
+                    {openMarket.length > 0 && (<>
+                      <div className="text-[10px] text-bloomberg-amber font-bold mb-1 mt-2">OPEN MARKET TRANSACTIONS</div>
+                      <TxTable txs={openMarket.slice(0, 10)} />
+                    </>)}
+
+                    {/* Stock Awards & Vesting */}
+                    {awards.length > 0 && (<>
+                      <div className="text-[10px] text-bloomberg-amber font-bold mb-1 mt-4">STOCK AWARDS & VESTING</div>
+                      <TxTable txs={awards.slice(0, 10)} caption="Automatyczne przyznanie akcji — część wynagrodzenia. Nie wliczane do Net Flow." />
+                    </>)}
+
+                    {/* Other */}
+                    {other.length > 0 && (<>
+                      <div className="text-[10px] text-bloomberg-amber font-bold mb-1 mt-4">OTHER (Option Exercise, Gift, etc.)</div>
+                      <TxTable txs={other.slice(0, 5)} />
+                    </>)}
+
+                    <Explainer text="Insider sales mogą być rutynowe (RSU vesting). Kupno insiderów jest silniejszym sygnałem niż sprzedaż. Tabela pokazuje tylko Open Market transactions w kalkulacji Net Flow." />
+                  </div>
+                )
+              })()}
             </>
           )}
 
