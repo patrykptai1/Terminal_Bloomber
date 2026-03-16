@@ -7,105 +7,157 @@ import BarCompareChart from "@/components/charts/BarCompareChart"
 import type { QuoteData, EarningsData } from "@/lib/yahoo"
 import { fmtBigValue } from "@/lib/currency"
 
-/* ── helper: find YoY match (same month-day, one year earlier) ── */
-function findYoYMatch(date: string, allBars: { date: string; value: number | null }[]): { value: number | null; date: string } | null {
-  const match = date.match(/^(\d{4})-(\d{2}-\d{2})$/)
-  if (!match) return null
-  const yearAgo = `${parseInt(match[1]) - 1}-${match[2]}`
-  const found = allBars.find((b) => b.date === yearAgo)
-  return found ? { value: found.value, date: yearAgo } : null
+/* ── TTM helper: compute rolling 4-quarter sum ── */
+interface QVal { date: string; value: number | null }
+interface TTMPoint { date: string; label: string; value: number; quarters: string[] }
+
+function computeTTM(quarters: QVal[]): TTMPoint[] {
+  const sorted = [...quarters].sort((a, b) => a.date.localeCompare(b.date))
+  const results: TTMPoint[] = []
+  for (let i = 3; i < sorted.length; i++) {
+    const window = sorted.slice(i - 3, i + 1)
+    if (window.every((q) => q.value != null)) {
+      const sum = window.reduce((acc, q) => acc + (q.value ?? 0), 0)
+      results.push({
+        date: window[3].date,
+        label: `TTM ${shortQLabel(window[3].date)}`,
+        value: sum,
+        quarters: window.map((q) => shortQLabel(q.date)),
+      })
+    }
+  }
+  return results
 }
 
 /* ── helper: format short quarter label like "Q1'25" ── */
 function shortQLabel(date: string): string {
-  // Handle YYYY-MM-DD format
   const m = date.match(/^(\d{4})-(\d{2})/)
   if (m) {
     const month = parseInt(m[2])
     const q = month <= 3 ? 1 : month <= 6 ? 2 : month <= 9 ? 3 : 4
     return `Q${q}'${m[1].slice(2)}`
   }
-  // Handle "1Q2025" format from financialsChart
   const m2 = date.match(/^(\d)Q(\d{4})/)
   if (m2) return `Q${m2[1]}'${m2[2].slice(2)}`
   return date
 }
 
-/* ── helper: bar chart section (reusable for Revenue / EBITDA / Net Income) ── */
-function FinancialBarSection({
+function yearFromDate(date: string): string {
+  const m = date.match(/^(\d{4})/)
+  return m ? m[1] : date
+}
+
+/* ── TTM Bar Chart Section ── */
+function TTMBarSection({
   title,
-  data,
+  ttmData,
+  annualData,
+  forwardAnnual,
   currency,
   color = "bg-bloomberg-blue",
-  forwardBars,
 }: {
   title: string
-  data: { date: string; value: number | null }[]
+  ttmData: TTMPoint[]
+  annualData?: { date: string; value: number | null }[]
+  forwardAnnual?: { date: string; estimate: number | null }[]
   currency: string
   color?: string
-  forwardBars?: { date: string; estimate: number | null; low?: number | null; high?: number | null }[]
 }) {
-  const combined = [
-    ...data.map((d) => ({ date: d.date, value: d.value, isEstimate: false })),
-    ...(forwardBars ?? [])
-      .filter((f) => !data.some((d) => d.date === f.date))
-      .map((f) => ({ date: f.date, value: f.estimate, isEstimate: true })),
-  ]
-  if (combined.length === 0) return null
-  const maxVal = Math.max(...combined.map((r) => Math.abs(r.value ?? 0)))
+  // Build combined bars: annual history + computed TTM + forward annual estimates
+  interface BarItem { label: string; sublabel: string; value: number; isEstimate: boolean; isTTM: boolean; date: string }
+  const bars: BarItem[] = []
+
+  // Add annual statements as long-term TTM (they ARE full-year = TTM)
+  if (annualData) {
+    for (const a of annualData) {
+      if (a.value != null) {
+        const year = yearFromDate(a.date)
+        // Don't add annual if we already have a TTM ending in same fiscal year-end
+        const hasTTMSameYear = ttmData.some((t) => yearFromDate(t.date) === year && t.date.endsWith(a.date.slice(5)))
+        if (!hasTTMSameYear) {
+          bars.push({ label: `FY${year}`, sublabel: "Annual", value: a.value, isEstimate: false, isTTM: false, date: a.date })
+        }
+      }
+    }
+  }
+
+  // Add computed TTM from quarterly data
+  for (const t of ttmData) {
+    bars.push({ label: t.label, sublabel: t.quarters.join(" + "), value: t.value, isEstimate: false, isTTM: true, date: t.date })
+  }
+
+  // Add forward annual estimates
+  if (forwardAnnual) {
+    for (const f of forwardAnnual) {
+      if (f.estimate != null) {
+        const year = yearFromDate(f.date)
+        if (!bars.some((b) => yearFromDate(b.date) === year)) {
+          bars.push({ label: `FY${year} (E)`, sublabel: "Consensus Est.", value: f.estimate, isEstimate: true, isTTM: false, date: f.date })
+        }
+      }
+    }
+  }
+
+  // Sort by date and deduplicate
+  bars.sort((a, b) => a.date.localeCompare(b.date))
+
+  if (bars.length === 0) return null
+  const maxVal = Math.max(...bars.map((b) => Math.abs(b.value)))
 
   return (
     <div className="bg-bloomberg-card border border-bloomberg-border rounded p-4">
-      <div className="text-xs text-bloomberg-amber font-bold mb-3">{title}</div>
-      <div className="flex items-end gap-3 h-48">
-        {combined.map((row, i) => {
-          const h = maxVal > 0 ? (Math.abs(row.value ?? 0) / maxVal) * 100 : 0
-          const negative = (row.value ?? 0) < 0
+      <div className="text-xs text-bloomberg-amber font-bold mb-1">{title}</div>
+      <div className="text-[10px] text-muted-foreground mb-3">TTM = Trailing Twelve Months (suma 4 kwartałów) — eliminuje sezonowość</div>
+      <div className="flex items-end gap-3 h-56">
+        {bars.map((bar, i) => {
+          const h = maxVal > 0 ? (Math.abs(bar.value) / maxVal) * 100 : 0
+          const negative = bar.value < 0
 
-          // Always compare YoY (same quarter last year) — most meaningful for seasonal businesses
-          // Fallback to QoQ for actuals when no YoY data available
+          // YoY TTM growth: compare to bar ~1 year earlier
           let growth: number | null = null
           let compLabel = ""
-          const yoyMatch = findYoYMatch(row.date, [...data, ...(forwardBars ?? []).map((f) => ({ date: f.date, value: f.estimate }))])
-          if (yoyMatch && yoyMatch.value && yoyMatch.value !== 0 && row.value) {
-            growth = ((row.value - yoyMatch.value) / Math.abs(yoyMatch.value)) * 100
-            compLabel = `vs ${shortQLabel(yoyMatch.date)}`
-          } else if (!row.isEstimate && i > 0) {
-            const prev = combined[i - 1].value
-            if (prev && prev !== 0 && row.value) {
-              growth = ((row.value - prev) / Math.abs(prev)) * 100
-              compLabel = `vs ${shortQLabel(combined[i - 1].date)}`
-            }
+          const barYear = parseInt(yearFromDate(bar.date))
+          const yoyBar = bars.find((b) => {
+            const bYear = parseInt(yearFromDate(b.date))
+            return bYear === barYear - 1 && b.value !== 0
+          })
+          if (yoyBar) {
+            growth = ((bar.value - yoyBar.value) / Math.abs(yoyBar.value)) * 100
+            compLabel = `vs ${yoyBar.label}`
           }
 
           return (
-            <div key={i} className="flex-1 flex flex-col items-center gap-0.5">
+            <div key={i} className="flex-1 flex flex-col items-center gap-0.5 min-w-0">
               {growth != null && (
                 <div className="flex flex-col items-center">
-                  <div
-                    className={`text-[10px] font-bold flex items-center gap-0.5 ${growth >= 0 ? "text-bloomberg-green" : "text-bloomberg-red"}`}
-                  >
+                  <div className={`text-[10px] font-bold flex items-center gap-0.5 ${growth >= 0 ? "text-bloomberg-green" : "text-bloomberg-red"}`}>
                     {growth >= 0 ? <TrendingUp className="w-3 h-3" /> : <TrendingDown className="w-3 h-3" />}
-                    {growth >= 0 ? "+" : ""}
-                    {growth.toFixed(1)}%
+                    {growth >= 0 ? "+" : ""}{growth.toFixed(1)}%
                   </div>
-                  <div className="text-[8px] text-muted-foreground">{compLabel}</div>
+                  <div className="text-[8px] text-muted-foreground text-center">{compLabel}</div>
                 </div>
               )}
               {growth == null && <div className="h-[26px]" />}
-              <div className="w-full flex items-end h-24">
+              <div className="w-full flex items-end h-28">
                 <div
-                  className={`flex-1 rounded-t transition-all ${row.isEstimate ? "border-2 border-dashed border-bloomberg-amber bg-bloomberg-amber/20" : negative ? "bg-bloomberg-red" : color}`}
+                  className={`flex-1 rounded-t transition-all ${
+                    bar.isEstimate
+                      ? "border-2 border-dashed border-bloomberg-amber bg-bloomberg-amber/20"
+                      : bar.isTTM
+                        ? `${color} ring-1 ring-white/20`
+                        : negative ? "bg-bloomberg-red" : `${color} opacity-60`
+                  }`}
                   style={{ height: `${Math.max(h, 2)}%` }}
                 />
               </div>
-              <div className="text-[10px] text-muted-foreground font-bold">
-                {shortQLabel(row.date)}
+              <div className="text-[10px] text-center font-bold text-muted-foreground leading-tight">
+                {bar.label}
               </div>
-              <div className="text-[10px] text-muted-foreground">
-                {row.value != null ? fmtBigValue(row.value, currency) : "N/A"}
+              <div className="text-[10px] text-muted-foreground text-center">
+                {fmtBigValue(bar.value, currency)}
               </div>
-              {row.isEstimate && <div className="text-[9px] text-bloomberg-amber font-bold">EST</div>}
+              {bar.isTTM && <div className="text-[8px] text-bloomberg-blue font-bold">TTM</div>}
+              {bar.isEstimate && <div className="text-[9px] text-bloomberg-amber font-bold">EST</div>}
             </div>
           )
         })}
@@ -114,17 +166,53 @@ function FinancialBarSection({
   )
 }
 
-/* ── helper: financial table ── */
-function FinancialTable({
+/* ── TTM Table ── */
+function TTMTable({
   title,
-  rows,
+  ttmData,
+  annualData,
+  forwardAnnual,
   currency,
 }: {
   title: string
-  rows: { date: string; value: number | null; isEstimate?: boolean }[]
+  ttmData: TTMPoint[]
+  annualData?: { date: string; value: number | null }[]
+  forwardAnnual?: { date: string; estimate: number | null }[]
   currency: string
 }) {
+  interface RowItem { label: string; sublabel: string; value: number; isEstimate: boolean; date: string }
+  const rows: RowItem[] = []
+
+  if (annualData) {
+    for (const a of annualData) {
+      if (a.value != null) {
+        const year = yearFromDate(a.date)
+        const hasTTM = ttmData.some((t) => yearFromDate(t.date) === year && t.date.endsWith(a.date.slice(5)))
+        if (!hasTTM) {
+          rows.push({ label: `FY${year}`, sublabel: "Annual Report", value: a.value, isEstimate: false, date: a.date })
+        }
+      }
+    }
+  }
+
+  for (const t of ttmData) {
+    rows.push({ label: t.label, sublabel: t.quarters.join(" + "), value: t.value, isEstimate: false, date: t.date })
+  }
+
+  if (forwardAnnual) {
+    for (const f of forwardAnnual) {
+      if (f.estimate != null) {
+        const year = yearFromDate(f.date)
+        if (!rows.some((r) => yearFromDate(r.date) === year)) {
+          rows.push({ label: `FY${year} (E)`, sublabel: "Consensus", value: f.estimate, isEstimate: true, date: f.date })
+        }
+      }
+    }
+  }
+
+  rows.sort((a, b) => a.date.localeCompare(b.date))
   if (rows.length === 0) return null
+
   return (
     <div className="bg-bloomberg-card border border-bloomberg-border rounded p-4">
       <div className="text-xs text-bloomberg-amber font-bold mb-3">{title}</div>
@@ -132,34 +220,30 @@ function FinancialTable({
         <table className="w-full text-xs">
           <thead>
             <tr className="border-b border-bloomberg-border">
-              <th className="text-left py-2 text-muted-foreground">QUARTER</th>
-              <th className="text-right py-2 text-muted-foreground">VALUE</th>
-              <th className="text-right py-2 text-muted-foreground">CHANGE</th>
+              <th className="text-left py-2 text-muted-foreground">PERIOD</th>
+              <th className="text-left py-2 text-muted-foreground">DETAIL</th>
+              <th className="text-right py-2 text-muted-foreground">VALUE (TTM)</th>
+              <th className="text-right py-2 text-muted-foreground">YoY CHANGE</th>
               <th className="text-center py-2 text-muted-foreground">TYPE</th>
             </tr>
           </thead>
           <tbody>
             {rows.map((row, i) => {
-              // Always try YoY first, fallback QoQ for actuals
+              const barYear = parseInt(yearFromDate(row.date))
+              const yoyRow = rows.find((r) => parseInt(yearFromDate(r.date)) === barYear - 1 && r.value !== 0)
               let change: number | null = null
               let compRef = ""
-              const yoyMatch = findYoYMatch(row.date, rows)
-              if (yoyMatch && yoyMatch.value && yoyMatch.value !== 0 && row.value) {
-                change = ((row.value - yoyMatch.value) / Math.abs(yoyMatch.value)) * 100
-                compRef = `vs ${shortQLabel(yoyMatch.date)}`
-              } else if (!row.isEstimate && i > 0) {
-                const prev = rows[i - 1].value
-                if (prev && prev !== 0 && row.value) {
-                  change = ((row.value - prev) / Math.abs(prev)) * 100
-                  compRef = `vs ${shortQLabel(rows[i - 1].date)}`
-                }
+              if (yoyRow) {
+                change = ((row.value - yoyRow.value) / Math.abs(yoyRow.value)) * 100
+                compRef = `vs ${yoyRow.label}`
               }
-              const positive = (row.value ?? 0) >= 0
+              const positive = row.value >= 0
               return (
                 <tr key={i} className="border-b border-bloomberg-border/50">
-                  <td className="py-2 font-bold">{row.date} <span className="text-[10px] text-muted-foreground font-normal">{shortQLabel(row.date)}</span></td>
+                  <td className="py-2 font-bold">{row.label}</td>
+                  <td className="py-2 text-[10px] text-muted-foreground">{row.sublabel}</td>
                   <td className={`py-2 text-right font-bold ${positive ? "text-bloomberg-green" : "text-bloomberg-red"}`}>
-                    {row.value != null ? fmtBigValue(row.value, currency) : "N/A"}
+                    {fmtBigValue(row.value, currency)}
                   </td>
                   <td className={`py-2 text-right ${change != null && change >= 0 ? "text-bloomberg-green" : "text-bloomberg-red"}`}>
                     {change != null ? (
@@ -215,17 +299,7 @@ export default function EarningsReport() {
   const fwdQuarterly = (e?.forwardEstimates ?? []).filter((f) => f.period === "0q" || f.period === "+1q")
   const fwdYearly = (e?.forwardEstimates ?? []).filter((f) => f.period === "0y" || f.period === "+1y")
 
-  // Build forward estimate entries for revenue (quarterly only for chart)
-  const fwdRevenue = fwdQuarterly
-    .filter((f) => f.revEstimate != null)
-    .map((f) => ({
-      date: f.endDate || f.period,
-      estimate: f.revEstimate,
-      low: f.revLow,
-      high: f.revHigh,
-    }))
-
-  // Build EPS chart data: historical only (no forward — they are shown separately as YoY)
+  // Build EPS chart data: historical only
   const epsChartData = (e?.quarterly ?? []).map((row) => ({
     name: row.date.length > 7 ? row.date.slice(5) : row.date,
     valueA: row.estimate ?? 0,
@@ -234,23 +308,34 @@ export default function EarningsReport() {
     labelB: "Actual",
   }))
 
-  // Income statement rows
-  const revenueRows = (e?.incomeStatements ?? []).map((s) => ({ date: s.date, value: s.revenue }))
-  const ebitdaRows = (e?.incomeStatements ?? []).map((s) => ({ date: s.date, value: s.ebitda }))
-  const netIncomeRows = (e?.incomeStatements ?? []).map((s) => ({ date: s.date, value: s.netIncome }))
+  // Income statement quarterly rows for TTM computation
+  const revenueQ = (e?.incomeStatements ?? []).map((s) => ({ date: s.date, value: s.revenue }))
+  const ebitdaQ = (e?.incomeStatements ?? []).map((s) => ({ date: s.date, value: s.ebitda }))
+  const netIncomeQ = (e?.incomeStatements ?? []).map((s) => ({ date: s.date, value: s.netIncome }))
 
-  // Add forward revenue estimates to table
-  const revTableRows = [
-    ...revenueRows.map((r) => ({ ...r, isEstimate: false })),
-    ...fwdRevenue
-      .filter((f) => !revenueRows.some((r) => r.date === f.date))
-      .map((f) => ({ date: f.date, value: f.estimate, isEstimate: true })),
-  ]
+  // Compute TTM rolling values
+  const revenueTTM = computeTTM(revenueQ)
+  const ebitdaTTM = computeTTM(ebitdaQ)
+  const netIncomeTTM = computeTTM(netIncomeQ)
+
+  // EPS TTM from quarterly actuals
+  const epsQ = (e?.quarterly ?? []).map((q) => ({ date: q.date, value: q.actual }))
+  const epsTTM = computeTTM(epsQ)
+
+  // Annual data for long-term trend
+  const annualRevenue = (e?.annualStatements ?? []).map((a) => ({ date: a.date, value: a.revenue }))
+  const annualEbitda = (e?.annualStatements ?? []).map((a) => ({ date: a.date, value: a.ebitda }))
+  const annualNetIncome = (e?.annualStatements ?? []).map((a) => ({ date: a.date, value: a.netIncome }))
+
+  // Forward annual estimates for Revenue
+  const fwdAnnualRevenue = fwdYearly
+    .filter((f) => f.revEstimate != null)
+    .map((f) => ({ date: f.endDate || f.period, estimate: f.revEstimate }))
 
   return (
     <div className="space-y-4">
       <div className="text-xs text-muted-foreground mb-2">
-        Earnings report -- EPS, Revenue, EBITDA & Net Income with forward estimates (Yahoo Finance)
+        Earnings report — EPS, Revenue, EBITDA & Net Income with TTM (Trailing 12M) analysis (Yahoo Finance)
       </div>
       <TerminalInput
         placeholder="Enter ticker (e.g. AAPL, GOOGL, TSLA)"
@@ -275,9 +360,17 @@ export default function EarningsReport() {
                 <span className="text-xl font-bold text-bloomberg-green">{q.symbol}</span>
                 <span className="text-sm text-muted-foreground ml-2">{q.name}</span>
               </div>
-              <div className="text-right text-sm">
-                <span className="text-muted-foreground">EPS (TTM): </span>
-                <span className="font-bold">{q.eps?.toFixed(2) ?? "N/A"}</span>
+              <div className="text-right text-sm space-x-4">
+                <span>
+                  <span className="text-muted-foreground">EPS (TTM): </span>
+                  <span className="font-bold">{q.eps?.toFixed(2) ?? "N/A"}</span>
+                </span>
+                {epsTTM.length > 0 && (
+                  <span>
+                    <span className="text-muted-foreground">EPS TTM (calc): </span>
+                    <span className="font-bold">{epsTTM[epsTTM.length - 1].value.toFixed(2)}</span>
+                  </span>
+                )}
               </div>
             </div>
           </div>
@@ -306,7 +399,7 @@ export default function EarningsReport() {
                       const isMiss = row.surprise != null && row.surprise < 0
                       return (
                         <tr key={i} className="border-b border-bloomberg-border/50">
-                          <td className="py-2 font-bold">{row.date}</td>
+                          <td className="py-2 font-bold">{row.date} <span className="text-[10px] text-muted-foreground">{shortQLabel(row.date)}</span></td>
                           <td className="py-2 text-right text-muted-foreground">{row.estimate?.toFixed(2) ?? "N/A"}</td>
                           <td className={`py-2 text-right font-bold ${isBeat ? "text-bloomberg-green" : isMiss ? "text-bloomberg-red" : ""}`}>
                             {row.actual?.toFixed(2) ?? "N/A"}
@@ -352,12 +445,12 @@ export default function EarningsReport() {
           {/* 1b. EPS BAR CHART — Estimate vs Actual (historical) */}
           {epsChartData.length > 0 && (
             <div className="bg-bloomberg-card border border-bloomberg-border rounded p-4">
-              <div className="text-xs text-bloomberg-amber font-bold mb-3">EPS: ESTIMATE vs ACTUAL (HISTORICAL)</div>
+              <div className="text-xs text-bloomberg-amber font-bold mb-3">EPS: ESTIMATE vs ACTUAL (HISTORICAL QUARTERLY)</div>
               <BarCompareChart data={epsChartData} />
             </div>
           )}
 
-          {/* 1b2. FORWARD EPS — YoY comparison cards */}
+          {/* 1c. FORWARD EPS — YoY comparison cards */}
           {fwdQuarterly.filter((f) => f.epsEstimate != null).length > 0 && (
             <div className="bg-bloomberg-card border border-bloomberg-border rounded p-4">
               <div className="text-xs text-bloomberg-amber font-bold mb-3">FORWARD EPS ESTIMATES — YoY COMPARISON</div>
@@ -408,7 +501,7 @@ export default function EarningsReport() {
             </div>
           )}
 
-          {/* 1b2. YEARLY EPS & REVENUE ESTIMATES */}
+          {/* 1d. YEARLY EPS & REVENUE ESTIMATES */}
           {fwdYearly.length > 0 && (
             <div className="bg-bloomberg-card border border-bloomberg-border rounded p-4">
               <div className="text-xs text-bloomberg-amber font-bold mb-3">ANNUAL ESTIMATES (CONSENSUS)</div>
@@ -461,7 +554,7 @@ export default function EarningsReport() {
             </div>
           )}
 
-          {/* 1c. SURPRISE HISTORY */}
+          {/* 1e. SURPRISE HISTORY */}
           {e.quarterly.length > 0 && e.quarterly.some((r) => r.surprise != null) && (
             <div className="bg-bloomberg-card border border-bloomberg-border rounded p-4">
               <div className="text-xs text-bloomberg-amber font-bold mb-3">EPS SURPRISE HISTORY</div>
@@ -479,7 +572,7 @@ export default function EarningsReport() {
                   return (
                     <div key={i} className="flex items-center gap-3">
                       <div className="w-20 text-xs text-muted-foreground shrink-0 font-mono">
-                        {row.date.length > 7 ? row.date.slice(5) : row.date}
+                        {shortQLabel(row.date)}
                       </div>
                       <div className="flex-1 flex items-center gap-2">
                         <div className="flex-1 h-5 bg-bloomberg-bg rounded overflow-hidden relative">
@@ -527,116 +620,122 @@ export default function EarningsReport() {
             </div>
           )}
 
-          {/* ═══ SECTION 2: REVENUE (Przychody) ═══ */}
+          {/* ═══ SECTION 2: REVENUE TTM (Przychody) ═══ */}
 
-          {(revenueRows.length > 0 || fwdRevenue.length > 0) && (
+          {(revenueTTM.length > 0 || annualRevenue.some((a) => a.value != null)) && (
             <>
               <div className="border-t border-bloomberg-border pt-4 mt-2">
-                <div className="text-sm font-bold text-bloomberg-green mb-3">REVENUE — PRZYCHODY</div>
+                <div className="text-sm font-bold text-bloomberg-green mb-3">REVENUE — PRZYCHODY (TTM)</div>
               </div>
 
-              <FinancialBarSection
-                title="REVENUE TREND (QUARTERLY) + FORWARD ESTIMATES"
-                data={revenueRows}
+              <TTMBarSection
+                title="REVENUE TTM TREND"
+                ttmData={revenueTTM}
+                annualData={annualRevenue}
+                forwardAnnual={fwdAnnualRevenue}
                 currency={q.currency}
                 color="bg-bloomberg-blue"
-                forwardBars={fwdRevenue}
               />
 
-              <FinancialTable
-                title="REVENUE TABLE"
-                rows={revTableRows}
+              <TTMTable
+                title="REVENUE TTM TABLE"
+                ttmData={revenueTTM}
+                annualData={annualRevenue}
+                forwardAnnual={fwdAnnualRevenue}
                 currency={q.currency}
               />
             </>
           )}
 
-          {/* ═══ SECTION 3: EBITDA ═══ */}
+          {/* ═══ SECTION 3: EBITDA TTM ═══ */}
 
-          {ebitdaRows.length > 0 && ebitdaRows.some((r) => r.value != null) && (
+          {(ebitdaTTM.length > 0 || annualEbitda.some((a) => a.value != null)) && (
             <>
               <div className="border-t border-bloomberg-border pt-4 mt-2">
-                <div className="text-sm font-bold text-bloomberg-green mb-3">EBITDA</div>
+                <div className="text-sm font-bold text-bloomberg-green mb-3">EBITDA (TTM)</div>
               </div>
 
-              <FinancialBarSection
-                title="EBITDA TREND (QUARTERLY)"
-                data={ebitdaRows}
+              <TTMBarSection
+                title="EBITDA TTM TREND"
+                ttmData={ebitdaTTM}
+                annualData={annualEbitda}
                 currency={q.currency}
                 color="bg-bloomberg-purple"
               />
 
-              <FinancialTable
-                title="EBITDA TABLE"
-                rows={ebitdaRows.map((r) => ({ ...r, isEstimate: false }))}
+              <TTMTable
+                title="EBITDA TTM TABLE"
+                ttmData={ebitdaTTM}
+                annualData={annualEbitda}
                 currency={q.currency}
               />
             </>
           )}
 
-          {/* ═══ SECTION 4: NET INCOME — Zysk Netto ═══ */}
+          {/* ═══ SECTION 4: NET INCOME TTM — Zysk Netto ═══ */}
 
-          {netIncomeRows.length > 0 && netIncomeRows.some((r) => r.value != null) && (
+          {(netIncomeTTM.length > 0 || annualNetIncome.some((a) => a.value != null)) && (
             <>
               <div className="border-t border-bloomberg-border pt-4 mt-2">
-                <div className="text-sm font-bold text-bloomberg-green mb-3">NET INCOME — ZYSK NETTO</div>
+                <div className="text-sm font-bold text-bloomberg-green mb-3">NET INCOME — ZYSK NETTO (TTM)</div>
               </div>
 
-              <FinancialBarSection
-                title="NET INCOME TREND (QUARTERLY)"
-                data={netIncomeRows}
+              <TTMBarSection
+                title="NET INCOME TTM TREND"
+                ttmData={netIncomeTTM}
+                annualData={annualNetIncome}
                 currency={q.currency}
                 color="bg-bloomberg-green"
               />
 
-              <FinancialTable
-                title="NET INCOME TABLE"
-                rows={netIncomeRows.map((r) => ({ ...r, isEstimate: false }))}
+              <TTMTable
+                title="NET INCOME TTM TABLE"
+                ttmData={netIncomeTTM}
+                annualData={annualNetIncome}
                 currency={q.currency}
               />
             </>
           )}
 
-          {/* ═══ SECTION 5: MARGIN TREND (Revenue vs Earnings) ═══ */}
+          {/* ═══ SECTION 5: MARGIN TREND (Revenue vs Earnings — TTM) ═══ */}
 
-          {e.financials.length > 0 && e.financials.some((r) => r.revenue && r.earnings) && (
+          {revenueTTM.length > 0 && netIncomeTTM.length > 0 && (
             <div className="bg-bloomberg-card border border-bloomberg-border rounded p-4">
-              <div className="text-xs text-bloomberg-amber font-bold mb-3">EARNINGS MARGIN TREND</div>
+              <div className="text-xs text-bloomberg-amber font-bold mb-3">NET MARGIN TREND (TTM)</div>
               <div className="overflow-x-auto">
                 <table className="w-full text-xs">
                   <thead>
                     <tr className="border-b border-bloomberg-border">
-                      <th className="text-left py-2 text-muted-foreground">QUARTER</th>
-                      <th className="text-right py-2 text-muted-foreground">REVENUE</th>
-                      <th className="text-right py-2 text-muted-foreground">EARNINGS</th>
-                      <th className="text-right py-2 text-muted-foreground">MARGIN</th>
+                      <th className="text-left py-2 text-muted-foreground">PERIOD</th>
+                      <th className="text-right py-2 text-muted-foreground">REVENUE TTM</th>
+                      <th className="text-right py-2 text-muted-foreground">NET INCOME TTM</th>
+                      <th className="text-right py-2 text-muted-foreground">NET MARGIN</th>
                       <th className="text-center py-2 text-muted-foreground">TREND</th>
                     </tr>
                   </thead>
                   <tbody>
-                    {e.financials.map((row, i) => {
-                      const margin = row.revenue && row.earnings ? (row.earnings / row.revenue) * 100 : null
-                      const prevMargin =
-                        i > 0 && e.financials[i - 1].revenue && e.financials[i - 1].earnings
-                          ? (e.financials[i - 1].earnings! / e.financials[i - 1].revenue!) * 100
-                          : null
-                      const marginDelta = margin != null && prevMargin != null ? margin - prevMargin : null
-                      const prevLabel = i > 0 ? shortQLabel(e.financials[i - 1].date) : ""
+                    {revenueTTM.map((rev, i) => {
+                      const ni = netIncomeTTM.find((n) => n.date === rev.date)
+                      if (!ni) return null
+                      const margin = (ni.value / rev.value) * 100
+                      const prevRev = i > 0 ? revenueTTM[i - 1] : null
+                      const prevNI = prevRev ? netIncomeTTM.find((n) => n.date === prevRev.date) : null
+                      const prevMargin = prevRev && prevNI ? (prevNI.value / prevRev.value) * 100 : null
+                      const delta = prevMargin != null ? margin - prevMargin : null
                       return (
                         <tr key={i} className="border-b border-bloomberg-border/50">
-                          <td className="py-2 font-bold">{row.date} <span className="text-[10px] text-muted-foreground font-normal">{shortQLabel(row.date)}</span></td>
-                          <td className="py-2 text-right">{row.revenue != null ? fmtBigValue(row.revenue, q.currency) : "N/A"}</td>
-                          <td className={`py-2 text-right font-bold ${row.earnings && row.earnings > 0 ? "text-bloomberg-green" : "text-bloomberg-red"}`}>
-                            {row.earnings != null ? fmtBigValue(row.earnings, q.currency) : "N/A"}
+                          <td className="py-2 font-bold">{rev.label}</td>
+                          <td className="py-2 text-right">{fmtBigValue(rev.value, q.currency)}</td>
+                          <td className={`py-2 text-right font-bold ${ni.value >= 0 ? "text-bloomberg-green" : "text-bloomberg-red"}`}>
+                            {fmtBigValue(ni.value, q.currency)}
                           </td>
-                          <td className={`py-2 text-right font-bold ${margin != null && margin > 0 ? "text-bloomberg-green" : "text-bloomberg-red"}`}>
-                            {margin != null ? margin.toFixed(1) + "%" : "N/A"}
+                          <td className={`py-2 text-right font-bold ${margin >= 0 ? "text-bloomberg-green" : "text-bloomberg-red"}`}>
+                            {margin.toFixed(1)}%
                           </td>
                           <td className="py-2 text-center">
-                            {marginDelta != null ? (
-                              <span className={`text-[10px] font-bold ${marginDelta >= 0 ? "text-bloomberg-green" : "text-bloomberg-red"}`}>
-                                {marginDelta >= 0 ? "+" : ""}{marginDelta.toFixed(1)}pp
-                                <span className="text-muted-foreground font-normal ml-1">vs {prevLabel}</span>
+                            {delta != null ? (
+                              <span className={`text-[10px] font-bold ${delta >= 0 ? "text-bloomberg-green" : "text-bloomberg-red"}`}>
+                                {delta >= 0 ? "+" : ""}{delta.toFixed(1)}pp
                               </span>
                             ) : (
                               <span className="text-[10px] text-muted-foreground">---</span>
@@ -648,31 +747,33 @@ export default function EarningsReport() {
                   </tbody>
                 </table>
               </div>
-              <div className="mt-4">
-                <div className="flex items-end gap-3 h-24">
-                  {e.financials.map((row, i) => {
-                    const margin = row.revenue && row.earnings ? (row.earnings / row.revenue) * 100 : 0
-                    const maxMargin = Math.max(
-                      ...e.financials.map((r) => (r.revenue && r.earnings ? Math.abs((r.earnings / r.revenue) * 100) : 0))
-                    )
-                    const h = maxMargin > 0 ? (Math.abs(margin) / maxMargin) * 100 : 0
-                    const positive = margin >= 0
-                    return (
-                      <div key={i} className="flex-1 flex flex-col items-center gap-1">
-                        <div className="w-full flex items-end h-16">
-                          <div
-                            className={`flex-1 rounded-t ${positive ? "bg-bloomberg-green" : "bg-bloomberg-red"}`}
-                            style={{ height: `${h}%` }}
-                          />
-                        </div>
-                        <div className="text-[10px] text-muted-foreground">{row.date}</div>
-                        <div className={`text-[10px] font-bold ${positive ? "text-bloomberg-green" : "text-bloomberg-red"}`}>
-                          {margin.toFixed(1)}%
-                        </div>
+              <div className="mt-4 flex items-end gap-3 h-24">
+                {revenueTTM.map((rev, i) => {
+                  const ni = netIncomeTTM.find((n) => n.date === rev.date)
+                  if (!ni) return null
+                  const margin = (ni.value / rev.value) * 100
+                  const maxMargin = Math.max(
+                    ...revenueTTM.map((r) => {
+                      const n = netIncomeTTM.find((n) => n.date === r.date)
+                      return n ? Math.abs((n.value / r.value) * 100) : 0
+                    })
+                  )
+                  const h = maxMargin > 0 ? (Math.abs(margin) / maxMargin) * 100 : 0
+                  return (
+                    <div key={i} className="flex-1 flex flex-col items-center gap-1">
+                      <div className="w-full flex items-end h-16">
+                        <div
+                          className={`flex-1 rounded-t ${margin >= 0 ? "bg-bloomberg-green" : "bg-bloomberg-red"}`}
+                          style={{ height: `${h}%` }}
+                        />
                       </div>
-                    )
-                  })}
-                </div>
+                      <div className="text-[10px] text-muted-foreground">{rev.label}</div>
+                      <div className={`text-[10px] font-bold ${margin >= 0 ? "text-bloomberg-green" : "text-bloomberg-red"}`}>
+                        {margin.toFixed(1)}%
+                      </div>
+                    </div>
+                  )
+                })}
               </div>
             </div>
           )}

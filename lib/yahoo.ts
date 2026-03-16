@@ -184,11 +184,19 @@ export interface IncomeStatementEntry {
   operatingIncome: number | null
 }
 
+export interface AnnualIncomeEntry {
+  date: string
+  revenue: number | null
+  ebitda: number | null
+  netIncome: number | null
+}
+
 export interface EarningsData {
   quarterly: EarningsEntry[]
   financials: FinancialsEntry[]
   forwardEstimates: ForwardEstimate[]
   incomeStatements: IncomeStatementEntry[]
+  annualStatements: AnnualIncomeEntry[]
 }
 
 export async function fetchEarnings(symbol: string): Promise<EarningsData> {
@@ -235,11 +243,9 @@ export async function fetchEarnings(symbol: string): Promise<EarningsData> {
     yearAgoRev: num(e.revenueEstimate?.yearAgoRevenue),
   }))
 
-  // Income statements (quarterly) for EBITDA & Net Income
+  // Income statements (quarterly) for Revenue & Net Income from quoteSummary
   const qStmts: any[] = result.incomeStatementHistoryQuarterly?.incomeStatementHistory ?? []
-  const aStmts: any[] = result.incomeStatementHistory?.incomeStatementHistory ?? []
-  const stmts = qStmts.length > 0 ? qStmts : aStmts
-  const incomeStatements: IncomeStatementEntry[] = stmts
+  const basicQuarterly: IncomeStatementEntry[] = qStmts
     .slice(0, 8)
     .map((s: any) => ({
       date: s.endDate ? (s.endDate instanceof Date ? formatDate(s.endDate) : typeof s.endDate === "string" ? s.endDate.split("T")[0] : formatDate(new Date(s.endDate))) : "",
@@ -251,7 +257,55 @@ export async function fetchEarnings(symbol: string): Promise<EarningsData> {
     }))
     .reverse()
 
-  return { quarterly, financials, forwardEstimates, incomeStatements }
+  // Enrich with fundamentalsTimeSeries for EBITDA (quoteSummary doesn't return it since Nov 2024)
+  let incomeStatements = basicQuarterly
+  try {
+    const fts: any[] = await yf.fundamentalsTimeSeries(symbol, {
+      period1: "2020-01-01",
+      type: "quarterly",
+      module: "financials",
+    })
+    if (fts && fts.length > 0) {
+      // Build map of FTS data by date
+      const ftsMap = new Map<string, any>()
+      for (const item of fts) {
+        const d = item.date instanceof Date ? formatDate(item.date) : typeof item.date === "string" ? item.date.split("T")[0] : ""
+        if (d) ftsMap.set(d, item)
+      }
+
+      // Merge: FTS has EBITDA + possibly more quarters
+      const allDates = new Set([...basicQuarterly.map((s) => s.date), ...ftsMap.keys()])
+      const merged: IncomeStatementEntry[] = []
+      for (const d of allDates) {
+        const basic = basicQuarterly.find((s) => s.date === d)
+        const ftsItem = ftsMap.get(d)
+        merged.push({
+          date: d,
+          revenue: basic?.revenue ?? num(ftsItem?.totalRevenue) ?? null,
+          ebitda: num(ftsItem?.EBITDA) ?? basic?.ebitda ?? null,
+          netIncome: basic?.netIncome ?? num(ftsItem?.netIncome) ?? null,
+          grossProfit: basic?.grossProfit ?? num(ftsItem?.grossProfit) ?? null,
+          operatingIncome: basic?.operatingIncome ?? num(ftsItem?.operatingIncome) ?? null,
+        })
+      }
+      incomeStatements = merged.sort((a, b) => a.date.localeCompare(b.date))
+    }
+  } catch {
+    // fundamentalsTimeSeries may fail for some tickers — graceful fallback
+  }
+
+  // Annual income statements for long-term TTM trend
+  const aStmts: any[] = result.incomeStatementHistory?.incomeStatementHistory ?? []
+  const annualStatements: AnnualIncomeEntry[] = aStmts
+    .map((s: any) => ({
+      date: s.endDate ? (s.endDate instanceof Date ? formatDate(s.endDate) : typeof s.endDate === "string" ? s.endDate.split("T")[0] : formatDate(new Date(s.endDate))) : "",
+      revenue: num(s.totalRevenue),
+      ebitda: num(s.ebitda),
+      netIncome: num(s.netIncome),
+    }))
+    .reverse()
+
+  return { quarterly, financials, forwardEstimates, incomeStatements, annualStatements }
 }
 
 export interface HistoricalPrice {
