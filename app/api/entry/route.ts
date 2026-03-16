@@ -50,7 +50,7 @@ export async function POST(req: NextRequest) {
       fetchNews(sym, sym).catch(() => []),
     ])
 
-    const analysis = computeFullAnalysis(quote, stats, history)
+    const analysis = computeFullAnalysis(quote, stats, history, stats?.sector ?? undefined)
 
     // Compute technicals from history
     const closes = history.map(h => h.close)

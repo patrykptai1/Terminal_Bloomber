@@ -137,3 +137,5 @@ export type TabId =
   | "compare"
   | "portfolio"
   | "entry"
+  | "analyst"
+  | "worldnews"

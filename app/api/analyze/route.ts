@@ -17,7 +17,7 @@ export async function POST(req: NextRequest) {
       fetchNews(sym, sym).catch(() => []),
     ])
 
-    const analysis = computeFullAnalysis(quote, stats, history)
+    const analysis = computeFullAnalysis(quote, stats, history, stats?.sector ?? undefined)
 
     // Update news with company name now that we have it
     let finalNews = news

@@ -138,7 +138,8 @@ function clampScore(v: number): number {
 export function computeFullAnalysis(
   quote: QuoteData,
   stats: KeyStatistics | null,
-  history: HistoricalPrice[]
+  history: HistoricalPrice[],
+  sectorOverride?: string
 ): FullAnalysis {
   const price = quote.price
   const closes = history.filter((h) => h.close > 0).map((h) => h.close)
@@ -157,7 +158,7 @@ export function computeFullAnalysis(
   // --- Sector ---
   // yahoo-finance2 quote doesn't expose sector directly; use a heuristic
   // We'll try to infer from the exchange name or default
-  const sector = "Technology" // default; overridden by caller if available
+  const sector = sectorOverride || "Technology"
   const sectorPE = SECTOR_PE[sector] ?? DEFAULT_SECTOR_PE
 
   // --- Valuation ---
@@ -298,6 +299,24 @@ export function computeFullAnalysis(
     mainRisk = "Overbought on RSI — short-term pullback likely"
   else if (distanceFrom52High < -30)
     mainRisk = "Significant drawdown from highs — trend may be broken"
+  else if (peFwd != null && peFwd > sectorPE * 1.3)
+    mainRisk = `Premium valuation at ${peFwd.toFixed(1)}x vs sector ${sectorPE.toFixed(1)}x — limited margin of safety`
+  else if (stats?.debtToEquity != null && stats.debtToEquity > 100)
+    mainRisk = "Elevated leverage — earnings sensitive to interest rate environment"
+  else if (rsi != null && rsi > 65)
+    mainRisk = "Momentum stretched — near-term consolidation possible"
+  else if (distanceFrom52High < -15)
+    mainRisk = "Pullback from highs — watch for support confirmation"
+  else if (profitMargin != null && profitMargin < 30)
+    mainRisk = "Low margins — vulnerable to input cost inflation"
+  else if (peFwd != null && peFwd > sectorPE)
+    mainRisk = `Trading above sector average (${peFwd.toFixed(1)}x vs ${sectorPE.toFixed(1)}x) — growth must justify premium`
+  else if (revenueGrowth != null && revenueGrowth > 30)
+    mainRisk = "Rapid growth may attract competition and compress margins over time"
+  else if (operatingMargin != null && operatingMargin > 30)
+    mainRisk = "High profitability invites competitive pressure and regulatory scrutiny"
+  else
+    mainRisk = `Sector-wide risks: macroeconomic slowdown, regulatory changes in ${sector}`
 
   // --- Risk Matrix ---
   // Valuation Risk

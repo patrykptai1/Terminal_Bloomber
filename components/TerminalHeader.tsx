@@ -10,6 +10,8 @@ const TABS: { id: TabId; label: string; shortcut: string }[] = [
   { id: "compare", label: "COMPARE", shortcut: "F5" },
   { id: "portfolio", label: "PORTFOLIO", shortcut: "F6" },
   { id: "entry", label: "ENTRY", shortcut: "F7" },
+  { id: "analyst", label: "ANALYST", shortcut: "F8" },
+  { id: "worldnews", label: "WORLD NEWS", shortcut: "F9" },
 ]
 
 export default function TerminalHeader({

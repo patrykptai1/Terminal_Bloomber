@@ -9,6 +9,8 @@ import RiskAssessment from "@/components/modules/RiskAssessment"
 import StockCompare from "@/components/modules/StockCompare"
 import PortfolioBuilder from "@/components/modules/PortfolioBuilder"
 import EntryTiming from "@/components/modules/EntryTiming"
+import AnalystRecommendations from "@/components/modules/AnalystRecommendations"
+import WorldNewsRadar from "@/components/modules/WorldNewsRadar"
 import type { TabId } from "@/types"
 
 const TAB_TITLES: Record<TabId, string> = {
@@ -19,9 +21,11 @@ const TAB_TITLES: Record<TabId, string> = {
   compare: "HEAD-TO-HEAD COMPARE",
   portfolio: "PORTFOLIO BUILDER",
   entry: "ENTRY TIMING",
+  analyst: "ANALYST RECOMMENDATIONS",
+  worldnews: "WORLD NEWS RADAR",
 }
 
-const TAB_KEYS: TabId[] = ["analysis", "screener", "earnings", "risk", "compare", "portfolio", "entry"]
+const TAB_KEYS: TabId[] = ["analysis", "screener", "earnings", "risk", "compare", "portfolio", "entry", "analyst", "worldnews"]
 
 export default function Home() {
   const [activeTab, setActiveTab] = useState<TabId>("analysis")
@@ -60,6 +64,8 @@ export default function Home() {
         {activeTab === "compare" && <StockCompare />}
         {activeTab === "portfolio" && <PortfolioBuilder />}
         {activeTab === "entry" && <EntryTiming />}
+        {activeTab === "analyst" && <AnalystRecommendations />}
+        {activeTab === "worldnews" && <WorldNewsRadar />}
       </main>
 
       <footer className="border-t border-bloomberg-border px-4 py-2 flex items-center justify-between text-xs text-muted-foreground">

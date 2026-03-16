@@ -19,8 +19,8 @@ export async function POST(req: NextRequest) {
       fetchHistory(b, "1y").catch(() => []),
     ])
 
-    const analysisA = computeFullAnalysis(quoteA, statsA, historyA)
-    const analysisB = computeFullAnalysis(quoteB, statsB, historyB)
+    const analysisA = computeFullAnalysis(quoteA, statsA, historyA, statsA?.sector ?? undefined)
+    const analysisB = computeFullAnalysis(quoteB, statsB, historyB, statsB?.sector ?? undefined)
 
     return NextResponse.json({ quoteA, quoteB, statsA, statsB, analysisA, analysisB })
   } catch (e: unknown) {

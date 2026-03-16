@@ -14,7 +14,7 @@ export async function POST(req: NextRequest) {
       fetchHistory(sym, "1y").catch(() => []),
     ])
 
-    const analysis = computeFullAnalysis(quote, stats, history)
+    const analysis = computeFullAnalysis(quote, stats, history, stats?.sector ?? undefined)
 
     return NextResponse.json({ quote, stats, analysis })
   } catch (e: unknown) {

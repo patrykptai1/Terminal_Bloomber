@@ -77,6 +77,8 @@ export async function fetchQuote(symbol: string): Promise<QuoteData> {
 }
 
 export interface KeyStatistics {
+  sector: string | null
+  industry: string | null
   enterpriseValue: number | null
   forwardPE: number | null
   pegRatio: number | null
@@ -107,13 +109,16 @@ export interface KeyStatistics {
 
 export async function fetchKeyStats(symbol: string): Promise<KeyStatistics> {
   const result: any = await yf.quoteSummary(symbol, {
-    modules: ["financialData", "defaultKeyStatistics"],
+    modules: ["financialData", "defaultKeyStatistics", "assetProfile"],
   })
 
   const fd: any = result.financialData ?? {}
   const ks: any = result.defaultKeyStatistics ?? {}
+  const ap: any = result.assetProfile ?? {}
 
   return {
+    sector: ap.sector ?? null,
+    industry: ap.industry ?? null,
     enterpriseValue: num(ks.enterpriseValue),
     forwardPE: num(ks.forwardPE),
     pegRatio: num(ks.pegRatio),
@@ -157,14 +162,44 @@ export interface FinancialsEntry {
   earnings: number | null
 }
 
+export interface ForwardEstimate {
+  period: string
+  endDate: string
+  epsEstimate: number | null
+  revEstimate: number | null
+  revLow: number | null
+  revHigh: number | null
+  epsLow: number | null
+  epsHigh: number | null
+  yearAgoEps: number | null
+  yearAgoRev: number | null
+}
+
+export interface IncomeStatementEntry {
+  date: string
+  revenue: number | null
+  ebitda: number | null
+  netIncome: number | null
+  grossProfit: number | null
+  operatingIncome: number | null
+}
+
 export interface EarningsData {
   quarterly: EarningsEntry[]
   financials: FinancialsEntry[]
+  forwardEstimates: ForwardEstimate[]
+  incomeStatements: IncomeStatementEntry[]
 }
 
 export async function fetchEarnings(symbol: string): Promise<EarningsData> {
   const result: any = await yf.quoteSummary(symbol, {
-    modules: ["earningsHistory", "earnings"],
+    modules: [
+      "earningsHistory",
+      "earnings",
+      "earningsTrend",
+      "incomeStatementHistory",
+      "incomeStatementHistoryQuarterly",
+    ],
   })
 
   const history: any[] = result.earningsHistory?.history ?? []
@@ -183,7 +218,40 @@ export async function fetchEarnings(symbol: string): Promise<EarningsData> {
     earnings: num(e.earnings),
   }))
 
-  return { quarterly, financials }
+  // Forward estimates from earningsTrend
+  const et: any[] = result.earningsTrend?.trend ?? []
+  const forwardEstimates: ForwardEstimate[] = et.map((e: any) => ({
+    period: e.period ?? "",
+    endDate: e.endDate
+      ? (typeof e.endDate === "string" ? e.endDate : (e.endDate instanceof Date ? e.endDate.toISOString().split("T")[0] : new Date(e.endDate).toISOString().split("T")[0]))
+      : "",
+    epsEstimate: num(e.earningsEstimate?.avg),
+    revEstimate: num(e.revenueEstimate?.avg),
+    revLow: num(e.revenueEstimate?.low),
+    revHigh: num(e.revenueEstimate?.high),
+    epsLow: num(e.earningsEstimate?.low),
+    epsHigh: num(e.earningsEstimate?.high),
+    yearAgoEps: num(e.earningsEstimate?.yearAgoEps),
+    yearAgoRev: num(e.revenueEstimate?.yearAgoRevenue),
+  }))
+
+  // Income statements (quarterly) for EBITDA & Net Income
+  const qStmts: any[] = result.incomeStatementHistoryQuarterly?.incomeStatementHistory ?? []
+  const aStmts: any[] = result.incomeStatementHistory?.incomeStatementHistory ?? []
+  const stmts = qStmts.length > 0 ? qStmts : aStmts
+  const incomeStatements: IncomeStatementEntry[] = stmts
+    .slice(0, 8)
+    .map((s: any) => ({
+      date: s.endDate ? (s.endDate instanceof Date ? formatDate(s.endDate) : typeof s.endDate === "string" ? s.endDate.split("T")[0] : formatDate(new Date(s.endDate))) : "",
+      revenue: num(s.totalRevenue),
+      ebitda: num(s.ebitda),
+      netIncome: num(s.netIncome),
+      grossProfit: num(s.grossProfit),
+      operatingIncome: num(s.operatingIncome),
+    }))
+    .reverse()
+
+  return { quarterly, financials, forwardEstimates, incomeStatements }
 }
 
 export interface HistoricalPrice {
@@ -233,6 +301,142 @@ export async function fetchMultipleQuotes(symbols: string[]): Promise<QuoteData[
   return results
     .filter((r) => r.status === "fulfilled")
     .map((r) => (r as PromiseFulfilledResult<QuoteData>).value)
+}
+
+// ── Analyst Recommendations ──────────────────────────────────
+
+export interface AnalystUpgrade {
+  date: string
+  firm: string
+  toGrade: string
+  fromGrade: string
+  action: string
+  priceTargetAction: string
+  currentPriceTarget: number | null
+  priorPriceTarget: number | null
+}
+
+export interface RecommendationPeriod {
+  period: string
+  strongBuy: number
+  buy: number
+  hold: number
+  sell: number
+  strongSell: number
+}
+
+export interface EarningsForecast {
+  period: string
+  endDate: string
+  growth: number | null
+  epsAvg: number | null
+  epsLow: number | null
+  epsHigh: number | null
+  yearAgoEps: number | null
+  epsAnalysts: number
+  revAvg: number | null
+  revLow: number | null
+  revHigh: number | null
+  revAnalysts: number
+  yearAgoRev: number | null
+  revGrowth: number | null
+  epsTrend: { current: number | null; d7: number | null; d30: number | null; d60: number | null; d90: number | null }
+  epsRevisions: { upLast7d: number; upLast30d: number; downLast7d: number; downLast30d: number }
+}
+
+export interface AnalystData {
+  upgrades: AnalystUpgrade[]
+  recommendations: RecommendationPeriod[]
+  forecasts: EarningsForecast[]
+  targetHigh: number | null
+  targetLow: number | null
+  targetMean: number | null
+  targetMedian: number | null
+  recommendationMean: number | null
+  recommendationKey: string | null
+  numberOfAnalysts: number
+  currentPrice: number
+}
+
+export async function fetchAnalystData(symbol: string): Promise<AnalystData> {
+  const result: any = await yf.quoteSummary(symbol, {
+    modules: ["recommendationTrend", "upgradeDowngradeHistory", "financialData", "earningsTrend"],
+  })
+
+  const fd: any = result.financialData ?? {}
+  const udh: any[] = result.upgradeDowngradeHistory?.history ?? []
+  const rt: any[] = result.recommendationTrend?.trend ?? []
+  const et: any[] = result.earningsTrend?.trend ?? []
+
+  const upgrades: AnalystUpgrade[] = udh.slice(0, 20).map((u: any) => ({
+    date: u.epochGradeDate
+      ? (u.epochGradeDate instanceof Date
+          ? u.epochGradeDate.toISOString().split("T")[0]
+          : typeof u.epochGradeDate === "string"
+            ? u.epochGradeDate.split("T")[0]
+            : new Date(u.epochGradeDate * 1000).toISOString().split("T")[0])
+      : "",
+    firm: u.firm ?? "",
+    toGrade: u.toGrade ?? "",
+    fromGrade: u.fromGrade ?? "",
+    action: u.action ?? "",
+    priceTargetAction: u.priceTargetAction ?? "",
+    currentPriceTarget: num(u.currentPriceTarget),
+    priorPriceTarget: num(u.priorPriceTarget),
+  }))
+
+  const recommendations: RecommendationPeriod[] = rt.map((r: any) => ({
+    period: r.period ?? "",
+    strongBuy: r.strongBuy ?? 0,
+    buy: r.buy ?? 0,
+    hold: r.hold ?? 0,
+    sell: r.sell ?? 0,
+    strongSell: r.strongSell ?? 0,
+  }))
+
+  const forecasts: EarningsForecast[] = et.map((e: any) => ({
+    period: e.period ?? "",
+    endDate: e.endDate ? (typeof e.endDate === "string" ? e.endDate : new Date(e.endDate).toISOString().split("T")[0]) : "",
+    growth: num(e.growth),
+    epsAvg: num(e.earningsEstimate?.avg),
+    epsLow: num(e.earningsEstimate?.low),
+    epsHigh: num(e.earningsEstimate?.high),
+    yearAgoEps: num(e.earningsEstimate?.yearAgoEps),
+    epsAnalysts: e.earningsEstimate?.numberOfAnalysts ?? 0,
+    revAvg: num(e.revenueEstimate?.avg),
+    revLow: num(e.revenueEstimate?.low),
+    revHigh: num(e.revenueEstimate?.high),
+    revAnalysts: e.revenueEstimate?.numberOfAnalysts ?? 0,
+    yearAgoRev: num(e.revenueEstimate?.yearAgoRevenue),
+    revGrowth: num(e.revenueEstimate?.growth),
+    epsTrend: {
+      current: num(e.epsTrend?.current),
+      d7: num(e.epsTrend?.["7daysAgo"]),
+      d30: num(e.epsTrend?.["30daysAgo"]),
+      d60: num(e.epsTrend?.["60daysAgo"]),
+      d90: num(e.epsTrend?.["90daysAgo"]),
+    },
+    epsRevisions: {
+      upLast7d: e.epsRevisions?.upLast7days ?? 0,
+      upLast30d: e.epsRevisions?.upLast30days ?? 0,
+      downLast7d: e.epsRevisions?.downLast7Days ?? 0,
+      downLast30d: e.epsRevisions?.downLast30days ?? 0,
+    },
+  }))
+
+  return {
+    upgrades,
+    recommendations,
+    forecasts,
+    targetHigh: num(fd.targetHighPrice),
+    targetLow: num(fd.targetLowPrice),
+    targetMean: num(fd.targetMeanPrice),
+    targetMedian: num(fd.targetMedianPrice),
+    recommendationMean: num(fd.recommendationMean),
+    recommendationKey: fd.recommendationKey ?? null,
+    numberOfAnalysts: fd.numberOfAnalystOpinions ?? 0,
+    currentPrice: fd.currentPrice ?? 0,
+  }
 }
 
 // --- helpers ---
