@@ -6,7 +6,8 @@ import { Card, CardContent } from '@/components/ui/card'
 import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from '@/components/ui/table'
-import { ExternalLink, Loader2, ArrowUpRight, ArrowDownRight } from 'lucide-react'
+import { ExternalLink, Loader2, ArrowUpRight, ArrowDownRight, Star } from 'lucide-react'
+import { addTokenToWatch, isTokenWatched } from '@/lib/tokenBook'
 
 interface WalletToken {
   mint: string
@@ -394,6 +395,13 @@ export default function WalletInspector() {
                             <TableCell className="text-gray-500 text-sm">{i + 1}</TableCell>
                             <TableCell>
                               <div className="flex items-center gap-2">
+                                <button
+                                  onClick={() => addTokenToWatch(token.mint, token.symbol, token.name, '', token.fdv, token.priceUsd)}
+                                  className={`transition-colors ${isTokenWatched(token.mint) ? 'text-yellow-500' : 'text-gray-300 hover:text-yellow-500'}`}
+                                  title={isTokenWatched(token.mint) ? 'Obserwowany' : 'Dodaj do obserwowanych'}
+                                >
+                                  <Star size={11} fill={isTokenWatched(token.mint) ? 'currentColor' : 'none'} />
+                                </button>
                                 <a
                                   href={`https://dexscreener.com/solana/${token.pairAddress || token.mint}`}
                                   target="_blank"

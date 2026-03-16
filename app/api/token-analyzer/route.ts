@@ -19,10 +19,9 @@ export interface TokenHit {
   sellCount: number
   tags: string[]
   holdingSince: number | null
-  // New fields for Etap 2 scoring
-  avgCostUsd: number          // weighted avg buy price per token
-  pairCreatedAt: number       // token deploy timestamp (unix sec)
-  firstBuyEstimate: number    // estimated first buy timestamp
+  avgCostUsd: number
+  pairCreatedAt: number
+  firstBuyEstimate: number
 }
 
 export interface ScoreBreakdown {
@@ -39,18 +38,32 @@ export interface InsiderWallet {
   totalRealizedPnl: number
   totalUnrealizedPnl: number
   avgEntryMcap: number
-  avgEntryUsd: number         // weighted average entry price in USD
+  avgEntryUsd: number
   solBalanceUsd: number
   insiderScore: number
   scoreBreakdown: ScoreBreakdown
   walletType: 'HOLDER' | 'TRADER'
   tags: string[]
   labels: string[]
+  // Zmiana 1: New Smart Score (0.0 - 1.0)
+  smartScore: number
+  coverageRatio: number
+  // Zmiana 3: Early entry analysis
+  earlyEntryRatio: number
+  earlyEntryCount: number
+  // Zmiana 4: Bot detection
+  botRatio: number
+  botWarning: boolean
+  // Zmiana 7: Weighted win rate
+  weightedWinRate: number
+  // Zmiana 9: Late entry warning
+  lateEntryWarning: boolean
 }
 
 export interface TokenAnalyzerResponse {
   wallets: InsiderWallet[]
   processedTokens: number
+  totalTokensAnalyzed: number
   totalEarlyBuyers: number
   elapsedMs: number
   errors: string[]
@@ -62,6 +75,7 @@ const BOT_TAGS = new Set([
   'sandwich', 'sandwich_bot', 'mev', 'bot', 'sniper_bot',
   'copy_trade_bot', 'copy_trader', 'photon', 'bonkbot',
   'trojan', 'banana_gun', 'maestro', 'sol_trading_bot',
+  'bundler', 'sniper',
 ])
 
 const EXCHANGE_TAGS = new Set([
@@ -85,15 +99,13 @@ const KNOWN_EXCHANGE_ADDRESSES = new Set([
   'u6PJ8DtQuPFnfmwHbGFULQ4u4EgjDiyYKjVEsynXq2w',
 ])
 
-function isBot(trader: GmgnTrader): boolean {
-  if (trader.tags.some(t => BOT_TAGS.has(t.toLowerCase()))) return true
-  const totalTx = trader.buyCount + trader.sellCount
-  if (totalTx > 50 && trader.startHoldingAt) {
-    const now = Date.now() / 1000
-    const holdMinutes = (now - trader.startHoldingAt) / 60
-    if (holdMinutes < 30 && totalTx > 50) return true
+// Zmiana 4: Count bot tags per hit, return ratio instead of boolean
+function countBotTags(hits: TokenHit[]): number {
+  let botTagged = 0
+  for (const hit of hits) {
+    if (hit.tags.some(t => BOT_TAGS.has(t.toLowerCase()))) botTagged++
   }
-  return false
+  return hits.length > 0 ? botTagged / hits.length : 0
 }
 
 function isExchange(trader: GmgnTrader): boolean {
@@ -102,14 +114,32 @@ function isExchange(trader: GmgnTrader): boolean {
   return trader.tags.some(t => EXCHANGE_TAGS.has(t.toLowerCase()))
 }
 
-// ── Wallet type classification (refined) ─────────────────────────────
+// ── Zmiana 2: Dynamic winRate threshold ─────────────────────────────────
+function getMinWinRate(tokenCount: number): number {
+  if (tokenCount <= 2) return 100
+  if (tokenCount <= 4) return 67
+  if (tokenCount <= 9) return 60
+  return 55
+}
+
+// ── Zmiana 7: Temporal decay ────────────────────────────────────────────
+function getTimeDecayWeight(createdAtUnix: number): number {
+  if (!createdAtUnix || createdAtUnix <= 0) return 0.50
+  const ageInDays = (Date.now() / 1000 - createdAtUnix) / 86400
+  if (ageInDays <= 7) return 1.00
+  if (ageInDays <= 30) return 0.85
+  if (ageInDays <= 90) return 0.65
+  if (ageInDays <= 180) return 0.40
+  return 0.20
+}
+
+// ── Wallet type classification ─────────────────────────────────────────
 
 function classifyWalletType(hits: TokenHit[]): 'HOLDER' | 'TRADER' {
   const totalBuys = hits.reduce((s, h) => s + h.buyCount, 0)
   const totalSells = hits.reduce((s, h) => s + h.sellCount, 0)
   const totalTx = totalBuys + totalSells
 
-  // Average hold time in hours
   let avgHoldHours = 24
   const holdTimes = hits
     .filter(h => h.holdingSince && h.holdingSince > 0)
@@ -121,19 +151,16 @@ function classifyWalletType(hits: TokenHit[]): 'HOLDER' | 'TRADER' {
   const daysActive = Math.max(avgHoldHours / 24, 1)
   const txPerDay = totalTx / daysActive
 
-  // TRADER: >50 tx/day
   if (txPerDay > 50) return 'TRADER'
-  // HOLDER: average hold > 4h
   if (avgHoldHours > 4) return 'HOLDER'
   return 'TRADER'
 }
 
-// ── New Barry-style InsiderScore (0-100) ─────────────────────────────
+// ── InsiderScore (0-100) — kept as secondary metric ─────────────────────
 
 function calculateInsiderScore(
   hits: TokenHit[],
   allTradersByToken: Map<string, GmgnTrader[]>,
-  traderData: Map<string, GmgnTrader>
 ): { score: number; breakdown: ScoreBreakdown } {
   const breakdown: ScoreBreakdown = {
     earlyEntry: 0,
@@ -144,8 +171,7 @@ function calculateInsiderScore(
 
   if (hits.length === 0) return { score: 0, breakdown }
 
-  // ── 1. Early Entry (0-30) ──────────────────────────────────────────
-  // For each token, check if this wallet was in the top 5/10/25% of earliest buyers
+  // 1. Early Entry (0-30)
   const entryScores: number[] = []
   for (const hit of hits) {
     const allTraders = allTradersByToken.get(hit.mint) ?? []
@@ -154,7 +180,6 @@ function calculateInsiderScore(
       continue
     }
 
-    // Sort all traders by their holding start (earliest first)
     const sorted = allTraders
       .filter(t => t.startHoldingAt && t.startHoldingAt > 0)
       .sort((a, b) => (a.startHoldingAt ?? 0) - (b.startHoldingAt ?? 0))
@@ -164,8 +189,6 @@ function calculateInsiderScore(
       continue
     }
 
-    // Find this wallet's position
-    const traderInfo = traderData.get(`${hit.mint}:${traderData.keys().next().value?.split(':')[1] ?? ''}`)
     const walletStartHolding = hit.holdingSince ?? 0
     const rank = sorted.findIndex(t => (t.startHoldingAt ?? 0) >= walletStartHolding)
     const percentile = rank >= 0 ? (rank / sorted.length) : 1
@@ -179,12 +202,11 @@ function calculateInsiderScore(
     ? Math.round(entryScores.reduce((a, b) => a + b, 0) / entryScores.length)
     : 0
 
-  // ── 2. Hold Duration (0-35) ────────────────────────────────────────
+  // 2. Hold Duration (0-35)
   const holdDurations: number[] = []
   for (const hit of hits) {
     if (hit.holdingSince && hit.holdingSince > 0) {
-      const now = Date.now() / 1000
-      const holdDays = (now - hit.holdingSince) / 86400
+      const holdDays = (Date.now() / 1000 - hit.holdingSince) / 86400
       holdDurations.push(holdDays)
     }
   }
@@ -198,7 +220,7 @@ function calculateInsiderScore(
     breakdown.holdDuration = 5
   }
 
-  // ── 3. Realized PnL % (0-25) ──────────────────────────────────────
+  // 3. Realized PnL % (0-25)
   const totalCost = hits.reduce((s, h) => s + h.totalCostUsd, 0)
   const totalRealized = hits.reduce((s, h) => s + h.realizedPnlUsd, 0)
   const pnlPct = totalCost > 0 ? (totalRealized / totalCost) * 100 : 0
@@ -208,19 +230,15 @@ function calculateInsiderScore(
   else if (pnlPct > 0) breakdown.pnlScore = 8
   else breakdown.pnlScore = 0
 
-  // ── 4. Consistency (0-10) ──────────────────────────────────────────
-  // DCA without panic selling: multiple buys with holds
+  // 4. Consistency (0-10)
   const totalBuys = hits.reduce((s, h) => s + h.buyCount, 0)
   const totalSells = hits.reduce((s, h) => s + h.sellCount, 0)
 
   if (totalBuys >= 3 && totalSells <= totalBuys * 0.3) {
-    // DCA: bought multiple times, sold little → 10
     breakdown.consistency = 10
   } else if (totalBuys >= 1 && totalSells <= 1) {
-    // Held without active selling → 5
     breakdown.consistency = 5
   } else {
-    // Sold early/often → 0
     breakdown.consistency = 0
   }
 
@@ -231,8 +249,6 @@ function calculateInsiderScore(
 // ── Average Entry (weighted) ────────────────────────────────────────
 
 function computeWeightedAvgEntry(hits: TokenHit[]): number {
-  // avgCostUsd from GMGN is already weighted avg per token
-  // Weight by totalCostUsd (how much was invested)
   let totalWeight = 0
   let weightedSum = 0
   for (const hit of hits) {
@@ -245,7 +261,7 @@ function computeWeightedAvgEntry(hits: TokenHit[]): number {
 }
 
 function computeLabels(
-  w: { tokensHit: number; avgEntryMcap: number; totalRealizedPnl: number; totalUnrealizedPnl: number; tokens: TokenHit[]; scoreBreakdown: ScoreBreakdown }
+  w: { tokensHit: number; avgEntryMcap: number; totalRealizedPnl: number; totalUnrealizedPnl: number; tokens: TokenHit[]; scoreBreakdown: ScoreBreakdown; earlyEntryRatio: number; botWarning: boolean; lateEntryWarning: boolean }
 ): string[] {
   const labels: string[] = []
   const totalPnl = w.totalRealizedPnl + w.totalUnrealizedPnl
@@ -262,7 +278,60 @@ function computeLabels(
   if (w.scoreBreakdown.holdDuration >= 25) labels.push('DIAMOND HANDS')
   if (w.scoreBreakdown.consistency >= 10) labels.push('DCA')
 
+  // Zmiana 3: Early entry badges
+  if (w.earlyEntryRatio >= 0.80) labels.push('🎯 EARLY HUNTER')
+  else if (w.earlyEntryRatio >= 0.50) labels.push('⚡ EARLY BUYER')
+
+  // Zmiana 4: Bot warning
+  if (w.botWarning) labels.push('⚠️ BOT')
+
+  // Zmiana 9: Late entry
+  if (w.lateEntryWarning) labels.push('⚠️ PÓŹNE WEJŚCIA')
+
   return labels
+}
+
+// ── Zmiana 1: New Smart Score (0.0 - 1.0) ───────────────────────────────
+
+function calculateSmartScore(
+  hits: TokenHit[],
+  totalTokensAnalyzed: number,
+): number {
+  const tokenCount = hits.length
+  if (tokenCount === 0) return 0
+
+  // Coverage (0.40)
+  const coverageRatio = totalTokensAnalyzed > 0 ? tokenCount / totalTokensAnalyzed : 0
+
+  // PnL weight (0.35)
+  const totalPnl = hits.reduce((s, h) => s + h.realizedPnlUsd + h.unrealizedPnlUsd, 0)
+  const pnlWeight = totalPnl > 0 ? Math.min(Math.log10(totalPnl + 1) / Math.log10(100000), 1.0) : 0
+
+  // Zmiana 7: Weighted win rate for consistency (0.25)
+  let weightedWins = 0
+  let weightedTotal = 0
+  for (const hit of hits) {
+    const weight = getTimeDecayWeight(hit.pairCreatedAt)
+    weightedTotal += weight
+    if (hit.realizedPnlUsd + hit.unrealizedPnlUsd > 0) weightedWins += weight
+  }
+  const consistency = weightedTotal > 0 ? weightedWins / weightedTotal : 0
+
+  // Zmiana 3: Early entry bonus (0.15)
+  const EARLY_MCAP = 500_000
+  let earlyCount = 0
+  let entryCount = 0
+  for (const hit of hits) {
+    if (hit.entryMcapUsd > 0) {
+      entryCount++
+      if (hit.entryMcapUsd < EARLY_MCAP) earlyCount++
+    }
+  }
+  const earlyEntryRatio = entryCount > 0 ? earlyCount / entryCount : 0
+  const earlyBonus = earlyEntryRatio * 0.15
+
+  const baseScore = (coverageRatio * 0.40) + (pnlWeight * 0.35) + (consistency * 0.25)
+  return Math.min(Math.round((baseScore + earlyBonus) * 10000) / 10000, 1.0)
 }
 
 // ── Main handler ───────────────────────────────────────────────────────
@@ -315,7 +384,8 @@ export async function POST(req: NextRequest) {
       allTradersByToken.set(mint, traders)
 
       for (const trader of traders) {
-        if (isBot(trader) || isExchange(trader)) continue
+        // Zmiana 5: Keep exchange filter as-is (different from analyze route)
+        if (isExchange(trader)) continue
 
         const avgCost = trader.avgCostUsd
         const mcapAtEntry = (avgCost && avgCost > 0 && currentPrice > 0)
@@ -365,19 +435,36 @@ export async function POST(req: NextRequest) {
   // Step 3: Build wallets
   const qualifiedWallets: InsiderWallet[] = []
 
-  // Build a lookup for trader data by "mint:address"
-  const traderDataMap = new Map<string, GmgnTrader>()
-  for (const [mint, traders] of allTradersByToken) {
-    for (const t of traders) {
-      traderDataMap.set(`${mint}:${t.address}`, t)
-    }
+  // Diagnostic: count overlap and balance distribution
+  const hitCountDist: Record<number, number> = {}
+  let balBelow1k = 0, bal1kTo5k = 0, bal5kTo15k = 0, balAbove15k = 0
+  let botFiltered = 0, balFiltered = 0
+  for (const [, hits] of walletHits) {
+    hitCountDist[hits.length] = (hitCountDist[hits.length] || 0) + 1
   }
+  for (const [, lamports] of walletSolBalance) {
+    const usd = Math.round((lamports / 1e9) * solPrice)
+    if (usd < 1000) balBelow1k++
+    else if (usd < 5000) bal1kTo5k++
+    else if (usd < 15000) bal5kTo15k++
+    else balAbove15k++
+  }
+  console.log(`[token-analyzer] Wallet overlap: ${JSON.stringify(hitCountDist)}`)
+  console.log(`[token-analyzer] SOL balance dist: <$1K:${balBelow1k} $1K-5K:${bal1kTo5k} $5K-15K:${bal5kTo15k} >$15K:${balAbove15k}`)
 
   for (const [address, hits] of walletHits.entries()) {
     const lamports = walletSolBalance.get(address) ?? 0
     const solBalUsd = Math.round((lamports / 1e9) * solPrice)
 
-    if (solBalUsd < 15_000) continue
+    // Portfolio filter: skip only if SOL balance is tiny AND no significant PnL
+    // Many meme traders keep minimal SOL — filter by PnL instead
+    const totalPnlCheck = hits.reduce((s, h) => s + h.realizedPnlUsd + h.unrealizedPnlUsd, 0)
+    if (solBalUsd < 1_000 && totalPnlCheck < 1_000) { balFiltered++; continue }
+
+    // Zmiana 4: Bot filter with ratio
+    const botRatio = countBotTags(hits)
+    if (botRatio > 0.70) { botFiltered++; continue }
+    const botWarning = botRatio > 0.30
 
     const totalRealized = hits.reduce((s, h) => s + h.realizedPnlUsd, 0)
     const totalUnrealized = hits.reduce((s, h) => s + h.unrealizedPnlUsd, 0)
@@ -389,8 +476,45 @@ export async function POST(req: NextRequest) {
     const { score: insiderScore, breakdown: scoreBreakdown } = calculateInsiderScore(
       hits,
       allTradersByToken,
-      traderDataMap
     )
+
+    // Zmiana 1: New Smart Score
+    const smartScore = calculateSmartScore(hits, processedTokens)
+
+    // Zmiana 1: Coverage ratio
+    const coverageRatio = processedTokens > 0 ? hits.length / processedTokens : 0
+
+    // Zmiana 3: Early entry analysis
+    const EARLY_MCAP = 500_000
+    let earlyEntryCount = 0
+    let entryCount = 0
+    let mcapSum = 0
+    for (const hit of hits) {
+      if (hit.entryMcapUsd > 0) {
+        entryCount++
+        mcapSum += hit.entryMcapUsd
+        if (hit.entryMcapUsd < EARLY_MCAP) earlyEntryCount++
+      }
+    }
+    const earlyEntryRatio = entryCount > 0 ? earlyEntryCount / entryCount : 0
+
+    // Zmiana 7: Weighted win rate
+    let weightedWins = 0
+    let weightedTotal = 0
+    for (const hit of hits) {
+      const weight = getTimeDecayWeight(hit.pairCreatedAt)
+      weightedTotal += weight
+      if (hit.realizedPnlUsd + hit.unrealizedPnlUsd > 0) weightedWins += weight
+    }
+    const weightedWinRate = weightedTotal > 0 ? (weightedWins / weightedTotal) * 100 : 0
+
+    // Zmiana 9: Late entry warning
+    const totalPnl = totalRealized + totalUnrealized
+    const isSmartMoney = totalPnl > 0 &&
+      hits.length >= 2 &&
+      weightedWinRate >= getMinWinRate(hits.length) &&
+      !botWarning
+    const lateEntryWarning = isSmartMoney && earlyEntryRatio < 0.30
 
     const wallet: InsiderWallet = {
       address,
@@ -406,16 +530,31 @@ export async function POST(req: NextRequest) {
       walletType,
       tags,
       labels: [],
+      smartScore,
+      coverageRatio,
+      earlyEntryRatio,
+      earlyEntryCount,
+      botRatio,
+      botWarning,
+      weightedWinRate,
+      lateEntryWarning,
     }
     wallet.labels = computeLabels(wallet)
     qualifiedWallets.push(wallet)
   }
 
-  qualifiedWallets.sort((a, b) => b.insiderScore - a.insiderScore)
+  console.log(`[token-analyzer] Filtered: ${balFiltered} by balance, ${botFiltered} by bot. Qualified: ${qualifiedWallets.length}`)
+
+  // Sort by smartScore (primary), insiderScore (secondary)
+  qualifiedWallets.sort((a, b) => {
+    if (b.smartScore !== a.smartScore) return b.smartScore - a.smartScore
+    return b.insiderScore - a.insiderScore
+  })
 
   const response: TokenAnalyzerResponse = {
     wallets: qualifiedWallets.slice(0, 50),
     processedTokens,
+    totalTokensAnalyzed: processedTokens,
     totalEarlyBuyers: walletHits.size,
     elapsedMs: Date.now() - start,
     errors,

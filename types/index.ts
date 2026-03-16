@@ -1,141 +1,87 @@
-// ============================================================
-// Terminal Bloomberg — Types
-// ============================================================
-
-export interface StockQuote {
+export interface TokenInfo {
+  address: string
   symbol: string
   name: string
-  price: number
-  change: number
-  changePercent: number
-  volume: number
-  avgVolume: number
-  marketCap: number
-  peRatio: number | null
-  eps: number | null
-  dividend: number | null
-  dividendYield: number | null
-  high52: number
-  low52: number
-  dayHigh: number
-  dayLow: number
-  open: number
-  previousClose: number
-  exchange: string
-  currency: string
+  priceUsd: number
+  fdv: number             // fully diluted valuation in USD (price × total supply)
+  pairAddress: string
+  pairCreatedAt: number   // Unix seconds — pool creation time
+  totalTxEstimate: number // rough tx count to decide analysis mode
 }
 
-export interface StockFinancials {
-  revenue: number[]
-  revenueGrowth: number[]
-  netIncome: number[]
-  profitMargin: number[]
-  operatingMargin: number[]
-  debtToEquity: number | null
-  currentRatio: number | null
-  quickRatio: number | null
-  roe: number | null
-  roa: number | null
-  freeCashFlow: number | null
-  periods: string[]
+export interface WalletTrade {
+  solSpent: number
+  solReceived: number
+  tradeCount: number
+  pnlUsd: number
+  unrealizedPnlUsd: number       // unrealized portion only (for balance estimate)
+  buyCount: number
+  sellCount: number
+  tags: string[]
+  startHoldingAt: number | null  // Unix ts of current/last holding start (from GMGN)
+  avgCostUsd: number             // avg cost per token in USD (GMGN avg_cost) — always set for Source A
+  nativeBalance: number          // wallet SOL balance in lamports (from GMGN)
 }
 
-export interface StockAnalysis {
-  ticker: string
-  recommendation: "BUY" | "HOLD" | "SELL"
-  confidence: number
-  summary: string
-  sections: {
-    title: string
-    content: string
-    sentiment: "positive" | "neutral" | "negative"
-  }[]
-  risks: string[]
-  catalysts: string[]
-  priceTarget?: { low: number; mid: number; high: number }
+export interface TokenEntry {
+  tokenAddress: string
+  tokenSymbol: string
+  firstSeenAt: number     // Unix timestamp of first buy (0 = unknown)
+  entryPriceUsd: number   // Token price at time of first buy (0 = unknown)
+  mcapAtEntryUsd: number  // Market cap at time of first buy (0 = unknown)
 }
 
-export interface ScreenerCriteria {
-  strategy: string
-  metrics: {
-    name: string
-    threshold: string
-    description: string
-  }[]
-  explanation: string
+export interface WalletAnalysis {
+  address: string
+  appearances: number
+  tokens: string[]
+  tokenSymbols: string[]
+  tokenFirstSeen: (number | null)[]  // parallel to tokens[]
+  tokenEntries: TokenEntry[]          // enriched entry data (populated in route.ts)
+  totalPnlUsd: number
+  totalUnrealizedUsd: number         // sum of unrealized profits across all tokens
+  solBalanceLamports: number         // SOL balance from GMGN (lamports)
+  solBalanceUsd: number              // solBalanceLamports / 1e9 × solPrice (set in route.ts)
+  winRate: number        // weighted win rate (temporal decay applied)
+  totalBuyCount: number
+  totalSellCount: number
+  smartScore: number     // composite: coverage(0.40) + pnl(0.35) + consistency(0.25) + earlyBonus(0.15), capped at 1.0
+  isSmartMoney: boolean
+  // Bot detection (Zmiana 4)
+  botRatio: number       // 0.0-1.0: fraction of token positions with bot tags
+  botWarning: boolean    // true when 0.30 < botRatio <= 0.70
+  // Early entry analysis (Zmiana 3)
+  earlyEntryRatio: number    // 0.0-1.0: fraction of tokens bought at mcap < $500K
+  earlyEntryCount: number    // absolute count of early entries
+  avgEntryMcap: number       // average mcap at entry in USD
+  // Coverage (Zmiana 1)
+  coverageRatio: number      // tokenCount / total_tokens_analyzed
+  // Late entry warning (Zmiana 9)
+  lateEntryWarning: boolean  // true when earlyEntryRatio < 0.30
+  // Vybe Network enrichment (populated when VYBE_API_KEY is set)
+  vybeName?:   string    // e.g. "Multicoin Capital"
+  vybeLabels?: string[]  // e.g. ["VC"] | ["KOL"] | ["CEX"]
 }
 
-export interface EarningsAnalysis {
-  company: string
-  quarter: string
-  beats: string[]
-  misses: string[]
-  guidance: string
-  investmentImpact: string
-  keyMetrics: { name: string; actual: string; expected: string; status: "beat" | "miss" | "inline" }[]
+export interface GraphData {
+  nodes: Array<{
+    id: string
+    type: 'wallet' | 'token'
+    label: string
+    val: number
+    color: string
+    pnl?: number
+  }>
+  links: Array<{ source: string; target: string }>
 }
 
-export interface RiskAssessment {
-  ticker: string
-  overallRisk: "LOW" | "MEDIUM" | "HIGH" | "VERY HIGH"
-  riskScore: number
-  categories: {
-    name: string
-    level: "LOW" | "MEDIUM" | "HIGH"
-    description: string
-  }[]
-  worstCase: string
-  mitigants: string[]
+export interface AnalyzeResponse {
+  wallets: WalletAnalysis[]
+  graphData: GraphData
+  processedTokens: number
+  stats: {
+    totalWallets: number
+    smartMoneyCount: number
+    elapsedMs: number
+  }
 }
-
-export interface StockComparison {
-  stockA: string
-  stockB: string
-  winner: string
-  comparison: {
-    category: string
-    stockAScore: number
-    stockBScore: number
-    analysis: string
-  }[]
-  verdict: string
-}
-
-export interface PortfolioPick {
-  ticker: string
-  name: string
-  allocation: number
-  thesis: string
-  sector: string
-  type: string
-}
-
-export interface Portfolio {
-  strategy: string
-  totalAmount: number
-  horizon: string
-  picks: PortfolioPick[]
-  diversificationNote: string
-}
-
-export interface EntryAnalysis {
-  ticker: string
-  currentPrice: number
-  recommendation: "BUY_NOW" | "WAIT" | "SET_LIMIT"
-  targetEntry?: number
-  supportLevels: number[]
-  resistanceLevels: number[]
-  analysis: string
-  technicalSignals: { name: string; signal: "bullish" | "bearish" | "neutral" }[]
-}
-
-export type TabId =
-  | "analysis"
-  | "screener"
-  | "earnings"
-  | "risk"
-  | "compare"
-  | "portfolio"
-  | "entry"
-  | "analyst"
-  | "worldnews"

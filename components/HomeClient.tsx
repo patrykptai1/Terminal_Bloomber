@@ -1,7 +1,7 @@
 'use client'
 
-import { useState, useCallback } from 'react'
-import { LayoutDashboard, Wallet, ScanLine, BarChart2, Activity, Crosshair, Search, Radar } from 'lucide-react'
+import { useState, useCallback, useEffect } from 'react'
+import { LayoutDashboard, Wallet, ScanLine, BarChart2, Activity, Crosshair, Search, Radar, Star } from 'lucide-react'
 import TokenAnalyzer from '@/components/TokenAnalyzer'
 import WalletInspector from '@/components/WalletInspector'
 import MyWallets from '@/components/MyWallets'
@@ -10,6 +10,7 @@ import WalletActivityDashboard from '@/components/WalletActivityDashboard'
 import BarryStrategy from '@/components/BarryStrategy'
 import TokenScanner from '@/components/TokenScanner'
 import CieloScout from '@/components/CieloScout'
+import WatchedTokens from '@/components/WatchedTokens'
 
 const NAV_ITEMS = [
   { tab: 'dashboard',     label: 'Wallet Radar',     Icon: LayoutDashboard },
@@ -20,6 +21,7 @@ const NAV_ITEMS = [
   { tab: 'wallet',        label: 'Wallet Scanner',    Icon: ScanLine        },
   { tab: 'scanner',       label: 'Market',            Icon: BarChart2       },
   { tab: 'barry',         label: 'Barry Strategy',    Icon: Crosshair       },
+  { tab: 'watched',        label: 'Obserwowane',       Icon: Star            },
 ]
 
 export default function HomeClient() {
@@ -29,6 +31,20 @@ export default function HomeClient() {
   const handleAnalyzeToken = useCallback((address: string) => {
     void address
     setActiveTab('tracking')
+  }, [])
+
+  // Listen for send-to-analyzer events from TokenScanner
+  useEffect(() => {
+    const handler = (e: Event) => {
+      const ca = (e as CustomEvent).detail as string
+      if (ca) {
+        // Dispatch to TokenAnalyzer to pre-fill input
+        window.dispatchEvent(new CustomEvent('analyzer-prefill', { detail: ca }))
+        setActiveTab('tracking')
+      }
+    }
+    window.addEventListener('send-to-analyzer', handler)
+    return () => window.removeEventListener('send-to-analyzer', handler)
   }, [])
 
   return (
@@ -133,6 +149,14 @@ export default function HomeClient() {
               <p className="text-gray-500 text-xs">6-krokowy pipeline analizy tokena wg strategii 0xBarrry</p>
             </div>
             <BarryStrategy />
+          </div>
+
+          <div className={activeTab === 'watched' ? '' : 'hidden'}>
+            <div className="space-y-0.5 mb-5">
+              <h1 className="text-xl font-bold text-gray-900">Obserwowane Tokeny</h1>
+              <p className="text-gray-500 text-xs">Tokeny dodane do obserwacji z dowolnej zakladki</p>
+            </div>
+            <WatchedTokens />
           </div>
 
         </div>

@@ -6,6 +6,7 @@ import {
   ExternalLink, Copy, Check, Zap, TrendingUp, Users, Clock,
   ChevronDown, ChevronRight, Filter,
 } from 'lucide-react'
+import { addTokenToWatch, isTokenWatched } from '@/lib/tokenBook'
 
 // ━━━ TYPES ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
@@ -323,6 +324,13 @@ function ScoutTab() {
                       {/* Token info */}
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-2 mb-1">
+                          <button
+                            onClick={() => addTokenToWatch(token.tokenAddress, token.tokenSymbol, token.tokenName)}
+                            className={`transition-colors ${isTokenWatched(token.tokenAddress) ? 'text-yellow-500' : 'text-gray-300 hover:text-yellow-500'}`}
+                            title={isTokenWatched(token.tokenAddress) ? 'Obserwowany' : 'Dodaj do obserwowanych'}
+                          >
+                            <Star size={11} fill={isTokenWatched(token.tokenAddress) ? 'currentColor' : 'none'} />
+                          </button>
                           <TokenLink address={token.tokenAddress} symbol={token.tokenSymbol} />
                           <span className="text-xs text-gray-400 truncate">{token.tokenName}</span>
                         </div>

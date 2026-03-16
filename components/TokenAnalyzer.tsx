@@ -3,8 +3,9 @@
 import { useState, useCallback, useMemo, useEffect } from 'react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Progress } from '@/components/ui/progress'
-import { ChevronDown, ChevronRight, UserPlus, Copy, Check, ExternalLink, Trophy, Zap, TrendingUp, Crown, Loader2 } from 'lucide-react'
+import { ChevronDown, ChevronRight, UserPlus, Copy, Check, ExternalLink, Trophy, Zap, TrendingUp, Crown, Loader2, Star, Target, Shield, Search, ArrowRight } from 'lucide-react'
 import { addToBook, removeFromBook, isInBook } from '@/lib/walletBook'
+import { addTokenToWatch, isTokenWatched } from '@/lib/tokenBook'
 
 // ── Types matching API response ────────────────────────────────────────
 
@@ -43,14 +44,41 @@ interface InsiderWallet {
   walletType: 'HOLDER' | 'TRADER'
   tags: string[]
   labels: string[]
+  // New fields
+  smartScore: number
+  coverageRatio: number
+  earlyEntryRatio: number
+  earlyEntryCount: number
+  botRatio: number
+  botWarning: boolean
+  weightedWinRate: number
+  lateEntryWarning: boolean
+  lastActiveTimestamp: number
 }
 
 interface AnalyzerResponse {
   wallets: InsiderWallet[]
   processedTokens: number
+  totalTokensAnalyzed: number
   totalEarlyBuyers: number
   elapsedMs: number
   errors: string[]
+}
+
+interface TransferDestination {
+  address: string
+  totalSolReceived: number
+  transferCount: number
+  lastTransferAt: number
+  currentSolBalance: number
+}
+
+interface WalletTraceResult {
+  wallet: string
+  destinations: TransferDestination[]
+  totalSolTransferred: number
+  txScanned: number
+  error?: string
 }
 
 // ── Helpers ────────────────────────────────────────────────────────────
@@ -73,36 +101,54 @@ function shortAddr(addr: string): string {
   return addr.slice(0, 6) + '...' + addr.slice(-4)
 }
 
-function scoreColor(score: number): string {
-  if (score >= 70) return 'text-emerald-700 bg-emerald-50 border-emerald-300'
-  if (score >= 45) return 'text-amber-700 bg-amber-50 border-amber-300'
-  return 'text-gray-600 bg-gray-50 border-gray-300'
+function pnlColor(n: number): string {
+  return n > 0 ? 'text-emerald-400' : n < 0 ? 'text-red-400' : 'text-gray-500'
 }
 
-function pnlColor(n: number): string {
-  return n > 0 ? 'text-emerald-600' : n < 0 ? 'text-red-500' : 'text-gray-500'
+function tokenEntryBadge(mcap: number): { text: string; cls: string } | null {
+  if (mcap <= 0) return null
+  if (mcap < 500_000) return { text: 'EARLY', cls: 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30' }
+  if (mcap <= 2_000_000) return { text: 'MID', cls: 'bg-amber-500/20 text-amber-400 border border-amber-500/30' }
+  return { text: 'LATE', cls: 'bg-red-500/20 text-red-400 border border-red-500/30' }
 }
 
 function tokenEarlyLabel(entryMcap: number, currentMcap: number): { text: string; bg: string } | null {
   if (entryMcap <= 0 || currentMcap <= 0) return null
   const ratio = entryMcap / currentMcap
-  if (ratio <= 0.01) return { text: 'SNIPER', bg: 'bg-purple-100 text-purple-700' }
-  if (ratio <= 0.05) return { text: 'VERY EARLY', bg: 'bg-emerald-100 text-emerald-700' }
-  if (ratio <= 0.15) return { text: 'EARLY', bg: 'bg-sky-100 text-sky-700' }
+  if (ratio <= 0.01) return { text: 'SNIPER', bg: 'bg-purple-500/20 text-purple-400' }
+  if (ratio <= 0.05) return { text: 'VERY EARLY', bg: 'bg-emerald-500/20 text-emerald-400' }
+  if (ratio <= 0.15) return { text: 'EARLY', bg: 'bg-sky-500/20 text-sky-400' }
+  return null
+}
+
+function hunterBadge(earlyRatio: number): { text: string; icon: 'target' | 'zap' | 'shield'; cls: string } | null {
+  if (earlyRatio >= 0.80) return { text: 'Early Hunter', icon: 'target', cls: 'bg-purple-500/20 text-purple-400 border-purple-500/30' }
+  if (earlyRatio >= 0.50) return { text: 'Early Buyer', icon: 'zap', cls: 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30' }
+  if (earlyRatio < 0.30 && earlyRatio >= 0) return { text: 'Late Entry', icon: 'shield', cls: 'bg-red-500/20 text-red-400 border-red-500/30' }
   return null
 }
 
 const LABEL_STYLES: Record<string, string> = {
-  'MULTI-TOKEN': 'bg-indigo-100 text-indigo-700 border-indigo-300',
-  'WHALE PROFIT': 'bg-yellow-100 text-yellow-700 border-yellow-300',
-  'HIGH PROFIT': 'bg-emerald-100 text-emerald-700 border-emerald-300',
-  'PROFIT': 'bg-green-50 text-green-600 border-green-200',
-  'SNIPER': 'bg-purple-100 text-purple-700 border-purple-300',
-  'VERY EARLY': 'bg-teal-100 text-teal-700 border-teal-300',
-  'EARLY': 'bg-sky-100 text-sky-700 border-sky-300',
-  'CONSISTENT': 'bg-blue-100 text-blue-700 border-blue-300',
-  'DIAMOND HANDS': 'bg-orange-100 text-orange-700 border-orange-300',
-  'DCA': 'bg-cyan-100 text-cyan-700 border-cyan-300',
+  'MULTI-TOKEN': 'bg-indigo-500/20 text-indigo-400 border-indigo-500/30',
+  'WHALE PROFIT': 'bg-yellow-500/20 text-yellow-400 border-yellow-500/30',
+  'HIGH PROFIT': 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30',
+  'PROFIT': 'bg-green-500/15 text-green-400 border-green-500/25',
+  'SNIPER': 'bg-purple-500/20 text-purple-400 border-purple-500/30',
+  'VERY EARLY': 'bg-teal-500/20 text-teal-400 border-teal-500/30',
+  'EARLY': 'bg-sky-500/20 text-sky-400 border-sky-500/30',
+  'CONSISTENT': 'bg-blue-500/20 text-blue-400 border-blue-500/30',
+  'DIAMOND HANDS': 'bg-orange-500/20 text-orange-400 border-orange-500/30',
+  'DCA': 'bg-cyan-500/20 text-cyan-400 border-cyan-500/30',
+}
+
+function activityStatus(lastActiveTs: number): { label: string; cls: string; dotCls: string } {
+  if (!lastActiveTs) return { label: 'Brak danych', cls: 'text-gray-500', dotCls: 'bg-gray-500' }
+  const nowSec = Math.floor(Date.now() / 1000)
+  const diffDays = (nowSec - lastActiveTs) / 86400
+  if (diffDays <= 3) return { label: `${diffDays < 1 ? 'Dziś' : Math.floor(diffDays) + 'd temu'}`, cls: 'text-emerald-400', dotCls: 'bg-emerald-400' }
+  if (diffDays <= 14) return { label: `${Math.floor(diffDays)}d temu`, cls: 'text-amber-400', dotCls: 'bg-amber-400' }
+  if (diffDays <= 60) return { label: `${Math.floor(diffDays)}d temu`, cls: 'text-orange-400', dotCls: 'bg-orange-400' }
+  return { label: `${Math.floor(diffDays)}d temu`, cls: 'text-red-400', dotCls: 'bg-red-400' }
 }
 
 interface GmgnTrade {
@@ -191,22 +237,37 @@ function formatHoldDuration(sec: number): string {
 }
 
 function isSmartMoney(w: InsiderWallet): boolean {
-  const entryMcap = getEarliestEntryMcap(w)
-  const holdSec = getHoldDurationSec(w)
-  const pnl = getPnlPercent(w)
-  return (
-    entryMcap > 0 && entryMcap < 500_000 &&
-    holdSec > 24 * 3600 &&
-    (pnl === null || pnl > 100) &&
-    w.walletType === 'HOLDER'
-  )
+  // Based on smartScore > 0 (computed server-side with all criteria)
+  return w.smartScore > 0
+}
+
+function smartScoreColor(score: number): string {
+  const pct = score * 100
+  if (pct >= 70) return 'bg-emerald-500'
+  if (pct >= 40) return 'bg-amber-500'
+  return 'bg-gray-600'
+}
+
+function smartScoreBadgeColor(score: number, lateEntry: boolean): string {
+  if (lateEntry) return 'text-amber-400 bg-amber-500/15 border-amber-500/30'
+  const pct = score * 100
+  if (pct >= 70) return 'text-emerald-400 bg-emerald-500/15 border-emerald-500/30'
+  if (pct >= 40) return 'text-amber-400 bg-amber-500/15 border-amber-500/30'
+  return 'text-gray-400 bg-gray-700/50 border-gray-600'
+}
+
+function avgEntryMcapColor(mcap: number): string {
+  if (mcap <= 0) return 'text-gray-500'
+  if (mcap < 500_000) return 'text-emerald-400'
+  if (mcap <= 2_000_000) return 'text-amber-400'
+  return 'text-red-400'
 }
 
 function mcapEntryColor(mcap: number): string {
   if (mcap <= 0) return 'text-gray-500'
-  if (mcap < 500_000) return 'text-emerald-600'
-  if (mcap <= 2_000_000) return 'text-amber-500'
-  return 'text-gray-500'
+  if (mcap < 500_000) return 'text-emerald-400'
+  if (mcap <= 2_000_000) return 'text-amber-400'
+  return 'text-gray-400'
 }
 
 // ── Trade History Component (auto-loads on mount) ───────────────────
@@ -256,7 +317,7 @@ function TradeHistory({ wallet, tokens }: { wallet: string; tokens: TokenHit[] }
         </div>
       )}
 
-      {error && <p className="text-[11px] text-red-500 py-1">{error}</p>}
+      {error && <p className="text-[11px] text-red-400 py-1">{error}</p>}
 
       {trades && tokens.map(token => {
         const tokenTrades = trades[token.mint] ?? []
@@ -269,12 +330,10 @@ function TradeHistory({ wallet, tokens }: { wallet: string; tokens: TokenHit[] }
         const totalBuyTokens = buys.reduce((s, t) => s + t.tokenAmount, 0)
         const isOpen = expandedToken.has(token.mint)
 
-        // Weighted average entry: sum(price * tokens) / sum(tokens)
         const weightedAvgEntry = totalBuyTokens > 0
           ? buys.reduce((s, t) => s + t.priceUsd * t.tokenAmount, 0) / totalBuyTokens
           : 0
 
-        // Hold duration
         const firstBuyTs = firstBuy?.timestamp ?? token.holdingSince ?? 0
         const lastActionTs = lastSell?.timestamp ?? (Date.now() / 1000)
         const holdDays = firstBuyTs > 0 ? (lastActionTs - firstBuyTs) / 86400 : 0
@@ -282,23 +341,36 @@ function TradeHistory({ wallet, tokens }: { wallet: string; tokens: TokenHit[] }
           ? `${holdDays.toFixed(1)} dni`
           : holdDays > 0 ? `${(holdDays * 24).toFixed(1)} godz.` : '—'
         const stillHolding = sells.length === 0 || (buys.length > 0 && sells.length < buys.length)
+        const entryBadge = tokenEntryBadge(token.entryMcapUsd)
 
         return (
-          <div key={token.mint} className="bg-white rounded-lg border border-gray-200 overflow-hidden">
+          <div key={token.mint} className="bg-gray-800/50 rounded-lg border border-gray-700/50 overflow-hidden">
             <div
-              className="cursor-pointer hover:bg-gray-50/80 transition-colors"
+              className="cursor-pointer hover:bg-gray-700/30 transition-colors"
               onClick={() => toggleToken(token.mint)}
             >
               <div className="flex items-center gap-2 px-3 pt-2 pb-1">
+                <button
+                  onClick={e => { e.stopPropagation(); addTokenToWatch(token.mint, token.symbol, '', '', token.currentMcapUsd, 0) }}
+                  className={`transition-colors ${isTokenWatched(token.mint) ? 'text-yellow-500' : 'text-gray-500 hover:text-yellow-500'}`}
+                  title={isTokenWatched(token.mint) ? 'Obserwowany' : 'Dodaj do obserwowanych'}
+                >
+                  <Star size={11} fill={isTokenWatched(token.mint) ? 'currentColor' : 'none'} />
+                </button>
                 <a
                   href={`https://gmgn.ai/sol/token/${token.mint}`}
                   target="_blank"
                   rel="noopener noreferrer"
                   onClick={e => e.stopPropagation()}
-                  className="font-bold text-xs text-gray-800 hover:text-orange-600"
+                  className="font-bold text-xs text-gray-200 hover:text-orange-400"
                 >
                   {token.symbol}
                 </a>
+                {entryBadge && (
+                  <span className={`text-[9px] font-bold px-1.5 py-0 rounded ${entryBadge.cls}`}>
+                    {entryBadge.text}
+                  </span>
+                )}
                 {(() => {
                   const earlyLabel = tokenEarlyLabel(token.entryMcapUsd, token.currentMcapUsd)
                   return earlyLabel ? (
@@ -310,12 +382,12 @@ function TradeHistory({ wallet, tokens }: { wallet: string; tokens: TokenHit[] }
                 {(() => {
                   const multiplier = token.entryMcapUsd > 0 ? Math.round(token.currentMcapUsd / token.entryMcapUsd) : 0
                   return multiplier >= 2 ? (
-                    <span className="text-[9px] font-bold text-orange-500 bg-orange-50 px-1.5 py-0 rounded">
+                    <span className="text-[9px] font-bold text-orange-400 bg-orange-500/15 px-1.5 py-0 rounded">
                       {multiplier}x
                     </span>
                   ) : null
                 })()}
-                <span className="text-[9px] text-gray-400 ml-auto flex items-center gap-1.5">
+                <span className="text-[9px] text-gray-500 ml-auto flex items-center gap-1.5">
                   {token.buyCount}B / {token.sellCount}S
                   {isOpen ? <ChevronDown size={12} /> : <ChevronRight size={12} />}
                 </span>
@@ -324,91 +396,88 @@ function TradeHistory({ wallet, tokens }: { wallet: string; tokens: TokenHit[] }
               <div className="flex gap-1.5 px-3 pb-2 flex-wrap text-[10px]">
                 {firstBuy ? (
                   <>
-                    <span className="bg-violet-50 text-violet-700 font-medium px-2 py-0.5 rounded">
+                    <span className="bg-violet-500/15 text-violet-400 font-medium px-2 py-0.5 rounded">
                       Wejscie: {formatDate(firstBuy.timestamp)}
                     </span>
-                    <span className="bg-violet-50 text-violet-700 font-bold px-2 py-0.5 rounded">
+                    <span className="bg-violet-500/15 text-violet-400 font-bold px-2 py-0.5 rounded">
                       @ {formatUsd(firstBuy.mcapUsd)}
                     </span>
                   </>
                 ) : token.holdingSince ? (
-                  <span className="bg-violet-50 text-violet-600 font-medium px-2 py-0.5 rounded">
+                  <span className="bg-violet-500/15 text-violet-400 font-medium px-2 py-0.5 rounded">
                     ~{formatDate(token.holdingSince)}
                   </span>
                 ) : null}
                 {!firstBuy && (
-                  <span className="bg-violet-50 text-violet-700 font-bold px-2 py-0.5 rounded">
+                  <span className="bg-violet-500/15 text-violet-400 font-bold px-2 py-0.5 rounded">
                     Entry: {formatUsd(token.entryMcapUsd)}
                   </span>
                 )}
-                <span className="bg-gray-100 text-gray-600 font-medium px-2 py-0.5 rounded">
+                <span className="bg-gray-700/50 text-gray-400 font-medium px-2 py-0.5 rounded">
                   Now: {formatUsd(token.currentMcapUsd)}
                 </span>
-                <span className={`font-bold px-2 py-0.5 rounded ${pnlColor(token.realizedPnlUsd)} ${token.realizedPnlUsd >= 0 ? 'bg-emerald-50' : 'bg-red-50'}`}>
+                <span className={`font-bold px-2 py-0.5 rounded ${pnlColor(token.realizedPnlUsd)} ${token.realizedPnlUsd >= 0 ? 'bg-emerald-500/10' : 'bg-red-500/10'}`}>
                   R: {token.realizedPnlUsd > 0 ? '+' : ''}{formatUsd(token.realizedPnlUsd)}
                 </span>
-                <span className={`font-bold px-2 py-0.5 rounded ${pnlColor(token.unrealizedPnlUsd)} ${token.unrealizedPnlUsd >= 0 ? 'bg-blue-50' : 'bg-red-50'}`}>
+                <span className={`font-bold px-2 py-0.5 rounded ${pnlColor(token.unrealizedPnlUsd)} ${token.unrealizedPnlUsd >= 0 ? 'bg-blue-500/10' : 'bg-red-500/10'}`}>
                   U: {token.unrealizedPnlUsd > 0 ? '+' : ''}{formatUsd(token.unrealizedPnlUsd)}
                 </span>
               </div>
             </div>
 
             {isOpen && (
-              <div className="border-t border-gray-100 bg-gray-50/50 px-3 py-2">
+              <div className="border-t border-gray-700/50 bg-gray-900/50 px-3 py-2">
                 {tokenTrades.length === 0 ? (
-                  <p className="text-[11px] text-gray-400 py-1">Brak danych o transakcjach z GMGN</p>
+                  <p className="text-[11px] text-gray-500 py-1">Brak danych o transakcjach z GMGN</p>
                 ) : (
                   <>
-                    {/* Summary stats */}
                     <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-1.5 mb-2 text-[10px]">
-                      <div className="bg-white rounded border border-gray-200 px-2 py-1.5">
-                        <div className="text-[9px] text-gray-400 font-medium">Pierwszy zakup</div>
-                        <div className="font-bold text-gray-700">{firstBuy ? formatDate(firstBuy.timestamp) : '—'}</div>
-                        <div className="text-violet-600 font-medium">{firstBuy ? `Mcap: ${formatUsd(firstBuy.mcapUsd)}` : '—'}</div>
+                      <div className="bg-gray-800/70 rounded border border-gray-700/50 px-2 py-1.5">
+                        <div className="text-[9px] text-gray-500 font-medium">Pierwszy zakup</div>
+                        <div className="font-bold text-gray-200">{firstBuy ? formatDate(firstBuy.timestamp) : '—'}</div>
+                        <div className="text-violet-400 font-medium">{firstBuy ? `Mcap: ${formatUsd(firstBuy.mcapUsd)}` : '—'}</div>
                       </div>
-                      <div className="bg-white rounded border border-gray-200 px-2 py-1.5">
-                        <div className="text-[9px] text-gray-400 font-medium">Ostatnia sprzedaz</div>
-                        <div className="font-bold text-gray-700">{lastSell ? formatDate(lastSell.timestamp) : '—'}</div>
-                        <div className="text-amber-600 font-medium">{lastSell ? `Mcap: ${formatUsd(lastSell.mcapUsd)}` : '—'}</div>
+                      <div className="bg-gray-800/70 rounded border border-gray-700/50 px-2 py-1.5">
+                        <div className="text-[9px] text-gray-500 font-medium">Ostatnia sprzedaz</div>
+                        <div className="font-bold text-gray-200">{lastSell ? formatDate(lastSell.timestamp) : '—'}</div>
+                        <div className="text-amber-400 font-medium">{lastSell ? `Mcap: ${formatUsd(lastSell.mcapUsd)}` : '—'}</div>
                       </div>
-                      <div className="bg-white rounded border border-gray-200 px-2 py-1.5">
-                        <div className="text-[9px] text-gray-400 font-medium">Avg Entry (weighted)</div>
-                        <div className="font-bold text-violet-700">{weightedAvgEntry > 0 ? `$${formatNum(weightedAvgEntry)}` : '—'}</div>
+                      <div className="bg-gray-800/70 rounded border border-gray-700/50 px-2 py-1.5">
+                        <div className="text-[9px] text-gray-500 font-medium">Avg Entry (weighted)</div>
+                        <div className="font-bold text-violet-400">{weightedAvgEntry > 0 ? `$${formatNum(weightedAvgEntry)}` : '—'}</div>
                       </div>
-                      <div className="bg-white rounded border border-gray-200 px-2 py-1.5">
-                        <div className="text-[9px] text-gray-400 font-medium">Czas trzymania</div>
-                        <div className="font-bold text-gray-700">{holdLabel}</div>
-                        <div className="text-[9px] text-gray-400">{stillHolding ? 'nadal trzyma' : 'zamknieta'}</div>
+                      <div className="bg-gray-800/70 rounded border border-gray-700/50 px-2 py-1.5">
+                        <div className="text-[9px] text-gray-500 font-medium">Czas trzymania</div>
+                        <div className="font-bold text-gray-200">{holdLabel}</div>
+                        <div className="text-[9px] text-gray-500">{stillHolding ? 'nadal trzyma' : 'zamknieta'}</div>
                       </div>
-                      <div className="bg-white rounded border border-gray-200 px-2 py-1.5">
-                        <div className="text-[9px] text-gray-400 font-medium">Realized PnL</div>
+                      <div className="bg-gray-800/70 rounded border border-gray-700/50 px-2 py-1.5">
+                        <div className="text-[9px] text-gray-500 font-medium">Realized PnL</div>
                         <div className={`font-bold ${pnlColor(token.realizedPnlUsd)}`}>
                           {token.realizedPnlUsd > 0 ? '+' : ''}{formatUsd(token.realizedPnlUsd)}
                         </div>
                       </div>
-                      <div className="bg-white rounded border border-gray-200 px-2 py-1.5">
-                        <div className="text-[9px] text-gray-400 font-medium">Unrealized PnL</div>
+                      <div className="bg-gray-800/70 rounded border border-gray-700/50 px-2 py-1.5">
+                        <div className="text-[9px] text-gray-500 font-medium">Unrealized PnL</div>
                         <div className={`font-bold ${pnlColor(token.unrealizedPnlUsd)}`}>
                           {token.unrealizedPnlUsd > 0 ? '+' : ''}{formatUsd(token.unrealizedPnlUsd)}
                         </div>
                       </div>
                     </div>
 
-                    {/* Buy/Sell volumes */}
                     <div className="flex gap-2 mb-2 text-[10px]">
-                      <span className="bg-emerald-50 text-emerald-600 font-medium px-2 py-0.5 rounded">
+                      <span className="bg-emerald-500/15 text-emerald-400 font-medium px-2 py-0.5 rounded">
                         Wolumen BUY: {formatUsd(totalBuyUsd)} ({buys.length} tx)
                       </span>
-                      <span className="bg-red-50 text-red-500 font-medium px-2 py-0.5 rounded">
+                      <span className="bg-red-500/15 text-red-400 font-medium px-2 py-0.5 rounded">
                         Wolumen SELL: {formatUsd(totalSellUsd)} ({sells.length} tx)
                       </span>
                     </div>
 
-                    {/* Trade table */}
                     <div className="overflow-x-auto">
                       <table className="w-full text-[10px]">
                         <thead>
-                          <tr className="text-gray-400 border-b border-gray-200 text-[9px] uppercase">
+                          <tr className="text-gray-500 border-b border-gray-700/50 text-[9px] uppercase">
                             <th className="text-left py-1 pr-2 font-medium">Data</th>
                             <th className="text-left py-1 pr-2 font-medium">Typ</th>
                             <th className="text-right py-1 pr-2 font-medium">Cena USD</th>
@@ -421,31 +490,31 @@ function TradeHistory({ wallet, tokens }: { wallet: string; tokens: TokenHit[] }
                         </thead>
                         <tbody>
                           {tokenTrades.map((t, i) => (
-                            <tr key={i} className={`border-b border-gray-50 hover:bg-white/80 ${
-                              i === 0 && t.type === 'buy' ? 'bg-violet-50/50' : ''
+                            <tr key={i} className={`border-b border-gray-800/50 hover:bg-gray-800/30 ${
+                              i === 0 && t.type === 'buy' ? 'bg-violet-500/5' : ''
                             }`}>
-                              <td className="py-1 pr-2 text-gray-500 whitespace-nowrap">{formatDate(t.timestamp)}</td>
+                              <td className="py-1 pr-2 text-gray-400 whitespace-nowrap">{formatDate(t.timestamp)}</td>
                               <td className="py-1 pr-2">
                                 <span className={`font-bold px-1.5 py-0.5 rounded text-[9px] ${
                                   t.type === 'buy'
-                                    ? 'bg-emerald-100 text-emerald-700'
-                                    : 'bg-red-100 text-red-600'
+                                    ? 'bg-emerald-500/20 text-emerald-400'
+                                    : 'bg-red-500/20 text-red-400'
                                 }`}>
                                   {t.type === 'buy' ? 'BUY' : 'SELL'}
                                 </span>
                               </td>
-                              <td className="py-1 pr-2 text-right text-gray-600 font-medium">{t.priceUsd > 0 ? `$${formatNum(t.priceUsd)}` : '—'}</td>
-                              <td className="py-1 pr-2 text-right text-violet-600 font-medium">{formatUsd(t.mcapUsd)}</td>
-                              <td className="py-1 pr-2 text-right text-gray-600">{formatNum(t.quoteAmount)}</td>
-                              <td className="py-1 pr-2 text-right font-medium text-gray-700">{formatUsd(t.costUsd)}</td>
-                              <td className="py-1 pr-2 text-right text-gray-500">{formatNum(t.tokenAmount)}</td>
+                              <td className="py-1 pr-2 text-right text-gray-300 font-medium">{t.priceUsd > 0 ? `$${formatNum(t.priceUsd)}` : '—'}</td>
+                              <td className="py-1 pr-2 text-right text-violet-400 font-medium">{formatUsd(t.mcapUsd)}</td>
+                              <td className="py-1 pr-2 text-right text-gray-400">{formatNum(t.quoteAmount)}</td>
+                              <td className="py-1 pr-2 text-right font-medium text-gray-200">{formatUsd(t.costUsd)}</td>
+                              <td className="py-1 pr-2 text-right text-gray-400">{formatNum(t.tokenAmount)}</td>
                               <td className="py-1 text-center">
                                 {t.txHash && (
                                   <a
                                     href={`https://solscan.io/tx/${t.txHash}`}
                                     target="_blank"
                                     rel="noopener noreferrer"
-                                    className="text-blue-400 hover:text-blue-600"
+                                    className="text-gray-500 hover:text-blue-400"
                                   >
                                     <ExternalLink size={10} />
                                   </a>
@@ -506,12 +575,13 @@ const TYPE_OPTIONS = [
 
 // ── Sort column type ─────────────────────────────────────────────────
 
-type SortCol = 'score' | 'entryMcap' | 'holdDuration' | 'pnl' | 'realized' | 'unrealized' | 'balance' | 'avgEntry'
+type SortCol = 'score' | 'smartScore' | 'entryMcap' | 'holdDuration' | 'pnl' | 'realized' | 'unrealized' | 'balance' | 'avgEntry' | 'earlyRatio' | 'coverage' | 'activity'
 
 // ── Main Table Component ──────────────────────────────────────────────
 
-function WalletTable({ wallets, onCopy, onBookmark, bookmarks, copiedAddr, expanded, onToggleExpand }: {
+function WalletTable({ wallets, totalTokensAnalyzed, onCopy, onBookmark, bookmarks, copiedAddr, expanded, onToggleExpand }: {
   wallets: InsiderWallet[]
+  totalTokensAnalyzed: number
   onCopy: (a: string) => void
   onBookmark: (a: string) => void
   bookmarks: Set<string>
@@ -521,6 +591,31 @@ function WalletTable({ wallets, onCopy, onBookmark, bookmarks, copiedAddr, expan
 }) {
   const [tab, setTab] = useState<SummaryTab>('smart')
 
+  // Wallet trace state
+  const [traceResults, setTraceResults] = useState<Map<string, WalletTraceResult>>(new Map())
+  const [traceLoading, setTraceLoading] = useState<Set<string>>(new Set())
+
+  const traceWallet = useCallback(async (address: string) => {
+    setTraceLoading(prev => new Set(prev).add(address))
+    // Auto-expand wallet card to show trace results (only if not already expanded)
+    if (!expanded.has(address)) onToggleExpand(address)
+    try {
+      const res = await fetch(`/api/wallet-trace?address=${address}`)
+      const data: WalletTraceResult = await res.json()
+      setTraceResults(prev => new Map(prev).set(address, data))
+    } catch (e) {
+      setTraceResults(prev => new Map(prev).set(address, {
+        wallet: address,
+        destinations: [],
+        totalSolTransferred: 0,
+        txScanned: 0,
+        error: (e as Error).message,
+      }))
+    } finally {
+      setTraceLoading(prev => { const n = new Set(prev); n.delete(address); return n })
+    }
+  }, [onToggleExpand, expanded])
+
   // Filters
   const [maxMcapEntry, setMaxMcapEntry] = useState(0)
   const [minHoldTime, setMinHoldTime] = useState(3600)
@@ -528,7 +623,7 @@ function WalletTable({ wallets, onCopy, onBookmark, bookmarks, copiedAddr, expan
   const [typeFilter, setTypeFilter] = useState('HOLDER')
 
   // Sort
-  const [sortCol, setSortCol] = useState<SortCol>('score')
+  const [sortCol, setSortCol] = useState<SortCol>('smartScore')
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc')
 
   const handleColSort = (col: SortCol) => {
@@ -588,6 +683,7 @@ function WalletTable({ wallets, onCopy, onBookmark, bookmarks, copiedAddr, expan
     const getSortVal = (w: InsiderWallet): number => {
       switch (sortCol) {
         case 'score': return w.insiderScore
+        case 'smartScore': return w.smartScore
         case 'entryMcap': return getEarliestEntryMcap(w)
         case 'holdDuration': return getHoldDurationSec(w)
         case 'pnl': return getPnlPercent(w) ?? -Infinity
@@ -595,6 +691,9 @@ function WalletTable({ wallets, onCopy, onBookmark, bookmarks, copiedAddr, expan
         case 'unrealized': return w.totalUnrealizedPnl
         case 'balance': return w.solBalanceUsd
         case 'avgEntry': return w.avgEntryMcap
+        case 'earlyRatio': return w.earlyEntryRatio
+        case 'coverage': return w.coverageRatio
+        case 'activity': return w.lastActiveTimestamp
         default: return 0
       }
     }
@@ -619,349 +718,531 @@ function WalletTable({ wallets, onCopy, onBookmark, bookmarks, copiedAddr, expan
   ]
 
   return (
-    <Card className="bg-white border-gray-200 rounded-xl shadow-sm">
-      <CardHeader className="pb-2 pt-3 px-3">
-        <div className="flex items-center gap-1">
-          <Trophy size={14} className="text-orange-500" />
-          <CardTitle className="text-xs font-semibold text-gray-700">Wyniki — Top {wallets.length}</CardTitle>
-        </div>
-        <div className="flex gap-1 mt-2">
-          {tabs.map(t => (
-            <button
-              key={t.key}
-              onClick={() => setTab(t.key)}
-              className={`flex items-center gap-1 px-2.5 py-1 text-[11px] font-medium rounded-md transition-colors ${
-                tab === t.key
-                  ? 'bg-orange-500 text-white'
-                  : 'bg-gray-100 text-gray-500 hover:bg-gray-200'
-              }`}
-            >
-              <t.icon size={11} />
-              {t.label}
-            </button>
-          ))}
-        </div>
-
-        {/* ── Filters ── */}
-        <div className="mt-3 p-2.5 bg-gray-50 rounded-lg border border-gray-200">
-          <div className="flex flex-wrap gap-3 items-end">
-            <div className="space-y-0.5">
-              <label className="text-[9px] text-gray-400 font-medium uppercase" title="Pokaż tylko wallety które kupiły gdy kapitalizacja była poniżej X">
-                Maks. mcap przy wejściu
-              </label>
-              <select
-                value={maxMcapEntry}
-                onChange={e => setMaxMcapEntry(Number(e.target.value))}
-                className="block px-2 py-1 text-[11px] border border-gray-200 rounded-md bg-white text-gray-700 focus:outline-none focus:ring-1 focus:ring-orange-400"
-              >
-                {MCAP_ENTRY_OPTIONS.map(o => (
-                  <option key={o.value} value={o.value}>{o.label}</option>
-                ))}
-              </select>
-            </div>
-
-            <div className="space-y-0.5">
-              <label className="text-[9px] text-gray-400 font-medium uppercase" title="Wyklucz wallety które sprzedały szybciej niż X">
-                Min. czas trzymania
-              </label>
-              <select
-                value={minHoldTime}
-                onChange={e => setMinHoldTime(Number(e.target.value))}
-                className="block px-2 py-1 text-[11px] border border-gray-200 rounded-md bg-white text-gray-700 focus:outline-none focus:ring-1 focus:ring-orange-400"
-              >
-                {HOLD_TIME_OPTIONS.map(o => (
-                  <option key={o.value} value={o.value}>{o.label}</option>
-                ))}
-              </select>
-            </div>
-
-            <div className="space-y-0.5">
-              <label className="text-[9px] text-gray-400 font-medium uppercase" title="Pokaż tylko wallety które zarobiły minimum X na tym tokenie">
-                Min. PnL%
-              </label>
-              <select
-                value={minPnl}
-                onChange={e => setMinPnl(Number(e.target.value))}
-                className="block px-2 py-1 text-[11px] border border-gray-200 rounded-md bg-white text-gray-700 focus:outline-none focus:ring-1 focus:ring-orange-400"
-              >
-                {PNL_OPTIONS.map(o => (
-                  <option key={o.value} value={o.value}>{o.label}</option>
-                ))}
-              </select>
-            </div>
-
-            <div className="space-y-0.5">
-              <label className="text-[9px] text-gray-400 font-medium uppercase">
-                Typ walletu
-              </label>
-              <select
-                value={typeFilter}
-                onChange={e => setTypeFilter(e.target.value)}
-                className="block px-2 py-1 text-[11px] border border-gray-200 rounded-md bg-white text-gray-700 focus:outline-none focus:ring-1 focus:ring-orange-400"
-              >
-                {TYPE_OPTIONS.map(o => (
-                  <option key={o.value} value={o.value}>{o.label}</option>
-                ))}
-              </select>
-            </div>
+    <div className="space-y-3">
+      {/* ── Header + tabs + filters ── */}
+      <div className="bg-gray-900 border border-gray-800 rounded-xl overflow-hidden">
+        <div className="px-4 pt-3 pb-2">
+          <div className="flex items-center gap-2 mb-2">
+            <Trophy size={14} className="text-orange-500" />
+            <h2 className="text-sm font-semibold text-gray-200">Wyniki — Top {wallets.length}</h2>
           </div>
 
-          <div className="mt-1.5 text-[10px] text-gray-400">
-            Pokazuję <span className="font-semibold text-gray-600">{filtered.length}</span> z <span className="font-semibold text-gray-600">{wallets.length}</span> walletów
+          {/* Tabs */}
+          <div className="flex gap-1.5">
+            {tabs.map(t => (
+              <button
+                key={t.key}
+                onClick={() => setTab(t.key)}
+                className={`flex items-center gap-1 px-3 py-1.5 text-[11px] font-medium rounded-full transition-colors ${
+                  tab === t.key
+                    ? 'bg-orange-500 text-white'
+                    : 'bg-gray-800 text-gray-400 hover:bg-gray-700 hover:text-gray-300'
+                }`}
+              >
+                <t.icon size={11} />
+                {t.label}
+              </button>
+            ))}
           </div>
         </div>
-      </CardHeader>
-      <CardContent className="px-0 pb-2 pt-1">
-        {/* Sort buttons */}
-        <div className="flex items-center gap-1 px-3 pb-2 flex-wrap">
-          <span className="text-[9px] text-gray-400 uppercase font-medium mr-1">Sortuj:</span>
+
+        {/* Filters */}
+        <div className="px-4 pb-3">
+          <div className="p-2.5 bg-gray-800/50 rounded-lg border border-gray-700/50">
+            <div className="flex flex-wrap gap-3 items-end">
+              <div className="space-y-0.5">
+                <label className="text-[9px] text-gray-500 font-medium uppercase">Maks. mcap przy wejściu</label>
+                <select
+                  value={maxMcapEntry}
+                  onChange={e => setMaxMcapEntry(Number(e.target.value))}
+                  className="block px-2 py-1 text-[11px] border border-gray-700 rounded-md bg-gray-900 text-gray-300 focus:outline-none focus:ring-1 focus:ring-orange-500"
+                >
+                  {MCAP_ENTRY_OPTIONS.map(o => (
+                    <option key={o.value} value={o.value}>{o.label}</option>
+                  ))}
+                </select>
+              </div>
+              <div className="space-y-0.5">
+                <label className="text-[9px] text-gray-500 font-medium uppercase">Min. czas trzymania</label>
+                <select
+                  value={minHoldTime}
+                  onChange={e => setMinHoldTime(Number(e.target.value))}
+                  className="block px-2 py-1 text-[11px] border border-gray-700 rounded-md bg-gray-900 text-gray-300 focus:outline-none focus:ring-1 focus:ring-orange-500"
+                >
+                  {HOLD_TIME_OPTIONS.map(o => (
+                    <option key={o.value} value={o.value}>{o.label}</option>
+                  ))}
+                </select>
+              </div>
+              <div className="space-y-0.5">
+                <label className="text-[9px] text-gray-500 font-medium uppercase">Min. PnL%</label>
+                <select
+                  value={minPnl}
+                  onChange={e => setMinPnl(Number(e.target.value))}
+                  className="block px-2 py-1 text-[11px] border border-gray-700 rounded-md bg-gray-900 text-gray-300 focus:outline-none focus:ring-1 focus:ring-orange-500"
+                >
+                  {PNL_OPTIONS.map(o => (
+                    <option key={o.value} value={o.value}>{o.label}</option>
+                  ))}
+                </select>
+              </div>
+              <div className="space-y-0.5">
+                <label className="text-[9px] text-gray-500 font-medium uppercase">Typ walletu</label>
+                <select
+                  value={typeFilter}
+                  onChange={e => setTypeFilter(e.target.value)}
+                  className="block px-2 py-1 text-[11px] border border-gray-700 rounded-md bg-gray-900 text-gray-300 focus:outline-none focus:ring-1 focus:ring-orange-500"
+                >
+                  {TYPE_OPTIONS.map(o => (
+                    <option key={o.value} value={o.value}>{o.label}</option>
+                  ))}
+                </select>
+              </div>
+            </div>
+            <div className="mt-1.5 text-[10px] text-gray-500">
+              Pokazuję <span className="font-semibold text-gray-300">{filtered.length}</span> z <span className="font-semibold text-gray-300">{wallets.length}</span> walletów
+            </div>
+          </div>
+        </div>
+
+        {/* Sort pills */}
+        <div className="flex items-center gap-1 px-4 pb-3 flex-wrap">
+          <span className="text-[9px] text-gray-500 uppercase font-medium mr-1">Sortuj:</span>
           {([
-            ['score', 'Score'],
+            ['smartScore', 'Smart Score'],
+            ['score', 'Insider'],
+            ['earlyRatio', 'Early %'],
+            ['coverage', 'Coverage'],
             ['entryMcap', 'Mcap wej.'],
             ['holdDuration', 'Trzyma'],
             ['realized', 'Realized'],
             ['unrealized', 'Unrealized'],
             ['balance', 'Saldo'],
+            ['activity', 'Aktywność'],
           ] as [SortCol, string][]).map(([col, label]) => (
             <button
               key={col}
               onClick={() => handleColSort(col)}
-              className={`px-2 py-0.5 rounded text-[10px] font-medium transition-colors ${
+              className={`px-2.5 py-1 rounded-full text-[10px] font-medium transition-colors ${
                 sortCol === col
-                  ? 'bg-orange-100 text-orange-700'
-                  : 'bg-gray-50 text-gray-400 hover:bg-gray-100 hover:text-gray-600'
+                  ? 'bg-orange-500/20 text-orange-400 border border-orange-500/30'
+                  : 'bg-gray-800 text-gray-500 hover:bg-gray-700 hover:text-gray-400'
               }`}
             >
               {label}{colSortIcon(col)}
             </button>
           ))}
         </div>
+      </div>
 
-        {/* Wallet cards */}
-        <div className="divide-y divide-gray-100">
-          {filtered.map((w, i) => {
-            const isSaved = bookmarks.has(w.address)
-            const isExpanded = expanded.has(w.address)
-            const isCopied = copiedAddr === w.address
-            const smart = isSmartMoney(w)
-            const entryMcap = getEarliestEntryMcap(w)
-            const holdSec = getHoldDurationSec(w)
-            const stillHolding = getStillHolding(w)
-            const pnlPct = getPnlPercent(w)
-            const totalPnl = w.totalRealizedPnl + w.totalUnrealizedPnl
-            const firstBuyInfo = getFirstBuyInfo(w)
+      {/* ── Wallet cards ── */}
+      <div className="space-y-2">
+        {filtered.map((w, i) => {
+          const isSaved = bookmarks.has(w.address)
+          const isExpanded = expanded.has(w.address)
+          const isCopied = copiedAddr === w.address
+          const smart = isSmartMoney(w)
+          const holdSec = getHoldDurationSec(w)
+          const stillHolding = getStillHolding(w)
+          const pnlPct = getPnlPercent(w)
+          const totalPnl = w.totalRealizedPnl + w.totalUnrealizedPnl
+          const firstBuyInfo = getFirstBuyInfo(w)
+          const hunter = hunterBadge(w.earlyEntryRatio)
 
-            return (
-              <div key={w.address}>
-                {/* ── Card row ── */}
-                <div
-                  className={`px-3 py-2.5 cursor-pointer hover:bg-gray-50/80 transition-colors ${isExpanded ? 'bg-orange-50/30' : ''}`}
-                  onClick={() => onToggleExpand(w.address)}
-                >
-                  {/* Row 1: rank + address + badges + actions */}
-                  <div className="flex items-center gap-2 mb-1.5">
-                    <span className="text-gray-300 font-bold text-xs w-5 text-right shrink-0">{i + 1}</span>
+          return (
+            <div key={w.address} className={`bg-gray-900 border rounded-xl overflow-hidden transition-colors ${
+              smart ? 'border-orange-500/30' : 'border-gray-800'
+            }`}>
+              {/* ── Card header ── */}
+              <div
+                className={`px-4 py-3 cursor-pointer transition-colors ${
+                  isExpanded ? 'bg-gray-800/30' : 'hover:bg-gray-800/20'
+                }`}
+                onClick={() => onToggleExpand(w.address)}
+              >
+                {/* Row 1: rank + address + badges + score bar */}
+                <div className="flex items-center gap-2 mb-2">
+                  <span className="text-gray-600 font-bold text-xs w-5 text-right shrink-0">{i + 1}</span>
 
-                    {smart && (
-                      <span className="text-[8px] font-bold px-1.5 py-0.5 rounded bg-orange-100 text-orange-700 shrink-0">
-                        Smart
+                  {smart && (
+                    <span className={`text-[9px] font-bold px-2 py-0.5 rounded-full border shrink-0 ${smartScoreBadgeColor(w.smartScore, w.lateEntryWarning)}`}>
+                      {w.lateEntryWarning ? '⚠ Smart' : '★ Smart'}
+                    </span>
+                  )}
+                  {w.botWarning && (
+                    <span className="text-[9px] font-bold px-2 py-0.5 rounded-full bg-yellow-500/15 text-yellow-400 border border-yellow-500/30 shrink-0"
+                      title={`Bot activity: ${(w.botRatio * 100).toFixed(0)}% pozycji`}>
+                      ⚠ Bot
+                    </span>
+                  )}
+                  {hunter && (
+                    <span className={`text-[9px] font-bold px-2 py-0.5 rounded-full border shrink-0 flex items-center gap-1 ${hunter.cls}`}>
+                      {hunter.icon === 'target' ? <Target size={9} /> : hunter.icon === 'zap' ? <Zap size={9} /> : <Shield size={9} />}
+                      {hunter.text}
+                    </span>
+                  )}
+
+                  <span className="font-mono text-gray-300 text-[11px] font-medium">{shortAddr(w.address)}</span>
+
+                  <button
+                    onClick={e => { e.stopPropagation(); onCopy(w.address) }}
+                    className={`shrink-0 transition-colors ${isCopied ? 'text-emerald-400' : 'text-gray-600 hover:text-gray-400'}`}
+                    title="Kopiuj adres"
+                  >
+                    {isCopied ? <Check size={10} /> : <Copy size={10} />}
+                  </button>
+
+                  {/* Labels (hidden on mobile) */}
+                  <div className="hidden sm:flex flex-wrap gap-0.5 min-w-0">
+                    {w.labels.slice(0, 3).map(l => (
+                      <span key={l} className={`text-[8px] font-bold px-1.5 py-0 rounded border ${LABEL_STYLES[l] || 'bg-gray-700/50 text-gray-400 border-gray-600'}`}>
+                        {l}
+                      </span>
+                    ))}
+                    <span className={`text-[8px] font-bold px-1.5 py-0.5 rounded ${
+                      w.walletType === 'HOLDER'
+                        ? 'bg-emerald-500/15 text-emerald-400'
+                        : 'bg-orange-500/15 text-orange-400'
+                    }`}>
+                      {w.walletType}
+                    </span>
+                    {w.lastActiveTimestamp > 0 && (Date.now() / 1000 - w.lastActiveTimestamp) > 30 * 86400 && (
+                      <span className="text-[8px] font-bold px-1.5 py-0.5 rounded bg-red-500/15 text-red-400 border border-red-500/25">
+                        INACTIVE {Math.floor((Date.now() / 1000 - w.lastActiveTimestamp) / 86400)}d
                       </span>
                     )}
-
-                    <span className="font-mono text-gray-700 text-[11px] font-medium">{shortAddr(w.address)}</span>
-
-                    <button
-                      onClick={e => { e.stopPropagation(); onCopy(w.address) }}
-                      className={`shrink-0 transition-colors ${isCopied ? 'text-emerald-500' : 'text-gray-300 hover:text-gray-500'}`}
-                      title="Kopiuj adres"
-                    >
-                      {isCopied ? <Check size={10} /> : <Copy size={10} />}
-                    </button>
-
-                    {/* Labels */}
-                    <div className="flex flex-wrap gap-0.5 min-w-0">
-                      {w.labels.slice(0, 3).map(l => (
-                        <span key={l} className={`text-[8px] font-bold px-1.5 py-0 rounded border ${LABEL_STYLES[l] || 'bg-gray-100 text-gray-500 border-gray-200'}`}>
-                          {l}
-                        </span>
-                      ))}
-                      <span className={`text-[8px] font-bold px-1.5 py-0.5 rounded ${
-                        w.walletType === 'HOLDER'
-                          ? 'bg-emerald-50 text-emerald-600'
-                          : 'bg-orange-50 text-orange-600'
-                      }`}>
-                        {w.walletType}
-                      </span>
-                    </div>
-
-                    {/* Score + actions (right aligned) */}
-                    <div className="ml-auto flex items-center gap-1.5 shrink-0" onClick={e => e.stopPropagation()}>
-                      <span
-                        className={`font-bold px-2 py-0.5 rounded text-[10px] border ${scoreColor(w.insiderScore)}`}
-                        title={`Early: ${w.scoreBreakdown.earlyEntry}/30 | Hold: ${w.scoreBreakdown.holdDuration}/35 | PnL: ${w.scoreBreakdown.pnlScore}/25 | Consistency: ${w.scoreBreakdown.consistency}/10`}
-                      >
-                        {w.insiderScore}
-                      </span>
-                      <a
-                        href={`https://gmgn.ai/sol/address/${w.address}`}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="text-gray-300 hover:text-blue-500"
-                        title="GMGN"
-                      >
-                        <ExternalLink size={11} />
-                      </a>
-                      <button
-                        onClick={() => onBookmark(w.address)}
-                        className={`transition-colors ${isSaved ? 'text-emerald-500' : 'text-gray-300 hover:text-orange-400'}`}
-                        title={isSaved ? 'Już obserwowany' : 'Dodaj do obserwowanych'}
-                      >
-                        {isSaved ? <Check size={12} /> : <UserPlus size={12} />}
-                      </button>
-                      {isExpanded ? <ChevronDown size={12} className="text-gray-400" /> : <ChevronRight size={12} className="text-gray-400" />}
-                    </div>
                   </div>
 
-                  {/* Row 2: metrics grid */}
-                  <div className="flex items-center gap-3 ml-7 flex-wrap">
-                    {/* Tokens */}
-                    <div className="flex items-center gap-0.5">
-                      {w.tokens.slice(0, 3).map(t => (
-                        <span key={t.mint} className="text-[9px] font-bold text-indigo-600 bg-indigo-50 px-1.5 py-0 rounded">
-                          {t.symbol}
-                        </span>
-                      ))}
-                      {w.tokens.length > 3 && (
-                        <span className="text-[9px] text-gray-400">+{w.tokens.length - 3}</span>
-                      )}
-                    </div>
-
-                    <span className="text-gray-200">|</span>
-
-                    {/* Pierwszy zakup + wzrost */}
-                    {firstBuyInfo && (
-                      <div className="text-[10px]">
-                        <span className="text-gray-400">1. zakup:</span>
-                        <span className={`ml-0.5 font-semibold ${mcapEntryColor(firstBuyInfo.mcap)}`}>{fmtMcap(firstBuyInfo.mcap)}</span>
-                        <span className="text-gray-400 mx-0.5">&rarr;</span>
-                        <span className="font-medium text-gray-600">{fmtMcap(firstBuyInfo.currentMcap)}</span>
-                        {firstBuyInfo.growthPct !== 0 && (
-                          <span className={`ml-0.5 font-bold ${firstBuyInfo.growthPct > 0 ? 'text-emerald-600' : 'text-red-500'}`}>
-                            ({firstBuyInfo.growthPct > 0 ? '+' : ''}{firstBuyInfo.growthPct >= 1000 ? `${(firstBuyInfo.growthPct / 100).toFixed(0)}x` : `${firstBuyInfo.growthPct.toFixed(0)}%`})
-                          </span>
-                        )}
-                        <span className="text-gray-400 ml-0.5 text-[9px]">{firstBuyInfo.symbol}</span>
+                  {/* Score bar + actions (right) */}
+                  <div className="ml-auto flex items-center gap-2 shrink-0" onClick={e => e.stopPropagation()}>
+                    <div className="flex items-center gap-1.5" title={`Smart Score: ${(w.smartScore * 100).toFixed(1)}% | Coverage: ${(w.coverageRatio * 100).toFixed(0)}% | WinRate: ${w.weightedWinRate.toFixed(0)}% | Early: ${(w.earlyEntryRatio * 100).toFixed(0)}%`}>
+                      <div className="w-16 h-2 bg-gray-800 rounded-full overflow-hidden">
+                        <div className={`h-full rounded-full transition-all ${smartScoreColor(w.smartScore)}`} style={{ width: `${Math.min(w.smartScore * 100, 100)}%` }} />
                       </div>
-                    )}
-
-                    {/* Hold duration */}
-                    <div className="text-[10px]">
-                      <span className="text-gray-400">Hold:</span>
-                      <span className="ml-0.5 font-medium text-gray-600">{formatHoldDuration(holdSec)}</span>
-                      {stillHolding && <span className="text-emerald-500 ml-0.5 text-[8px]">aktywny</span>}
-                    </div>
-
-                    {/* Balance */}
-                    <div className="text-[10px]">
-                      <span className="text-gray-400">Saldo:</span>
-                      <span className="ml-0.5 font-medium text-sky-600">{formatUsd(w.solBalanceUsd)}</span>
-                    </div>
-
-                    {/* PnL */}
-                    <div className="text-[10px]">
-                      <span className="text-gray-400">PnL:</span>
-                      <span className={`ml-0.5 font-bold ${pnlColor(totalPnl)}`}>
-                        {totalPnl > 0 ? '+' : ''}{formatUsd(totalPnl)}
-                      </span>
-                      {pnlPct !== null && (
-                        <span className={`ml-0.5 text-[9px] ${pnlColor(pnlPct)}`}>
-                          ({pnlPct > 0 ? '+' : ''}{pnlPct.toFixed(0)}%)
-                        </span>
-                      )}
-                    </div>
-
-                    {/* Realized / Unrealized compact */}
-                    <div className="text-[10px] hidden sm:flex items-center gap-1.5">
-                      <span className={`${pnlColor(w.totalRealizedPnl)}`}>
-                        R: {w.totalRealizedPnl > 0 ? '+' : ''}{formatUsd(w.totalRealizedPnl)}
-                      </span>
-                      <span className={`${pnlColor(w.totalUnrealizedPnl)}`}>
-                        U: {w.totalUnrealizedPnl > 0 ? '+' : ''}{formatUsd(w.totalUnrealizedPnl)}
+                      <span className={`font-bold text-[11px] ${w.smartScore >= 0.7 ? 'text-emerald-400' : w.smartScore >= 0.4 ? 'text-amber-400' : 'text-gray-500'}`}>
+                        {(w.smartScore * 100).toFixed(0)}%
                       </span>
                     </div>
+                    <a
+                      href={`https://gmgn.ai/sol/address/${w.address}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-gray-600 hover:text-blue-400 transition-colors"
+                      title="GMGN"
+                    >
+                      <ExternalLink size={11} />
+                    </a>
+                    <button
+                      onClick={() => onBookmark(w.address)}
+                      className={`transition-colors ${isSaved ? 'text-emerald-400' : 'text-gray-600 hover:text-orange-400'}`}
+                      title={isSaved ? 'Już obserwowany' : 'Dodaj do obserwowanych'}
+                    >
+                      {isSaved ? <Check size={12} /> : <UserPlus size={12} />}
+                    </button>
+                    {isExpanded ? <ChevronDown size={12} className="text-gray-500" /> : <ChevronRight size={12} className="text-gray-500" />}
                   </div>
                 </div>
 
-                {/* Expanded: score breakdown + trade history */}
-                {isExpanded && (
-                  <div className="border-t border-gray-100 bg-gray-50/50 px-3 py-2.5 space-y-2">
-                    {/* Score breakdown */}
-                    <div className="grid grid-cols-2 sm:grid-cols-5 gap-1.5 text-[10px]">
-                      <div className="bg-white rounded border border-gray-200 px-2 py-1.5">
-                        <div className="text-[9px] text-gray-400 font-medium">Wczesne wejscie</div>
-                        <div className="font-bold text-gray-700">{w.scoreBreakdown.earlyEntry}<span className="text-gray-400 font-normal">/30</span></div>
+                {/* Row 2: 4-stat grid */}
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 ml-7">
+                  <div className="bg-gray-800/60 rounded-lg px-2.5 py-1.5">
+                    <div className="text-[9px] text-gray-500 font-medium">Avg Entry MCap</div>
+                    <div className={`font-bold text-sm ${avgEntryMcapColor(w.avgEntryMcap)}`}>{fmtMcap(w.avgEntryMcap)}</div>
+                  </div>
+                  <div className="bg-gray-800/60 rounded-lg px-2.5 py-1.5">
+                    <div className="text-[9px] text-gray-500 font-medium">Coverage</div>
+                    <div className="font-bold text-sm text-indigo-400">{w.tokensHit}/{totalTokensAnalyzed}
+                      <span className="text-gray-500 font-normal text-[10px] ml-1">({(w.coverageRatio * 100).toFixed(0)}%)</span>
+                    </div>
+                  </div>
+                  <div className="bg-gray-800/60 rounded-lg px-2.5 py-1.5">
+                    <div className="text-[9px] text-gray-500 font-medium">Realized PnL</div>
+                    <div className={`font-bold text-sm ${pnlColor(w.totalRealizedPnl)}`}>
+                      {w.totalRealizedPnl > 0 ? '+' : ''}{formatUsd(w.totalRealizedPnl)}
+                    </div>
+                  </div>
+                  <div className="bg-gray-800/60 rounded-lg px-2.5 py-1.5">
+                    <div className="text-[9px] text-gray-500 font-medium">Saldo SOL</div>
+                    <div className="font-bold text-sm text-sky-400">{formatUsd(w.solBalanceUsd)}</div>
+                    {(() => {
+                      const act = activityStatus(w.lastActiveTimestamp)
+                      return (
+                        <div className={`flex items-center gap-1 mt-0.5 ${act.cls}`}>
+                          <span className={`w-1.5 h-1.5 rounded-full ${act.dotCls} inline-block`} />
+                          <span className="text-[9px] font-medium">{act.label}</span>
+                        </div>
+                      )
+                    })()}
+                    {/* Trace button — available for every wallet */}
+                    <button
+                      onClick={e => { e.stopPropagation(); traceWallet(w.address) }}
+                      disabled={traceLoading.has(w.address)}
+                      className="mt-1 flex items-center gap-1 px-2 py-0.5 text-[9px] font-medium rounded-full bg-amber-500/15 text-amber-400 border border-amber-500/25 hover:bg-amber-500/25 transition-colors disabled:opacity-50"
+                      title="Śledź gdzie poszły środki"
+                    >
+                      {traceLoading.has(w.address) ? <Loader2 size={8} className="animate-spin" /> : <Search size={8} />}
+                      {traceResults.has(w.address) ? 'Traced' : 'Trace'}
+                    </button>
+                  </div>
+                </div>
+
+                {/* Row 3: tokens + quick metrics */}
+                <div className="flex items-center gap-3 ml-7 mt-2 flex-wrap">
+                  <div className="flex items-center gap-0.5">
+                    {w.tokens.slice(0, 4).map(t => (
+                      <span key={t.mint} className="text-[9px] font-bold text-indigo-400 bg-indigo-500/15 px-1.5 py-0.5 rounded">
+                        {t.symbol}
+                      </span>
+                    ))}
+                    {w.tokens.length > 4 && (
+                      <span className="text-[9px] text-gray-500">+{w.tokens.length - 4}</span>
+                    )}
+                  </div>
+
+                  <span className="text-gray-700">|</span>
+
+                  {firstBuyInfo && (
+                    <div className="text-[10px]">
+                      <span className="text-gray-500">1. zakup:</span>
+                      <span className={`ml-0.5 font-semibold ${mcapEntryColor(firstBuyInfo.mcap)}`}>{fmtMcap(firstBuyInfo.mcap)}</span>
+                      <span className="text-gray-600 mx-0.5">&rarr;</span>
+                      <span className="font-medium text-gray-400">{fmtMcap(firstBuyInfo.currentMcap)}</span>
+                      {firstBuyInfo.growthPct !== 0 && (
+                        <span className={`ml-0.5 font-bold ${firstBuyInfo.growthPct > 0 ? 'text-emerald-400' : 'text-red-400'}`}>
+                          ({firstBuyInfo.growthPct > 0 ? '+' : ''}{firstBuyInfo.growthPct >= 1000 ? `${(firstBuyInfo.growthPct / 100).toFixed(0)}x` : `${firstBuyInfo.growthPct.toFixed(0)}%`})
+                        </span>
+                      )}
+                      <span className="text-gray-500 ml-0.5 text-[9px]">{firstBuyInfo.symbol}</span>
+                    </div>
+                  )}
+
+                  <div className="text-[10px]">
+                    <span className="text-gray-500">Hold:</span>
+                    <span className="ml-0.5 font-medium text-gray-400">{formatHoldDuration(holdSec)}</span>
+                    {stillHolding && <span className="text-emerald-400 ml-0.5 text-[8px]">aktywny</span>}
+                  </div>
+
+                  <div className="text-[10px]">
+                    <span className="text-gray-500">PnL:</span>
+                    <span className={`ml-0.5 font-bold ${pnlColor(totalPnl)}`}>
+                      {totalPnl > 0 ? '+' : ''}{formatUsd(totalPnl)}
+                    </span>
+                    {pnlPct !== null && (
+                      <span className={`ml-0.5 text-[9px] ${pnlColor(pnlPct)}`}>
+                        ({pnlPct > 0 ? '+' : ''}{pnlPct.toFixed(0)}%)
+                      </span>
+                    )}
+                  </div>
+
+                  {w.earlyEntryRatio > 0 && (
+                    <div className="text-[10px]">
+                      <span className="text-gray-500">Early:</span>
+                      <span className={`ml-0.5 font-bold ${w.earlyEntryRatio >= 0.50 ? 'text-emerald-400' : 'text-gray-400'}`}>
+                        {(w.earlyEntryRatio * 100).toFixed(0)}%
+                      </span>
+                    </div>
+                  )}
+
+                  <div className="text-[10px] hidden sm:flex items-center gap-1.5">
+                    <span className={`${pnlColor(w.totalUnrealizedPnl)}`}>
+                      U: {w.totalUnrealizedPnl > 0 ? '+' : ''}{formatUsd(w.totalUnrealizedPnl)}
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              {/* ── Expanded card body ── */}
+              {isExpanded && (
+                <div className="border-t border-gray-800 bg-gray-950/50 px-4 py-3 space-y-3">
+                  {/* Smart Score breakdown */}
+                  <div className="grid grid-cols-3 sm:grid-cols-7 gap-1.5 text-[10px]">
+                    <div className="bg-gray-800/70 rounded-lg border border-gray-700/50 px-2.5 py-1.5">
+                      <div className="text-[9px] text-gray-500 font-medium">Smart Score</div>
+                      <div className="flex items-center gap-1 mt-0.5">
+                        <div className="flex-1 h-1.5 bg-gray-700 rounded-full overflow-hidden">
+                          <div className={`h-full rounded-full ${smartScoreColor(w.smartScore)}`} style={{ width: `${w.smartScore * 100}%` }} />
+                        </div>
+                        <span className="font-bold text-gray-200">{(w.smartScore * 100).toFixed(0)}%</span>
                       </div>
-                      <div className="bg-white rounded border border-gray-200 px-2 py-1.5">
-                        <div className="text-[9px] text-gray-400 font-medium">Czas trzymania</div>
-                        <div className="font-bold text-gray-700">{w.scoreBreakdown.holdDuration}<span className="text-gray-400 font-normal">/35</span></div>
+                    </div>
+                    <div className="bg-gray-800/70 rounded-lg border border-gray-700/50 px-2.5 py-1.5">
+                      <div className="text-[9px] text-gray-500 font-medium">Coverage</div>
+                      <div className="font-bold text-indigo-400">{w.tokensHit}/{totalTokensAnalyzed}</div>
+                    </div>
+                    <div className="bg-gray-800/70 rounded-lg border border-gray-700/50 px-2.5 py-1.5">
+                      <div className="text-[9px] text-gray-500 font-medium">Win Rate (ważony)</div>
+                      <div className="font-bold text-gray-200">{w.weightedWinRate.toFixed(0)}%</div>
+                    </div>
+                    <div className="bg-gray-800/70 rounded-lg border border-gray-700/50 px-2.5 py-1.5">
+                      <div className="text-[9px] text-gray-500 font-medium">Early Ratio</div>
+                      <div className={`font-bold ${w.earlyEntryRatio >= 0.50 ? 'text-emerald-400' : 'text-gray-200'}`}>
+                        {(w.earlyEntryRatio * 100).toFixed(0)}% <span className="text-gray-500 font-normal">({w.earlyEntryCount}/{w.tokensHit})</span>
                       </div>
-                      <div className="bg-white rounded border border-gray-200 px-2 py-1.5">
-                        <div className="text-[9px] text-gray-400 font-medium">PnL Score</div>
-                        <div className="font-bold text-gray-700">{w.scoreBreakdown.pnlScore}<span className="text-gray-400 font-normal">/25</span></div>
+                    </div>
+                    <div className="bg-gray-800/70 rounded-lg border border-gray-700/50 px-2.5 py-1.5">
+                      <div className="text-[9px] text-gray-500 font-medium">Avg Entry MCap</div>
+                      <div className={`font-bold ${avgEntryMcapColor(w.avgEntryMcap)}`}>{fmtMcap(w.avgEntryMcap)}</div>
+                    </div>
+                    <div className="bg-gray-800/70 rounded-lg border border-gray-700/50 px-2.5 py-1.5">
+                      <div className="text-[9px] text-gray-500 font-medium">Bot Ratio</div>
+                      <div className={`font-bold ${w.botRatio > 0.30 ? 'text-yellow-400' : 'text-gray-200'}`}>
+                        {(w.botRatio * 100).toFixed(0)}%
                       </div>
-                      <div className="bg-white rounded border border-gray-200 px-2 py-1.5">
-                        <div className="text-[9px] text-gray-400 font-medium">Konsekwencja</div>
-                        <div className="font-bold text-gray-700">{w.scoreBreakdown.consistency}<span className="text-gray-400 font-normal">/10</span></div>
+                    </div>
+                    {(() => {
+                      const act = activityStatus(w.lastActiveTimestamp)
+                      return (
+                        <div className="bg-gray-800/70 rounded-lg border border-gray-700/50 px-2.5 py-1.5">
+                          <div className="text-[9px] text-gray-500 font-medium">Ostatnia aktywność</div>
+                          <div className={`font-bold flex items-center gap-1 ${act.cls}`}>
+                            <span className={`w-1.5 h-1.5 rounded-full ${act.dotCls} inline-block`} />
+                            {w.lastActiveTimestamp > 0
+                              ? new Date(w.lastActiveTimestamp * 1000).toLocaleDateString('pl-PL', { day: '2-digit', month: '2-digit', year: '2-digit' })
+                              : '—'}
+                          </div>
+                        </div>
+                      )
+                    })()}
+                  </div>
+
+                  {/* Insider Score breakdown */}
+                  <div className="grid grid-cols-2 sm:grid-cols-5 gap-1.5 text-[10px]">
+                    <div className="bg-gray-800/70 rounded-lg border border-gray-700/50 px-2.5 py-1.5">
+                      <div className="text-[9px] text-gray-500 font-medium">Insider Score</div>
+                      <div className="font-bold text-gray-200">{w.insiderScore}<span className="text-gray-500 font-normal">/100</span></div>
+                    </div>
+                    <div className="bg-gray-800/70 rounded-lg border border-gray-700/50 px-2.5 py-1.5">
+                      <div className="text-[9px] text-gray-500 font-medium">Wczesne wejscie</div>
+                      <div className="font-bold text-gray-200">{w.scoreBreakdown.earlyEntry}<span className="text-gray-500 font-normal">/30</span></div>
+                    </div>
+                    <div className="bg-gray-800/70 rounded-lg border border-gray-700/50 px-2.5 py-1.5">
+                      <div className="text-[9px] text-gray-500 font-medium">Czas trzymania</div>
+                      <div className="font-bold text-gray-200">{w.scoreBreakdown.holdDuration}<span className="text-gray-500 font-normal">/35</span></div>
+                    </div>
+                    <div className="bg-gray-800/70 rounded-lg border border-gray-700/50 px-2.5 py-1.5">
+                      <div className="text-[9px] text-gray-500 font-medium">PnL Score</div>
+                      <div className="font-bold text-gray-200">{w.scoreBreakdown.pnlScore}<span className="text-gray-500 font-normal">/25</span></div>
+                    </div>
+                    <div className="bg-gray-800/70 rounded-lg border border-gray-700/50 px-2.5 py-1.5">
+                      <div className="text-[9px] text-gray-500 font-medium">PnL %</div>
+                      <div className={`font-bold ${pnlPct !== null && pnlPct > 0 ? 'text-emerald-400' : pnlPct !== null && pnlPct < 0 ? 'text-red-400' : 'text-gray-500'}`}>
+                        {pnlPct !== null ? `${pnlPct > 0 ? '+' : ''}${pnlPct.toFixed(0)}%` : '—'}
                       </div>
-                      <div className="bg-white rounded border border-gray-200 px-2 py-1.5">
-                        <div className="text-[9px] text-gray-400 font-medium">PnL %</div>
-                        <div className={`font-bold ${pnlPct !== null && pnlPct > 0 ? 'text-emerald-600' : pnlPct !== null && pnlPct < 0 ? 'text-red-500' : 'text-gray-500'}`}>
-                          {pnlPct !== null ? `${pnlPct > 0 ? '+' : ''}${pnlPct.toFixed(0)}%` : '—'}
+                    </div>
+                  </div>
+
+                  {/* PnL detailed */}
+                  <div className="flex gap-2 text-[10px]">
+                    <span className={`font-bold px-2.5 py-1 rounded-lg ${pnlColor(w.totalRealizedPnl)} ${w.totalRealizedPnl >= 0 ? 'bg-emerald-500/10' : 'bg-red-500/10'}`}>
+                      Realized: {w.totalRealizedPnl > 0 ? '+' : ''}{formatUsd(w.totalRealizedPnl)}
+                    </span>
+                    <span className={`font-bold px-2.5 py-1 rounded-lg ${pnlColor(w.totalUnrealizedPnl)} ${w.totalUnrealizedPnl >= 0 ? 'bg-blue-500/10' : 'bg-red-500/10'}`}>
+                      Unrealized: {w.totalUnrealizedPnl > 0 ? '+' : ''}{formatUsd(w.totalUnrealizedPnl)}
+                    </span>
+                  </div>
+
+                  {/* Wallet Trace Results */}
+                  {traceLoading.has(w.address) && (
+                    <div className="flex items-center gap-2 p-3 bg-amber-500/5 border border-amber-500/20 rounded-lg">
+                      <Loader2 size={14} className="animate-spin text-amber-400" />
+                      <span className="text-[11px] text-amber-400">Śledzenie transferów SOL... (skanowanie ~200 transakcji)</span>
+                    </div>
+                  )}
+                  {traceResults.has(w.address) && (() => {
+                    const trace = traceResults.get(w.address)!
+                    if (trace.error) return (
+                      <div className="p-3 bg-red-500/10 border border-red-500/20 rounded-lg text-[11px] text-red-400">
+                        Błąd trace: {trace.error}
+                      </div>
+                    )
+                    if (trace.destinations.length === 0) return (
+                      <div className="p-3 bg-gray-800/50 border border-gray-700/50 rounded-lg text-[11px] text-gray-400">
+                        Brak wykrytych transferów SOL &gt; 0.01 w ostatnich {trace.txScanned} transakcjach
+                      </div>
+                    )
+                    return (
+                      <div className="bg-amber-500/5 border border-amber-500/20 rounded-lg overflow-hidden">
+                        <div className="px-3 py-2 border-b border-amber-500/10 flex items-center justify-between">
+                          <div className="flex items-center gap-2">
+                            <ArrowRight size={12} className="text-amber-400" />
+                            <span className="text-[11px] font-semibold text-amber-400">
+                              Profit wysłany do {trace.destinations.length} wallet{trace.destinations.length > 1 ? 'ów' : 'a'}
+                            </span>
+                          </div>
+                          <span className="text-[10px] text-gray-500">
+                            Łącznie: <span className="text-amber-400 font-bold">{trace.totalSolTransferred.toFixed(1)} SOL</span>
+                            {' · '}{trace.txScanned} tx przeskanowanych
+                          </span>
+                        </div>
+                        <div className="divide-y divide-gray-800/50">
+                          {trace.destinations.map((dest, di) => (
+                            <div key={dest.address} className="px-3 py-2 flex items-center gap-3 hover:bg-gray-800/30 transition-colors">
+                              <span className="text-gray-600 text-[10px] font-bold w-4 text-right">{di + 1}</span>
+                              <div className="flex-1 min-w-0">
+                                <div className="flex items-center gap-2">
+                                  <span className="font-mono text-[11px] text-gray-300">{shortAddr(dest.address)}</span>
+                                  <button
+                                    onClick={e => { e.stopPropagation(); onCopy(dest.address) }}
+                                    className="text-gray-600 hover:text-gray-400 transition-colors"
+                                    title="Kopiuj adres"
+                                  >
+                                    <Copy size={9} />
+                                  </button>
+                                  <a href={`https://gmgn.ai/sol/address/${dest.address}`} target="_blank" rel="noopener noreferrer"
+                                    className="text-gray-600 hover:text-blue-400 transition-colors" title="GMGN">
+                                    <ExternalLink size={9} />
+                                  </a>
+                                  <button
+                                    onClick={e => { e.stopPropagation(); onBookmark(dest.address) }}
+                                    className={`transition-colors ${bookmarks.has(dest.address) ? 'text-emerald-400' : 'text-gray-600 hover:text-orange-400'}`}
+                                    title={bookmarks.has(dest.address) ? 'Już obserwowany' : 'Dodaj do My Wallets'}
+                                  >
+                                    {bookmarks.has(dest.address) ? <Check size={10} /> : <UserPlus size={10} />}
+                                  </button>
+                                </div>
+                                <div className="flex items-center gap-3 mt-0.5 text-[10px]">
+                                  <span className="text-amber-400 font-bold">
+                                    +{dest.totalSolReceived.toFixed(2)} SOL
+                                  </span>
+                                  <span className="text-gray-500">
+                                    {dest.transferCount} transfer{dest.transferCount > 1 ? 'ów' : ''}
+                                  </span>
+                                  <span className="text-gray-500">
+                                    ostatni: {new Date(dest.lastTransferAt * 1000).toLocaleDateString('pl-PL', { day: '2-digit', month: '2-digit', year: '2-digit' })}
+                                  </span>
+                                </div>
+                              </div>
+                              <div className="text-right shrink-0">
+                                <div className="text-[9px] text-gray-500">Saldo teraz</div>
+                                <div className={`font-bold text-[11px] ${dest.currentSolBalance > 10 ? 'text-emerald-400' : 'text-gray-400'}`}>
+                                  {dest.currentSolBalance.toFixed(2)} SOL
+                                </div>
+                              </div>
+                            </div>
+                          ))}
                         </div>
                       </div>
-                    </div>
+                    )
+                  })()}
 
-                    {/* PnL detailed */}
-                    <div className="flex gap-2 text-[10px]">
-                      <span className={`font-bold px-2 py-0.5 rounded ${pnlColor(w.totalRealizedPnl)} ${w.totalRealizedPnl >= 0 ? 'bg-emerald-50' : 'bg-red-50'}`}>
-                        Realized: {w.totalRealizedPnl > 0 ? '+' : ''}{formatUsd(w.totalRealizedPnl)}
-                      </span>
-                      <span className={`font-bold px-2 py-0.5 rounded ${pnlColor(w.totalUnrealizedPnl)} ${w.totalUnrealizedPnl >= 0 ? 'bg-blue-50' : 'bg-red-50'}`}>
-                        Unrealized: {w.totalUnrealizedPnl > 0 ? '+' : ''}{formatUsd(w.totalUnrealizedPnl)}
-                      </span>
+                  {/* Links */}
+                  <div className="flex items-center justify-between text-[10px] pb-1">
+                    <div className="flex items-center gap-3">
+                      <a href={`https://gmgn.ai/sol/address/${w.address}`} target="_blank" rel="noopener noreferrer"
+                        className="text-blue-400 hover:text-blue-300 font-medium">GMGN</a>
+                      <a href={`https://solscan.io/account/${w.address}`} target="_blank" rel="noopener noreferrer"
+                        className="text-blue-400 hover:text-blue-300 font-medium">Solscan</a>
                     </div>
-
-                    {/* Links */}
-                    <div className="flex items-center justify-between text-[10px] pb-1">
-                      <div className="flex items-center gap-2">
-                        <a
-                          href={`https://gmgn.ai/sol/address/${w.address}`}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="text-blue-500 hover:text-blue-700 font-medium"
-                        >
-                          GMGN
-                        </a>
-                        <a
-                          href={`https://solscan.io/account/${w.address}`}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="text-blue-500 hover:text-blue-700 font-medium"
-                        >
-                          Solscan
-                        </a>
-                      </div>
-                      <span className="text-gray-400">Transakcje dla {w.tokens.length} token{w.tokens.length > 1 ? 'ow' : 'a'}</span>
-                    </div>
-                    <TradeHistory wallet={w.address} tokens={w.tokens} />
+                    <span className="text-gray-500">Transakcje dla {w.tokens.length} token{w.tokens.length > 1 ? 'ow' : 'a'}</span>
                   </div>
-                )}
-              </div>
-            )
-          })}
-        </div>
-      </CardContent>
-    </Card>
+                  <TradeHistory wallet={w.address} tokens={w.tokens} />
+                </div>
+              )}
+            </div>
+          )
+        })}
+      </div>
+    </div>
   )
 }
 
@@ -980,6 +1261,22 @@ export default function TokenAnalyzer() {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const [enrichment, setEnrichment] = useState<any>(null)
   const [enrichLoading, setEnrichLoading] = useState(false)
+
+  // Listen for prefill from TokenScanner
+  useEffect(() => {
+    const handler = (e: Event) => {
+      const ca = (e as CustomEvent).detail as string
+      if (ca) {
+        setInput(prev => {
+          const existing = prev.trim()
+          if (existing.includes(ca)) return prev
+          return existing ? `${existing}\n${ca}` : ca
+        })
+      }
+    }
+    window.addEventListener('analyzer-prefill', handler)
+    return () => window.removeEventListener('analyzer-prefill', handler)
+  }, [])
 
   const toggleExpand = (addr: string) => {
     setExpanded(prev => {
@@ -1141,48 +1438,46 @@ export default function TokenAnalyzer() {
   return (
     <div className="space-y-3">
       {/* Input */}
-      <Card className="bg-white border-gray-200 rounded-xl shadow-sm">
-        <CardHeader className="pb-2 pt-3">
-          <CardTitle className="text-xs font-semibold text-gray-700">Insider Wallet Analyzer</CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-2">
+      <div className="bg-gray-900 border border-gray-800 rounded-xl overflow-hidden">
+        <div className="px-4 pt-3 pb-1">
+          <h2 className="text-sm font-semibold text-gray-200">Insider Wallet Analyzer</h2>
+        </div>
+        <div className="px-4 pb-3 space-y-2">
           <textarea
             value={input}
             onChange={e => setInput(e.target.value)}
             placeholder={"Wklej adresy mint tokenow (jeden na linie lub po przecinku)\nnp.:\nSo11111111111111111111111111111111111111112\nEPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v"}
-            className="w-full h-24 px-3 py-2 text-xs bg-gray-50 border border-gray-200 rounded-lg resize-none focus:outline-none focus:ring-1 focus:ring-orange-400 focus:border-orange-400 font-mono"
+            className="w-full h-24 px-3 py-2 text-xs bg-gray-950 border border-gray-700 rounded-lg resize-none focus:outline-none focus:ring-1 focus:ring-orange-500 focus:border-orange-500 font-mono text-gray-300 placeholder:text-gray-600"
             disabled={loading}
           />
           <div className="flex items-center justify-between">
-            <p className="text-[10px] text-gray-400">Top 50 walletow | min. saldo $15K | bez botow i gield</p>
+            <p className="text-[10px] text-gray-500">Top 50 walletow | min. saldo $1K | bez botow i gield</p>
             <button
               onClick={analyze}
               disabled={loading || !input.trim()}
-              className="px-3 py-1.5 text-xs font-medium bg-orange-500 text-white rounded-lg hover:bg-orange-600 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+              className="px-4 py-1.5 text-xs font-medium bg-orange-500 text-white rounded-lg hover:bg-orange-600 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
             >
               {loading ? 'Analizuje...' : 'Analizuj'}
             </button>
           </div>
-        </CardContent>
-      </Card>
+        </div>
+      </div>
 
       {/* Progress */}
       {loading && (
-        <Card className="bg-white border-gray-200 rounded-xl shadow-sm">
-          <CardContent className="pt-3 pb-3 space-y-1.5">
-            <div className="flex justify-between text-[11px]">
-              <span className="text-gray-600">{statusText}</span>
-              <span className="text-gray-500">{Math.round(progress)}%</span>
-            </div>
-            <Progress value={progress} className="h-1 bg-gray-100" />
-          </CardContent>
-        </Card>
+        <div className="bg-gray-900 border border-gray-800 rounded-xl p-3 space-y-1.5">
+          <div className="flex justify-between text-[11px]">
+            <span className="text-gray-400">{statusText}</span>
+            <span className="text-gray-500">{Math.round(progress)}%</span>
+          </div>
+          <Progress value={progress} className="h-1 bg-gray-800" />
+        </div>
       )}
 
       {/* Error */}
       {error && (
-        <div className="bg-red-50 border border-red-200 rounded-xl p-3">
-          <p className="text-red-600 text-xs">{error}</p>
+        <div className="bg-red-500/10 border border-red-500/30 rounded-xl p-3">
+          <p className="text-red-400 text-xs">{error}</p>
         </div>
       )}
 
@@ -1197,221 +1492,211 @@ export default function TokenAnalyzer() {
               { label: 'Wyniki', value: result.wallets.length },
               { label: 'Czas', value: `${(result.elapsedMs / 1000).toFixed(1)}s` },
             ].map(s => (
-              <div key={s.label} className="bg-white border border-gray-200 rounded-lg p-2.5 text-center shadow-sm">
-                <div className="text-lg font-bold text-orange-600">{s.value}</div>
-                <div className="text-[9px] text-gray-400 uppercase tracking-wide">{s.label}</div>
+              <div key={s.label} className="bg-gray-900 border border-gray-800 rounded-lg p-2.5 text-center">
+                <div className="text-lg font-bold text-orange-500">{s.value}</div>
+                <div className="text-[9px] text-gray-500 uppercase tracking-wide">{s.label}</div>
               </div>
             ))}
           </div>
 
           {/* Errors from processing */}
           {result.errors.length > 0 && (
-            <div className="bg-yellow-50 border border-yellow-200 rounded-xl p-2.5">
-              <p className="text-yellow-700 text-[11px] font-medium mb-0.5">Ostrzezenia:</p>
+            <div className="bg-yellow-500/10 border border-yellow-500/30 rounded-xl p-2.5">
+              <p className="text-yellow-400 text-[11px] font-medium mb-0.5">Ostrzezenia:</p>
               {result.errors.map((e, i) => (
-                <p key={i} className="text-yellow-600 text-[11px]">{e}</p>
+                <p key={i} className="text-yellow-400/80 text-[11px]">{e}</p>
               ))}
             </div>
           )}
 
           {/* Enrichment Panel */}
           {enrichLoading && (
-            <div className="p-4 bg-white border border-gray-200 rounded-xl shadow-sm animate-pulse">
-              <div className="h-4 bg-gray-100 rounded w-1/3 mb-3" />
+            <div className="p-4 bg-gray-900 border border-gray-800 rounded-xl animate-pulse">
+              <div className="h-4 bg-gray-800 rounded w-1/3 mb-3" />
               <div className="grid grid-cols-3 gap-2">
-                {[1,2,3].map(i => <div key={i} className="h-8 bg-gray-100 rounded" />)}
+                {[1,2,3].map(i => <div key={i} className="h-8 bg-gray-800 rounded" />)}
               </div>
             </div>
           )}
 
           {enrichment && !enrichLoading && (
-            <Card className="bg-white border-gray-200 rounded-xl shadow-sm overflow-hidden">
-              <CardContent className="p-0">
-                {/* Warnings */}
-                {enrichment.priceValidation?.warning && (
-                  <div className="px-4 py-2 bg-yellow-50 border-b border-yellow-200 text-yellow-700 text-xs">
-                    {enrichment.priceValidation.warning}
-                  </div>
-                )}
-                {enrichment.liquidityWarning && (
-                  <div className="px-4 py-2 bg-red-50 border-b border-red-200 text-red-600 text-xs">
-                    Niska likwidnosc — price impact przy $5k: {enrichment.priceImpact5kUsd?.toFixed(1)}%
-                  </div>
-                )}
+            <div className="bg-gray-900 border border-gray-800 rounded-xl overflow-hidden">
+              {enrichment.priceValidation?.warning && (
+                <div className="px-4 py-2 bg-yellow-500/10 border-b border-yellow-500/20 text-yellow-400 text-xs">
+                  {enrichment.priceValidation.warning}
+                </div>
+              )}
+              {enrichment.liquidityWarning && (
+                <div className="px-4 py-2 bg-red-500/10 border-b border-red-500/20 text-red-400 text-xs">
+                  Niska likwidnosc — price impact przy $5k: {enrichment.priceImpact5kUsd?.toFixed(1)}%
+                </div>
+              )}
 
-                {/* Token too new */}
-                {enrichment.isNewToken && (
-                  <div className="px-4 py-6 text-center text-gray-400 text-xs">
-                    Token zbyt nowy — brak danych w zewnetrznych bazach
-                  </div>
-                )}
+              {enrichment.isNewToken && (
+                <div className="px-4 py-6 text-center text-gray-500 text-xs">
+                  Token zbyt nowy — brak danych w zewnetrznych bazach
+                </div>
+              )}
 
-                {enrichment.hasData && (
-                  <div className="divide-y divide-gray-100">
-                    {/* Social & Sentiment */}
-                    {(enrichment.twitterFollowers != null || enrichment.telegramUsers != null || enrichment.sentimentVotesUp != null) && (
-                      <div className="px-4 py-3">
-                        <div className="flex items-center justify-between mb-2">
-                          <h3 className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider">Social & Sentiment</h3>
-                          <span className="text-[10px] text-gray-300">via {enrichment.dataSources?.join(', ')}</span>
-                        </div>
-                        <div className="flex gap-6">
-                          {enrichment.twitterFollowers != null && (
-                            <div>
-                              <div className="text-sm font-bold text-gray-900 font-mono">
-                                {enrichment.twitterFollowers >= 1000
-                                  ? `${(enrichment.twitterFollowers / 1000).toFixed(1)}K`
-                                  : String(enrichment.twitterFollowers)}
-                              </div>
-                              <div className="text-[10px] text-gray-400">Twitter</div>
+              {enrichment.hasData && (
+                <div className="divide-y divide-gray-800">
+                  {(enrichment.twitterFollowers != null || enrichment.telegramUsers != null || enrichment.sentimentVotesUp != null) && (
+                    <div className="px-4 py-3">
+                      <div className="flex items-center justify-between mb-2">
+                        <h3 className="text-[10px] font-semibold text-gray-500 uppercase tracking-wider">Social & Sentiment</h3>
+                        <span className="text-[10px] text-gray-600">via {enrichment.dataSources?.join(', ')}</span>
+                      </div>
+                      <div className="flex gap-6">
+                        {enrichment.twitterFollowers != null && (
+                          <div>
+                            <div className="text-sm font-bold text-gray-200 font-mono">
+                              {enrichment.twitterFollowers >= 1000
+                                ? `${(enrichment.twitterFollowers / 1000).toFixed(1)}K`
+                                : String(enrichment.twitterFollowers)}
                             </div>
-                          )}
-                          {enrichment.telegramUsers != null && (
-                            <div>
-                              <div className="text-sm font-bold text-gray-900 font-mono">
-                                {enrichment.telegramUsers >= 1000
-                                  ? `${(enrichment.telegramUsers / 1000).toFixed(1)}K`
-                                  : String(enrichment.telegramUsers)}
-                              </div>
-                              <div className="text-[10px] text-gray-400">Telegram</div>
+                            <div className="text-[10px] text-gray-500">Twitter</div>
+                          </div>
+                        )}
+                        {enrichment.telegramUsers != null && (
+                          <div>
+                            <div className="text-sm font-bold text-gray-200 font-mono">
+                              {enrichment.telegramUsers >= 1000
+                                ? `${(enrichment.telegramUsers / 1000).toFixed(1)}K`
+                                : String(enrichment.telegramUsers)}
                             </div>
-                          )}
-                          {enrichment.sentimentVotesUp != null && (
-                            <div>
-                              <div className={`text-sm font-bold font-mono ${
-                                enrichment.sentimentVotesUp > 60 ? 'text-emerald-600' : 'text-red-500'
-                              }`}>
-                                {enrichment.sentimentVotesUp.toFixed(0)}%
-                              </div>
-                              <div className="text-[10px] text-gray-400">Bullish</div>
+                            <div className="text-[10px] text-gray-500">Telegram</div>
+                          </div>
+                        )}
+                        {enrichment.sentimentVotesUp != null && (
+                          <div>
+                            <div className={`text-sm font-bold font-mono ${
+                              enrichment.sentimentVotesUp > 60 ? 'text-emerald-400' : 'text-red-400'
+                            }`}>
+                              {enrichment.sentimentVotesUp.toFixed(0)}%
                             </div>
-                          )}
-                        </div>
-                        {enrichment.narrativeSentiment != null && (
-                          <div className="mt-2 flex items-center gap-2">
-                            <span className="text-[10px] text-gray-400 shrink-0">Narracja</span>
-                            <div className="flex-1 h-1.5 bg-gray-100 rounded-full overflow-hidden">
-                              <div
-                                className={`h-full rounded-full ${
-                                  enrichment.narrativeSentiment > 60 ? 'bg-emerald-500' :
-                                  enrichment.narrativeSentiment > 40 ? 'bg-yellow-500' : 'bg-red-500'
-                                }`}
-                                style={{ width: `${enrichment.narrativeSentiment}%` }}
-                              />
-                            </div>
-                            <span className="text-[10px] text-gray-400 font-mono">{enrichment.narrativeSentiment}</span>
+                            <div className="text-[10px] text-gray-500">Bullish</div>
                           </div>
                         )}
                       </div>
-                    )}
-
-                    {/* Dev Activity — FIX: use > 0 to avoid rendering "0" */}
-                    {(Number(enrichment.githubStars) > 0 || Number(enrichment.githubCommits4w) > 0) && (
-                      <div className="px-4 py-3">
-                        <h3 className="text-[10px] font-semibold text-gray-400 mb-1.5 uppercase tracking-wider">Developer</h3>
-                        <div className="flex gap-4 text-xs">
-                          {Number(enrichment.githubStars) > 0 && (
-                            <span className="text-gray-600">{enrichment.githubStars} stars</span>
-                          )}
-                          {Number(enrichment.githubCommits4w) > 0 && (
-                            <span className={enrichment.githubCommits4w > 10 ? 'text-emerald-600' : 'text-gray-500'}>
-                              {enrichment.githubCommits4w} commits/4w
-                            </span>
-                          )}
-                          {enrichment.githubUrl && (
-                            <a href={enrichment.githubUrl} target="_blank" rel="noopener noreferrer"
-                              className="text-blue-500 hover:text-blue-600">GitHub</a>
-                          )}
+                      {enrichment.narrativeSentiment != null && (
+                        <div className="mt-2 flex items-center gap-2">
+                          <span className="text-[10px] text-gray-500 shrink-0">Narracja</span>
+                          <div className="flex-1 h-1.5 bg-gray-800 rounded-full overflow-hidden">
+                            <div
+                              className={`h-full rounded-full ${
+                                enrichment.narrativeSentiment > 60 ? 'bg-emerald-500' :
+                                enrichment.narrativeSentiment > 40 ? 'bg-yellow-500' : 'bg-red-500'
+                              }`}
+                              style={{ width: `${enrichment.narrativeSentiment}%` }}
+                            />
+                          </div>
+                          <span className="text-[10px] text-gray-500 font-mono">{enrichment.narrativeSentiment}</span>
                         </div>
-                      </div>
-                    )}
-
-                    {/* ATH & ROI */}
-                    {(enrichment.athUsd != null || enrichment.roi90d != null) && (
-                      <div className="px-4 py-3">
-                        <h3 className="text-[10px] font-semibold text-gray-400 mb-1.5 uppercase tracking-wider">ATH & ROI</h3>
-                        <div className="flex gap-4 text-xs flex-wrap items-center">
-                          {enrichment.athUsd != null && (
-                            <span className="text-gray-600">
-                              ATH: <span className="text-gray-900 font-mono font-semibold">${enrichment.athUsd.toFixed(6)}</span>
-                              {enrichment.athDate && (
-                                <span className="text-gray-300 ml-1">({enrichment.athDate.split('T')[0]})</span>
-                              )}
-                            </span>
-                          )}
-                          {enrichment.athChangePercent != null && (
-                            <span className={`font-medium ${enrichment.athChangePercent > -50 ? 'text-yellow-600' : 'text-red-500'}`}>
-                              {enrichment.athChangePercent.toFixed(1)}% od ATH
-                            </span>
-                          )}
-                          {enrichment.roi90d != null && (
-                            <span className={`font-medium ${enrichment.roi90d > 0 ? 'text-emerald-600' : 'text-red-500'}`}>
-                              ROI 90d: {enrichment.roi90d > 0 ? '+' : ''}{enrichment.roi90d.toFixed(0)}%
-                            </span>
-                          )}
-                        </div>
-                      </div>
-                    )}
-
-                    {/* News */}
-                    {enrichment.recentNews?.length > 0 && (
-                      <div className="px-4 py-3">
-                        <div className="flex items-center justify-between mb-1.5">
-                          <h3 className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider">Newsy</h3>
-                          <span className="text-[10px]">
-                            <span className="text-emerald-600">{enrichment.newsPositiveCount}+</span>
-                            {' / '}
-                            <span className="text-red-500">{enrichment.newsNegativeCount}-</span>
-                          </span>
-                        </div>
-                        <div className="space-y-1">
-                          {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
-                          {enrichment.recentNews.slice(0, 3).map((n: any, i: number) => (
-                            <a key={i} href={n.url} target="_blank" rel="noopener noreferrer"
-                              className="flex items-start gap-1.5 text-xs text-gray-500 hover:text-gray-900 transition-colors">
-                              <span className={`shrink-0 mt-0.5 ${
-                                n.sentiment === 'positive' ? 'text-emerald-500' :
-                                n.sentiment === 'negative' ? 'text-red-500' : 'text-gray-300'
-                              }`}>
-                                {n.sentiment === 'positive' ? '+' : n.sentiment === 'negative' ? '-' : '~'}
-                              </span>
-                              <span className="line-clamp-1">{n.title}</span>
-                            </a>
-                          ))}
-                        </div>
-                      </div>
-                    )}
-
-                    {/* Categories + footer */}
-                    <div className="px-4 py-2.5 flex items-center justify-between">
-                      <div className="flex flex-wrap gap-1">
-                        {enrichment.categories?.slice(0, 4).map((cat: string, i: number) => (
-                          <span key={i} className="px-2 py-0.5 bg-gray-100 text-gray-500 text-[10px] rounded-full">
-                            {cat}
-                          </span>
-                        ))}
-                      </div>
-                      {enrichment.enrichmentDurationMs != null && (
-                        <span className="text-[10px] text-gray-300 shrink-0 ml-2">
-                          {enrichment.enrichmentDurationMs}ms · {enrichment.dataSources?.length ?? 0} src
-                        </span>
                       )}
                     </div>
+                  )}
+
+                  {(Number(enrichment.githubStars) > 0 || Number(enrichment.githubCommits4w) > 0) && (
+                    <div className="px-4 py-3">
+                      <h3 className="text-[10px] font-semibold text-gray-500 mb-1.5 uppercase tracking-wider">Developer</h3>
+                      <div className="flex gap-4 text-xs">
+                        {Number(enrichment.githubStars) > 0 && (
+                          <span className="text-gray-400">{enrichment.githubStars} stars</span>
+                        )}
+                        {Number(enrichment.githubCommits4w) > 0 && (
+                          <span className={enrichment.githubCommits4w > 10 ? 'text-emerald-400' : 'text-gray-500'}>
+                            {enrichment.githubCommits4w} commits/4w
+                          </span>
+                        )}
+                        {enrichment.githubUrl && (
+                          <a href={enrichment.githubUrl} target="_blank" rel="noopener noreferrer"
+                            className="text-blue-400 hover:text-blue-300">GitHub</a>
+                        )}
+                      </div>
+                    </div>
+                  )}
+
+                  {(enrichment.athUsd != null || enrichment.roi90d != null) && (
+                    <div className="px-4 py-3">
+                      <h3 className="text-[10px] font-semibold text-gray-500 mb-1.5 uppercase tracking-wider">ATH & ROI</h3>
+                      <div className="flex gap-4 text-xs flex-wrap items-center">
+                        {enrichment.athUsd != null && (
+                          <span className="text-gray-400">
+                            ATH: <span className="text-gray-200 font-mono font-semibold">${enrichment.athUsd.toFixed(6)}</span>
+                            {enrichment.athDate && (
+                              <span className="text-gray-600 ml-1">({enrichment.athDate.split('T')[0]})</span>
+                            )}
+                          </span>
+                        )}
+                        {enrichment.athChangePercent != null && (
+                          <span className={`font-medium ${enrichment.athChangePercent > -50 ? 'text-yellow-400' : 'text-red-400'}`}>
+                            {enrichment.athChangePercent.toFixed(1)}% od ATH
+                          </span>
+                        )}
+                        {enrichment.roi90d != null && (
+                          <span className={`font-medium ${enrichment.roi90d > 0 ? 'text-emerald-400' : 'text-red-400'}`}>
+                            ROI 90d: {enrichment.roi90d > 0 ? '+' : ''}{enrichment.roi90d.toFixed(0)}%
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  )}
+
+                  {enrichment.recentNews?.length > 0 && (
+                    <div className="px-4 py-3">
+                      <div className="flex items-center justify-between mb-1.5">
+                        <h3 className="text-[10px] font-semibold text-gray-500 uppercase tracking-wider">Newsy</h3>
+                        <span className="text-[10px]">
+                          <span className="text-emerald-400">{enrichment.newsPositiveCount}+</span>
+                          {' / '}
+                          <span className="text-red-400">{enrichment.newsNegativeCount}-</span>
+                        </span>
+                      </div>
+                      <div className="space-y-1">
+                        {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
+                        {enrichment.recentNews.slice(0, 3).map((n: any, i: number) => (
+                          <a key={i} href={n.url} target="_blank" rel="noopener noreferrer"
+                            className="flex items-start gap-1.5 text-xs text-gray-400 hover:text-gray-200 transition-colors">
+                            <span className={`shrink-0 mt-0.5 ${
+                              n.sentiment === 'positive' ? 'text-emerald-400' :
+                              n.sentiment === 'negative' ? 'text-red-400' : 'text-gray-600'
+                            }`}>
+                              {n.sentiment === 'positive' ? '+' : n.sentiment === 'negative' ? '-' : '~'}
+                            </span>
+                            <span className="line-clamp-1">{n.title}</span>
+                          </a>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  <div className="px-4 py-2.5 flex items-center justify-between">
+                    <div className="flex flex-wrap gap-1">
+                      {enrichment.categories?.slice(0, 4).map((cat: string, i: number) => (
+                        <span key={i} className="px-2 py-0.5 bg-gray-800 text-gray-400 text-[10px] rounded-full">
+                          {cat}
+                        </span>
+                      ))}
+                    </div>
+                    {enrichment.enrichmentDurationMs != null && (
+                      <span className="text-[10px] text-gray-600 shrink-0 ml-2">
+                        {enrichment.enrichmentDurationMs}ms · {enrichment.dataSources?.length ?? 0} src
+                      </span>
+                    )}
                   </div>
-                )}
-              </CardContent>
-            </Card>
+                </div>
+              )}
+            </div>
           )}
 
           {result.wallets.length === 0 ? (
-            <Card className="bg-white border-gray-200 rounded-xl shadow-sm">
-              <CardContent className="pt-5 pb-5 text-center text-gray-500 text-xs">
-                Nie znaleziono walletow spelniajacych kryteria (saldo &gt;= $15K, bez botow/gield).
-              </CardContent>
-            </Card>
+            <div className="bg-gray-900 border border-gray-800 rounded-xl p-5 text-center text-gray-500 text-xs">
+              Nie znaleziono walletow spelniajacych kryteria.
+            </div>
           ) : (
             <WalletTable
               wallets={result.wallets}
+              totalTokensAnalyzed={result.totalTokensAnalyzed ?? result.processedTokens}
               onCopy={copyAddr}
               onBookmark={toggleBookmark}
               bookmarks={bookmarks}
@@ -1421,7 +1706,7 @@ export default function TokenAnalyzer() {
             />
           )}
 
-          <p className="text-[9px] text-gray-400 text-center">
+          <p className="text-[9px] text-gray-500 text-center">
             Dane z GMGN + DexScreener. Entry mcap to szacunek na podstawie avg cost. Nie jest to porada inwestycyjna.
           </p>
         </>
