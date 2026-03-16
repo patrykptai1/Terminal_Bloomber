@@ -191,17 +191,20 @@ export interface IncomeStatementEntry {
   date: string
   revenue: number | null
   ebitda: number | null
+  ebitdaNormalized: number | null
   netIncome: number | null
   grossProfit: number | null
   operatingIncome: number | null
   totalExpenses: number | null
   dilutedEPS: number | null
+  depreciation: number | null
 }
 
 export interface AnnualIncomeEntry {
   date: string
   revenue: number | null
   ebitda: number | null
+  ebitdaNormalized: number | null
   netIncome: number | null
 }
 
@@ -211,12 +214,43 @@ export interface CashFlowEntry {
   capitalExpenditure: number | null
   freeCashFlow: number | null
   stockBasedCompensation: number | null
+  depreciation: number | null
 }
 
 export interface BalanceSheetEntry {
   date: string
   cashAndEquivalents: number | null
   sharesOutstanding: number | null
+}
+
+export interface InstitutionHolder {
+  organization: string
+  pctHeld: number | null
+  position: number | null
+  value: number | null
+  pctChange: number | null
+}
+
+export interface InsiderTransaction {
+  name: string
+  relation: string
+  transactionType: string
+  shares: number | null
+  value: number | null
+  date: string
+}
+
+export interface OwnershipData {
+  insidersPercentHeld: number | null
+  institutionsPercentHeld: number | null
+  institutionsCount: number | null
+  institutions: InstitutionHolder[]
+  insiderTransactions: InsiderTransaction[]
+  netInsiderBuyCount: number
+  netInsiderSellCount: number
+  netInsiderBuyShares: number
+  netInsiderSellShares: number
+  totalInsiderShares: number | null
 }
 
 export interface EarningsData {
@@ -230,6 +264,7 @@ export interface EarningsData {
   balanceSheetQuarterly: BalanceSheetEntry[]
   balanceSheetAnnual: BalanceSheetEntry[]
   gaapEpsTTM: number | null
+  ownership: OwnershipData | null
 }
 
 export async function fetchEarnings(symbol: string): Promise<EarningsData> {
@@ -301,11 +336,13 @@ export async function fetchEarnings(symbol: string): Promise<EarningsData> {
       date: s.endDate ? (s.endDate instanceof Date ? formatDate(s.endDate) : typeof s.endDate === "string" ? s.endDate.split("T")[0] : formatDate(new Date(s.endDate))) : "",
       revenue: num(s.totalRevenue),
       ebitda: num(s.ebitda),
+      ebitdaNormalized: null,
       netIncome: num(s.netIncome),
       grossProfit: num(s.grossProfit),
       operatingIncome: num(s.operatingIncome),
       totalExpenses: num(s.totalExpenses ?? s.totalOperatingExpenses),
       dilutedEPS: num(s.dilutedEPS),
+      depreciation: null,
     }))
     .reverse()
 
@@ -331,15 +368,24 @@ export async function fetchEarnings(symbol: string): Promise<EarningsData> {
       for (const d of allDates) {
         const basic = basicQuarterly.find((s) => s.date === d)
         const ftsItem = ftsMap.get(d)
+        const da = num(ftsItem?.reconciledDepreciation) ?? num(ftsItem?.depreciationAmortizationDepletionIncomeStatement)
+        const opInc = basic?.operatingIncome ?? num(ftsItem?.operatingIncome)
+        // Use normalizedEBITDA (adjusted, excludes one-time items) as primary
+        // Fallback: OpIncome + D&A (manual calc), then GAAP EBITDA
+        const normEbitda = num(ftsItem?.normalizedEBITDA)
+        const calcEbitda = (opInc != null && da != null) ? opInc + da : null
+        const gaapEbitda = num(ftsItem?.EBITDA) ?? basic?.ebitda ?? null
         merged.push({
           date: d,
           revenue: basic?.revenue ?? num(ftsItem?.totalRevenue) ?? null,
-          ebitda: num(ftsItem?.EBITDA) ?? basic?.ebitda ?? null,
+          ebitda: gaapEbitda,
+          ebitdaNormalized: normEbitda ?? calcEbitda ?? gaapEbitda,
           netIncome: basic?.netIncome ?? num(ftsItem?.netIncome) ?? null,
           grossProfit: basic?.grossProfit ?? num(ftsItem?.grossProfit) ?? null,
-          operatingIncome: basic?.operatingIncome ?? num(ftsItem?.operatingIncome) ?? null,
+          operatingIncome: opInc ?? null,
           totalExpenses: basic?.totalExpenses ?? num(ftsItem?.totalExpenses) ?? null,
           dilutedEPS: basic?.dilutedEPS ?? num(ftsItem?.dilutedEPS) ?? null,
+          depreciation: da ?? null,
         })
       }
       incomeStatements = merged.sort((a, b) => a.date.localeCompare(b.date))
@@ -355,6 +401,7 @@ export async function fetchEarnings(symbol: string): Promise<EarningsData> {
       date: s.endDate ? (s.endDate instanceof Date ? formatDate(s.endDate) : typeof s.endDate === "string" ? s.endDate.split("T")[0] : formatDate(new Date(s.endDate))) : "",
       revenue: num(s.totalRevenue),
       ebitda: num(s.ebitda),
+      ebitdaNormalized: null,
       netIncome: num(s.netIncome),
     }))
     .reverse()
@@ -378,10 +425,13 @@ export async function fetchEarnings(symbol: string): Promise<EarningsData> {
       for (const d of allDates) {
         const basic = basicAnnual.find((s) => s.date === d)
         const ftsItem = ftsMap.get(d)
+        const normEbitda = num(ftsItem?.normalizedEBITDA)
+        const gaapEbitda = num(ftsItem?.EBITDA) ?? basic?.ebitda ?? null
         merged.push({
           date: d,
           revenue: basic?.revenue ?? num(ftsItem?.totalRevenue) ?? null,
-          ebitda: num(ftsItem?.EBITDA) ?? basic?.ebitda ?? null,
+          ebitda: gaapEbitda,
+          ebitdaNormalized: normEbitda ?? gaapEbitda,
           netIncome: basic?.netIncome ?? num(ftsItem?.netIncome) ?? null,
         })
       }
@@ -402,6 +452,7 @@ export async function fetchEarnings(symbol: string): Promise<EarningsData> {
       capitalExpenditure: num(item.capitalExpenditure) ?? num(item.purchaseOfPPE),
       freeCashFlow: num(item.freeCashFlow),
       stockBasedCompensation: num(item.stockBasedCompensation),
+      depreciation: num(item.depreciationAndAmortization) ?? num(item.depreciationAmortizationDepletion),
     })).sort((a: CashFlowEntry, b: CashFlowEntry) => a.date.localeCompare(b.date))
   } catch { /* graceful */ }
   try {
@@ -412,6 +463,7 @@ export async function fetchEarnings(symbol: string): Promise<EarningsData> {
       capitalExpenditure: num(item.capitalExpenditure) ?? num(item.purchaseOfPPE),
       freeCashFlow: num(item.freeCashFlow),
       stockBasedCompensation: num(item.stockBasedCompensation),
+      depreciation: num(item.depreciationAndAmortization) ?? num(item.depreciationAmortizationDepletion),
     })).sort((a: CashFlowEntry, b: CashFlowEntry) => a.date.localeCompare(b.date))
   } catch { /* graceful */ }
 
@@ -437,7 +489,45 @@ export async function fetchEarnings(symbol: string): Promise<EarningsData> {
       .sort((a: BalanceSheetEntry, b: BalanceSheetEntry) => a.date.localeCompare(b.date))
   } catch { /* graceful */ }
 
-  return { quarterly, financials, forwardEstimates, incomeStatements, annualStatements, cashFlowQuarterly, cashFlowAnnual, balanceSheetQuarterly, balanceSheetAnnual, gaapEpsTTM }
+  // Ownership data
+  let ownership: OwnershipData | null = null
+  try {
+    const ownerResult: any = await yf.quoteSummary(symbol, {
+      modules: ["majorHoldersBreakdown", "institutionOwnership", "insiderTransactions", "netSharePurchaseActivity"],
+    })
+    const mh = ownerResult.majorHoldersBreakdown
+    const io: any[] = ownerResult.institutionOwnership?.ownershipList ?? []
+    const itx: any[] = ownerResult.insiderTransactions?.transactions ?? []
+    const nsp = ownerResult.netSharePurchaseActivity
+
+    ownership = {
+      insidersPercentHeld: num(mh?.insidersPercentHeld),
+      institutionsPercentHeld: num(mh?.institutionsPercentHeld),
+      institutionsCount: mh?.institutionsCount ?? null,
+      institutions: io.slice(0, 10).map((i: any) => ({
+        organization: i.organization ?? "",
+        pctHeld: num(i.pctHeld),
+        position: num(i.position),
+        value: num(i.value),
+        pctChange: num(i.pctChange),
+      })),
+      insiderTransactions: itx.slice(0, 20).map((t: any) => ({
+        name: t.filerName ?? "",
+        relation: t.filerRelation ?? "",
+        transactionType: t.transactionText ?? "",
+        shares: num(t.shares),
+        value: num(t.value),
+        date: t.startDate ? (t.startDate instanceof Date ? formatDate(t.startDate) : typeof t.startDate === "string" ? t.startDate.split("T")[0] : "") : "",
+      })),
+      netInsiderBuyCount: nsp?.buyInfoCount ?? 0,
+      netInsiderSellCount: nsp?.sellInfoCount ?? 0,
+      netInsiderBuyShares: nsp?.buyInfoShares ?? 0,
+      netInsiderSellShares: nsp?.sellInfoShares ?? 0,
+      totalInsiderShares: num(nsp?.totalInsiderShares),
+    }
+  } catch { /* graceful */ }
+
+  return { quarterly, financials, forwardEstimates, incomeStatements, annualStatements, cashFlowQuarterly, cashFlowAnnual, balanceSheetQuarterly, balanceSheetAnnual, gaapEpsTTM, ownership }
 }
 
 export interface HistoricalPrice {
