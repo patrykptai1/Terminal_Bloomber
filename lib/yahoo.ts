@@ -173,6 +173,18 @@ export interface ForwardEstimate {
   epsHigh: number | null
   yearAgoEps: number | null
   yearAgoRev: number | null
+  // Revision data
+  epsTrendCurrent: number | null
+  epsTrend7d: number | null
+  epsTrend30d: number | null
+  epsTrend60d: number | null
+  epsTrend90d: number | null
+  epsRevisionsUp7d: number
+  epsRevisionsUp30d: number
+  epsRevisionsDown7d: number
+  epsRevisionsDown30d: number
+  revAnalysts: number
+  epsAnalysts: number
 }
 
 export interface IncomeStatementEntry {
@@ -182,6 +194,8 @@ export interface IncomeStatementEntry {
   netIncome: number | null
   grossProfit: number | null
   operatingIncome: number | null
+  totalExpenses: number | null
+  dilutedEPS: number | null
 }
 
 export interface AnnualIncomeEntry {
@@ -191,12 +205,31 @@ export interface AnnualIncomeEntry {
   netIncome: number | null
 }
 
+export interface CashFlowEntry {
+  date: string
+  operatingCashFlow: number | null
+  capitalExpenditure: number | null
+  freeCashFlow: number | null
+  stockBasedCompensation: number | null
+}
+
+export interface BalanceSheetEntry {
+  date: string
+  cashAndEquivalents: number | null
+  sharesOutstanding: number | null
+}
+
 export interface EarningsData {
   quarterly: EarningsEntry[]
   financials: FinancialsEntry[]
   forwardEstimates: ForwardEstimate[]
   incomeStatements: IncomeStatementEntry[]
   annualStatements: AnnualIncomeEntry[]
+  cashFlowQuarterly: CashFlowEntry[]
+  cashFlowAnnual: CashFlowEntry[]
+  balanceSheetQuarterly: BalanceSheetEntry[]
+  balanceSheetAnnual: BalanceSheetEntry[]
+  gaapEpsTTM: number | null
 }
 
 export async function fetchEarnings(symbol: string): Promise<EarningsData> {
@@ -226,7 +259,7 @@ export async function fetchEarnings(symbol: string): Promise<EarningsData> {
     earnings: num(e.earnings),
   }))
 
-  // Forward estimates from earningsTrend
+  // Forward estimates from earningsTrend (includes revision data)
   const et: any[] = result.earningsTrend?.trend ?? []
   const forwardEstimates: ForwardEstimate[] = et.map((e: any) => ({
     period: e.period ?? "",
@@ -241,7 +274,24 @@ export async function fetchEarnings(symbol: string): Promise<EarningsData> {
     epsHigh: num(e.earningsEstimate?.high),
     yearAgoEps: num(e.earningsEstimate?.yearAgoEps),
     yearAgoRev: num(e.revenueEstimate?.yearAgoRevenue),
+    epsTrendCurrent: num(e.epsTrend?.current),
+    epsTrend7d: num(e.epsTrend?.["7daysAgo"]),
+    epsTrend30d: num(e.epsTrend?.["30daysAgo"]),
+    epsTrend60d: num(e.epsTrend?.["60daysAgo"]),
+    epsTrend90d: num(e.epsTrend?.["90daysAgo"]),
+    epsRevisionsUp7d: e.epsRevisions?.upLast7days ?? 0,
+    epsRevisionsUp30d: e.epsRevisions?.upLast30days ?? 0,
+    epsRevisionsDown7d: e.epsRevisions?.downLast7Days ?? 0,
+    epsRevisionsDown30d: e.epsRevisions?.downLast30days ?? 0,
+    revAnalysts: e.revenueEstimate?.numberOfAnalysts ?? 0,
+    epsAnalysts: e.earningsEstimate?.numberOfAnalysts ?? 0,
   }))
+
+  // GAAP EPS TTM from earnings module
+  const gaapEpsTTM = num(result.earnings?.financialsChart?.yearly?.slice(-1)?.[0]?.earnings)
+    ?? (earningsChart.length >= 4
+      ? earningsChart.slice(-4).reduce((s: number, e: any) => s + (e.earnings ?? 0), 0) / (num(result.earnings?.financialsChart?.yearly?.[0]?.revenue) ? 1 : 1)
+      : null)
 
   // Income statements (quarterly) for Revenue & Net Income from quoteSummary
   const qStmts: any[] = result.incomeStatementHistoryQuarterly?.incomeStatementHistory ?? []
@@ -254,6 +304,8 @@ export async function fetchEarnings(symbol: string): Promise<EarningsData> {
       netIncome: num(s.netIncome),
       grossProfit: num(s.grossProfit),
       operatingIncome: num(s.operatingIncome),
+      totalExpenses: num(s.totalExpenses ?? s.totalOperatingExpenses),
+      dilutedEPS: num(s.dilutedEPS),
     }))
     .reverse()
 
@@ -286,6 +338,8 @@ export async function fetchEarnings(symbol: string): Promise<EarningsData> {
           netIncome: basic?.netIncome ?? num(ftsItem?.netIncome) ?? null,
           grossProfit: basic?.grossProfit ?? num(ftsItem?.grossProfit) ?? null,
           operatingIncome: basic?.operatingIncome ?? num(ftsItem?.operatingIncome) ?? null,
+          totalExpenses: basic?.totalExpenses ?? num(ftsItem?.totalExpenses) ?? null,
+          dilutedEPS: basic?.dilutedEPS ?? num(ftsItem?.dilutedEPS) ?? null,
         })
       }
       incomeStatements = merged.sort((a, b) => a.date.localeCompare(b.date))
@@ -296,7 +350,7 @@ export async function fetchEarnings(symbol: string): Promise<EarningsData> {
 
   // Annual income statements for long-term TTM trend
   const aStmts: any[] = result.incomeStatementHistory?.incomeStatementHistory ?? []
-  const annualStatements: AnnualIncomeEntry[] = aStmts
+  const basicAnnual: AnnualIncomeEntry[] = aStmts
     .map((s: any) => ({
       date: s.endDate ? (s.endDate instanceof Date ? formatDate(s.endDate) : typeof s.endDate === "string" ? s.endDate.split("T")[0] : formatDate(new Date(s.endDate))) : "",
       revenue: num(s.totalRevenue),
@@ -305,7 +359,85 @@ export async function fetchEarnings(symbol: string): Promise<EarningsData> {
     }))
     .reverse()
 
-  return { quarterly, financials, forwardEstimates, incomeStatements, annualStatements }
+  // Enrich annual with fundamentalsTimeSeries for EBITDA (quoteSummary returns N/A)
+  let annualStatements = basicAnnual
+  try {
+    const ftsAnnual: any[] = await yf.fundamentalsTimeSeries(symbol, {
+      period1: "2018-01-01",
+      type: "annual",
+      module: "financials",
+    })
+    if (ftsAnnual && ftsAnnual.length > 0) {
+      const ftsMap = new Map<string, any>()
+      for (const item of ftsAnnual) {
+        const d = item.date instanceof Date ? formatDate(item.date) : typeof item.date === "string" ? item.date.split("T")[0] : ""
+        if (d) ftsMap.set(d, item)
+      }
+      const allDates = new Set([...basicAnnual.map((s) => s.date), ...ftsMap.keys()])
+      const merged: AnnualIncomeEntry[] = []
+      for (const d of allDates) {
+        const basic = basicAnnual.find((s) => s.date === d)
+        const ftsItem = ftsMap.get(d)
+        merged.push({
+          date: d,
+          revenue: basic?.revenue ?? num(ftsItem?.totalRevenue) ?? null,
+          ebitda: num(ftsItem?.EBITDA) ?? basic?.ebitda ?? null,
+          netIncome: basic?.netIncome ?? num(ftsItem?.netIncome) ?? null,
+        })
+      }
+      annualStatements = merged.sort((a, b) => a.date.localeCompare(b.date))
+    }
+  } catch {
+    // graceful fallback
+  }
+
+  // Cash flow statements via fundamentalsTimeSeries
+  let cashFlowQuarterly: CashFlowEntry[] = []
+  let cashFlowAnnual: CashFlowEntry[] = []
+  try {
+    const cfQ: any[] = await yf.fundamentalsTimeSeries(symbol, { period1: "2020-01-01", type: "quarterly", module: "cash-flow" })
+    cashFlowQuarterly = (cfQ ?? []).map((item: any) => ({
+      date: item.date instanceof Date ? formatDate(item.date) : typeof item.date === "string" ? item.date.split("T")[0] : "",
+      operatingCashFlow: num(item.operatingCashFlow) ?? num(item.cashFlowFromContinuingOperatingActivities),
+      capitalExpenditure: num(item.capitalExpenditure) ?? num(item.purchaseOfPPE),
+      freeCashFlow: num(item.freeCashFlow),
+      stockBasedCompensation: num(item.stockBasedCompensation),
+    })).sort((a: CashFlowEntry, b: CashFlowEntry) => a.date.localeCompare(b.date))
+  } catch { /* graceful */ }
+  try {
+    const cfA: any[] = await yf.fundamentalsTimeSeries(symbol, { period1: "2018-01-01", type: "annual", module: "cash-flow" })
+    cashFlowAnnual = (cfA ?? []).map((item: any) => ({
+      date: item.date instanceof Date ? formatDate(item.date) : typeof item.date === "string" ? item.date.split("T")[0] : "",
+      operatingCashFlow: num(item.operatingCashFlow) ?? num(item.cashFlowFromContinuingOperatingActivities),
+      capitalExpenditure: num(item.capitalExpenditure) ?? num(item.purchaseOfPPE),
+      freeCashFlow: num(item.freeCashFlow),
+      stockBasedCompensation: num(item.stockBasedCompensation),
+    })).sort((a: CashFlowEntry, b: CashFlowEntry) => a.date.localeCompare(b.date))
+  } catch { /* graceful */ }
+
+  // Balance sheet via fundamentalsTimeSeries
+  let balanceSheetQuarterly: BalanceSheetEntry[] = []
+  let balanceSheetAnnual: BalanceSheetEntry[] = []
+  try {
+    const bsQ: any[] = await yf.fundamentalsTimeSeries(symbol, { period1: "2020-01-01", type: "quarterly", module: "balance-sheet" })
+    balanceSheetQuarterly = (bsQ ?? []).map((item: any) => ({
+      date: item.date instanceof Date ? formatDate(item.date) : typeof item.date === "string" ? item.date.split("T")[0] : "",
+      cashAndEquivalents: num(item.cashAndCashEquivalents) ?? num(item.cashCashEquivalentsAndShortTermInvestments),
+      sharesOutstanding: num(item.ordinarySharesNumber) ?? num(item.shareIssued),
+    })).filter((b: BalanceSheetEntry) => b.cashAndEquivalents != null || b.sharesOutstanding != null)
+      .sort((a: BalanceSheetEntry, b: BalanceSheetEntry) => a.date.localeCompare(b.date))
+  } catch { /* graceful */ }
+  try {
+    const bsA: any[] = await yf.fundamentalsTimeSeries(symbol, { period1: "2018-01-01", type: "annual", module: "balance-sheet" })
+    balanceSheetAnnual = (bsA ?? []).map((item: any) => ({
+      date: item.date instanceof Date ? formatDate(item.date) : typeof item.date === "string" ? item.date.split("T")[0] : "",
+      cashAndEquivalents: num(item.cashAndCashEquivalents) ?? num(item.cashCashEquivalentsAndShortTermInvestments),
+      sharesOutstanding: num(item.ordinarySharesNumber) ?? num(item.shareIssued),
+    })).filter((b: BalanceSheetEntry) => b.cashAndEquivalents != null || b.sharesOutstanding != null)
+      .sort((a: BalanceSheetEntry, b: BalanceSheetEntry) => a.date.localeCompare(b.date))
+  } catch { /* graceful */ }
+
+  return { quarterly, financials, forwardEstimates, incomeStatements, annualStatements, cashFlowQuarterly, cashFlowAnnual, balanceSheetQuarterly, balanceSheetAnnual, gaapEpsTTM }
 }
 
 export interface HistoricalPrice {
