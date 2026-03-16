@@ -215,6 +215,9 @@ export interface CashFlowEntry {
   freeCashFlow: number | null
   stockBasedCompensation: number | null
   depreciation: number | null
+  taxesPaid: number | null
+  interestPaid: number | null
+  changeInWorkingCapital: number | null
 }
 
 export interface BalanceSheetEntry {
@@ -265,6 +268,7 @@ export interface EarningsData {
   balanceSheetAnnual: BalanceSheetEntry[]
   gaapEpsTTM: number | null
   ownership: OwnershipData | null
+  sector: string | null
 }
 
 export async function fetchEarnings(symbol: string): Promise<EarningsData> {
@@ -469,6 +473,9 @@ export async function fetchEarnings(symbol: string): Promise<EarningsData> {
       freeCashFlow: num(item.freeCashFlow),
       stockBasedCompensation: num(item.stockBasedCompensation),
       depreciation: num(item.depreciationAndAmortization) ?? num(item.depreciationAmortizationDepletion),
+      taxesPaid: num(item.incomeTaxPaidSupplementalData) ?? num(item.taxesPaid),
+      interestPaid: num(item.interestPaidSupplementalData) ?? num(item.interestPaid),
+      changeInWorkingCapital: num(item.changeInWorkingCapital),
     })).sort((a: CashFlowEntry, b: CashFlowEntry) => a.date.localeCompare(b.date))
   } catch { /* graceful */ }
   try {
@@ -480,6 +487,9 @@ export async function fetchEarnings(symbol: string): Promise<EarningsData> {
       freeCashFlow: num(item.freeCashFlow),
       stockBasedCompensation: num(item.stockBasedCompensation),
       depreciation: num(item.depreciationAndAmortization) ?? num(item.depreciationAmortizationDepletion),
+      taxesPaid: num(item.incomeTaxPaidSupplementalData) ?? num(item.taxesPaid),
+      interestPaid: num(item.interestPaidSupplementalData) ?? num(item.interestPaid),
+      changeInWorkingCapital: num(item.changeInWorkingCapital),
     })).sort((a: CashFlowEntry, b: CashFlowEntry) => a.date.localeCompare(b.date))
   } catch { /* graceful */ }
 
@@ -543,7 +553,14 @@ export async function fetchEarnings(symbol: string): Promise<EarningsData> {
     }
   } catch { /* graceful */ }
 
-  return { quarterly, financials, forwardEstimates, incomeStatements, annualStatements, cashFlowQuarterly, cashFlowAnnual, balanceSheetQuarterly, balanceSheetAnnual, gaapEpsTTM, ownership }
+  // Sector (for bank detection in reconciliation)
+  let sector: string | null = null
+  try {
+    const profileResult: any = await yf.quoteSummary(symbol, { modules: ["assetProfile"] })
+    sector = profileResult.assetProfile?.sector ?? null
+  } catch { /* graceful */ }
+
+  return { quarterly, financials, forwardEstimates, incomeStatements, annualStatements, cashFlowQuarterly, cashFlowAnnual, balanceSheetQuarterly, balanceSheetAnnual, gaapEpsTTM, ownership, sector }
 }
 
 export interface HistoricalPrice {

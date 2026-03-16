@@ -1,258 +1,522 @@
-import { WalletTrade, WalletAnalysis, GraphData, TokenInfo } from '@/types'
+// ============================================================
+// WallStreet AI Terminal — Full Analysis Engine
+// Computes MARKET_DATA block from yahoo-finance2 data
+// ============================================================
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-type ParsedSwapTx = any
+import type { QuoteData, KeyStatistics, HistoricalPrice } from "@/lib/yahoo"
 
-/**
- * @deprecated — use GMGN data directly. Kept for potential fallback use.
- */
-export function parseSwapTransactions(
-  txs: ParsedSwapTx[],
-  getPrice: (unixSec: number) => number
-): Map<string, WalletTrade> {
-  const wallets = new Map<string, WalletTrade>()
+// --- Interfaces ---
 
-  for (const tx of txs) {
-    const wallet = tx.feePayer
-    if (!wallet) continue
-    if (Math.abs(tx.solDelta) < 0.0005) continue
+export interface FullAnalysis {
+  verdict: "BUY" | "HOLD" | "SELL" | "AVOID"
+  thesis: string
+  confidence: "High" | "Medium" | "Low"
 
-    const historicalPrice = getPrice(tx.blockTime)
-    const usdValue = tx.solDelta * historicalPrice   // negative=buy cost, positive=sale revenue
+  entry: number
+  stopLoss: number
+  stopLossPct: number
+  target1: number
+  target1Pct: number
+  target2: number
+  target2Pct: number
+  riskReward: number
 
-    const existing = wallets.get(wallet) ?? {
-      solSpent: 0,
-      solReceived: 0,
-      tradeCount: 0,
-      pnlUsd: 0,
-      unrealizedPnlUsd: 0,
-      buyCount: 0,
-      sellCount: 0,
-      tags: [] as string[],
-      startHoldingAt: null as number | null,
-      avgCostUsd: 0,
-      nativeBalance: 0,
-    }
-
-    if (tx.solDelta < 0) {
-      existing.solSpent    += Math.abs(tx.solDelta)
-      existing.pnlUsd      -= Math.abs(usdValue)    // cost (negative)
-    } else {
-      existing.solReceived += tx.solDelta
-      existing.pnlUsd      += usdValue               // revenue (positive)
-    }
-    existing.tradeCount += 1
-    wallets.set(wallet, existing)
+  checklist: {
+    valuationReasonable: boolean | null
+    revenueGrowthPositive: boolean | null
+    marginsStable: boolean | null
+    balanceSheetHealthy: boolean | null
+    aboveMA50: boolean | null
+    aboveMA200: boolean | null
+    noExcessivePremium: boolean | null
+    sectorTailwind: boolean | null
   }
 
-  return wallets
+  mainRisk: string
+
+  ma50: number | null
+  ma200: number | null
+  rsi: number | null
+  distanceFromMA50Pct: number | null
+  distanceFromMA200Pct: number | null
+  distanceFrom52High: number
+  distanceFrom52Low: number
+
+  peFwd: number | null
+  evEbitda: number | null
+  pfcf: number | null
+  sectorPE: number
+  premiumToSectorPE: number | null
+
+  grossMargin: number | null
+  operatingMargin: number | null
+  fcfMargin: number | null
+  debtEbitda: number | null
+  roe: number | null
+  revenueGrowth: number | null
+
+  riskMatrix: {
+    name: string
+    probability: "Low" | "Medium" | "High"
+    impact: "Low" | "Medium" | "High"
+    score: number
+    mitigation: string
+  }[]
+  overallRiskScore: number
+
+  bullCase: { probability: number; returnPct: number; price: number }
+  baseCase: { probability: number; returnPct: number; price: number }
+  bearCase: { probability: number; returnPct: number; price: number }
+  expectedReturn: number
+
+  sector: string
 }
 
-// ── Zmiana 4: Bot tags ──────────────────────────────────────────────────────
-const BOT_TAGS = new Set(['bundler', 'sniper', 'sandwich_bot'])
+// --- Sector PE Map ---
 
-// ── Zmiana 2: Dynamic winRate threshold ─────────────────────────────────────
-function getMinWinRate(tokenCount: number): number {
-  if (tokenCount <= 2) return 100   // oba muszą być na plusie
-  if (tokenCount <= 4) return 67    // min 2/3 lub 3/4
-  if (tokenCount <= 9) return 60    // min 60%
-  return 55                          // przy 10+ tokenach próg 55%
+const SECTOR_PE: Record<string, number> = {
+  Technology: 28.5,
+  Healthcare: 22.1,
+  "Financial Services": 14.8,
+  "Consumer Cyclical": 24.3,
+  "Consumer Defensive": 21.7,
+  Energy: 12.4,
+  Industrials: 21.9,
+  "Basic Materials": 17.2,
+  "Real Estate": 35.4,
+  Utilities: 18.6,
+  "Communication Services": 20.1,
 }
 
-// ── Zmiana 7: Temporal decay ────────────────────────────────────────────────
-function getTimeDecayWeight(createdAtUnix: number | null): number {
-  if (!createdAtUnix || createdAtUnix <= 0) return 0.50 // neutral default
-  const nowMs = Date.now()
-  const ageInDays = (nowMs - createdAtUnix * 1000) / (1000 * 60 * 60 * 24)
+const DEFAULT_SECTOR_PE = 21.0
 
-  if (ageInDays <= 7) return 1.00
-  if (ageInDays <= 30) return 0.85
-  if (ageInDays <= 90) return 0.65
-  if (ageInDays <= 180) return 0.40
-  return 0.20
+// --- Technical helpers ---
+
+function computeSMA(closes: number[], period: number): number | null {
+  if (closes.length < period) return null
+  const slice = closes.slice(-period)
+  return slice.reduce((a, b) => a + b, 0) / period
 }
 
-export function aggregateWallets(
-  tokenResults: Array<{
-    tokenAddress: string
-    tokenInfo: TokenInfo
-    walletTrades: Map<string, WalletTrade>
-  }>,
-  totalTokensAnalyzed: number,
-): WalletAnalysis[] {
-  const walletMap = new Map<
-    string,
+function computeRSI(closes: number[], period: number = 14): number | null {
+  if (closes.length < period + 1) return null
+
+  let gains = 0
+  let losses = 0
+
+  for (let i = closes.length - period; i < closes.length; i++) {
+    const diff = closes[i] - closes[i - 1]
+    if (diff > 0) gains += diff
+    else losses -= diff
+  }
+
+  const avgGain = gains / period
+  const avgLoss = losses / period
+
+  if (avgLoss === 0) return 100
+  const rs = avgGain / avgLoss
+  return 100 - 100 / (1 + rs)
+}
+
+function pctDiff(price: number, ref: number): number {
+  if (ref === 0) return 0
+  return ((price - ref) / ref) * 100
+}
+
+function riskLevel(score: number): "Low" | "Medium" | "High" {
+  if (score <= 3) return "Low"
+  if (score <= 6) return "Medium"
+  return "High"
+}
+
+function clampScore(v: number): number {
+  return Math.max(1, Math.min(9, Math.round(v)))
+}
+
+// --- Main function ---
+
+export function computeFullAnalysis(
+  quote: QuoteData,
+  stats: KeyStatistics | null,
+  history: HistoricalPrice[],
+  sectorOverride?: string
+): FullAnalysis {
+  const price = quote.price
+  const closes = history.filter((h) => h.close > 0).map((h) => h.close)
+  const lows = history.filter((h) => h.low > 0).map((h) => h.low)
+
+  // --- Technicals ---
+  const ma50 = computeSMA(closes, 50)
+  const ma200 = computeSMA(closes, 200)
+  const rsi = computeRSI(closes, 14)
+
+  const distanceFromMA50Pct = ma50 != null ? pctDiff(price, ma50) : null
+  const distanceFromMA200Pct = ma200 != null ? pctDiff(price, ma200) : null
+  const distanceFrom52High = quote.high52 > 0 ? pctDiff(price, quote.high52) : 0
+  const distanceFrom52Low = quote.low52 > 0 ? pctDiff(price, quote.low52) : 0
+
+  // --- Sector ---
+  // yahoo-finance2 quote doesn't expose sector directly; use a heuristic
+  // We'll try to infer from the exchange name or default
+  const sector = sectorOverride || "Technology"
+  const sectorPE = SECTOR_PE[sector] ?? DEFAULT_SECTOR_PE
+
+  // --- Valuation ---
+  const peFwd = quote.forwardPE
+  const evEbitda = stats?.enterpriseToEbitda ?? null
+  const fcf = stats?.freeCashFlow
+  const totalRev = stats?.totalRevenue
+  const pfcf =
+    fcf != null && fcf > 0 && quote.marketCap > 0
+      ? quote.marketCap / fcf
+      : null
+  const premiumToSectorPE =
+    peFwd != null ? ((peFwd - sectorPE) / sectorPE) * 100 : null
+
+  // --- Fundamentals ---
+  const profitMargin = stats?.profitMargin != null ? stats.profitMargin * 100 : null
+  const operatingMargin = stats?.operatingMargin != null ? stats.operatingMargin * 100 : null
+  const fcfMargin =
+    fcf != null && totalRev != null && totalRev > 0
+      ? (fcf / totalRev) * 100
+      : null
+  const debtEbitda = stats?.enterpriseToEbitda ?? null
+  const roe = stats?.returnOnEquity != null ? stats.returnOnEquity * 100 : null
+  const revenueGrowth = stats?.revenueGrowth != null ? stats.revenueGrowth * 100 : null
+
+  // --- Checklist ---
+  const valuationReasonable =
+    peFwd != null ? peFwd < sectorPE * 1.5 : null
+  const revenueGrowthPositive =
+    revenueGrowth != null ? revenueGrowth > 0 : null
+  const marginsStable =
+    operatingMargin != null ? operatingMargin > 0 : null
+  const balanceSheetHealthy =
+    stats?.currentRatio != null
+      ? stats.currentRatio > 1.0
+      : stats?.debtToEquity != null
+        ? stats.debtToEquity < 150
+        : null
+  const aboveMA50 = ma50 != null ? price > ma50 : null
+  const aboveMA200 = ma200 != null ? price > ma200 : null
+  const noExcessivePremium =
+    premiumToSectorPE != null ? premiumToSectorPE < 50 : null
+  // Sector tailwind: positive revenue growth + price trending up
+  const sectorTailwind =
+    revenueGrowth != null && ma50 != null
+      ? revenueGrowth > 5 && price > ma50
+      : null
+
+  const checklist = {
+    valuationReasonable,
+    revenueGrowthPositive,
+    marginsStable,
+    balanceSheetHealthy,
+    aboveMA50,
+    aboveMA200,
+    noExcessivePremium,
+    sectorTailwind,
+  }
+
+  // --- Verdict ---
+  let checkScore = 0
+  let aligned = 0
+  for (const v of Object.values(checklist)) {
+    if (v === true) {
+      checkScore++
+      aligned++
+    } else if (v === false) {
+      checkScore--
+      aligned++
+    }
+  }
+
+  let verdict: "BUY" | "HOLD" | "SELL" | "AVOID"
+  if (checkScore >= 5) verdict = "BUY"
+  else if (checkScore >= 2) verdict = "HOLD"
+  else if (checkScore >= -1) verdict = "SELL"
+  else verdict = "AVOID"
+
+  let confidence: "High" | "Medium" | "Low"
+  if (aligned >= 6) confidence = "High"
+  else if (aligned >= 4) confidence = "Medium"
+  else confidence = "Low"
+
+  // --- Entry / Stop / Targets ---
+  const entry = price
+
+  // Support: min of recent lows or 90% of price
+  const recentLows = lows.slice(-50)
+  const nearestSupport =
+    recentLows.length > 0 ? Math.min(...recentLows) : price * 0.9
+  const stopFromMA200 = ma200 != null ? ma200 : price * 0.9
+  const stopLoss = Math.max(
+    Math.min(stopFromMA200, price * 0.95),
+    nearestSupport,
+    price * 0.85 // hard floor: max 15% loss
+  )
+  // But stopLoss must be below price
+  const finalStopLoss = Math.min(stopLoss, price * 0.95)
+  const stopLossPct = pctDiff(finalStopLoss, price)
+
+  const target1Raw = quote.targetMeanPrice ?? price * 1.15
+  const target1 = Math.min(target1Raw, price * 1.5) // cap at 50% upside
+  const target1Pct = pctDiff(target1, price)
+
+  const target2Raw = quote.targetHighPrice ?? price * 1.3
+  const target2 = Math.min(target2Raw, price * 2.0) // cap at 100% upside
+  const target2Pct = pctDiff(target2, price)
+
+  const downside = price - finalStopLoss
+  const riskReward = downside > 0 ? (target1 - price) / downside : 0
+
+  // --- Thesis ---
+  const thesisParts: string[] = []
+  if (verdict === "BUY") {
+    if (revenueGrowthPositive) thesisParts.push("strong revenue growth")
+    if (aboveMA50 && aboveMA200) thesisParts.push("solid uptrend")
+    if (valuationReasonable) thesisParts.push("reasonable valuation")
+    if (thesisParts.length === 0) thesisParts.push("positive fundamentals")
+    thesisParts.unshift(`${quote.name} shows`)
+  } else if (verdict === "HOLD") {
+    thesisParts.push(`${quote.name} has mixed signals — hold for now`)
+  } else if (verdict === "SELL") {
+    thesisParts.push(`${quote.name} shows deteriorating metrics`)
+  } else {
+    thesisParts.push(`${quote.name} has too many red flags to invest`)
+  }
+  const thesis = thesisParts.join(", ") + "."
+
+  // --- Main Risk ---
+  let mainRisk = "General market downturn"
+  if (peFwd != null && peFwd > sectorPE * 2)
+    mainRisk = "Extremely high valuation — vulnerable to correction"
+  else if (stats?.debtToEquity != null && stats.debtToEquity > 200)
+    mainRisk = "High debt levels — sensitive to interest rate changes"
+  else if (revenueGrowth != null && revenueGrowth < -5)
+    mainRisk = "Revenue decline — business may be shrinking"
+  else if (rsi != null && rsi > 75)
+    mainRisk = "Overbought on RSI — short-term pullback likely"
+  else if (distanceFrom52High < -30)
+    mainRisk = "Significant drawdown from highs — trend may be broken"
+  else if (peFwd != null && peFwd > sectorPE * 1.3)
+    mainRisk = `Premium valuation at ${peFwd.toFixed(1)}x vs sector ${sectorPE.toFixed(1)}x — limited margin of safety`
+  else if (stats?.debtToEquity != null && stats.debtToEquity > 100)
+    mainRisk = "Elevated leverage — earnings sensitive to interest rate environment"
+  else if (rsi != null && rsi > 65)
+    mainRisk = "Momentum stretched — near-term consolidation possible"
+  else if (distanceFrom52High < -15)
+    mainRisk = "Pullback from highs — watch for support confirmation"
+  else if (profitMargin != null && profitMargin < 30)
+    mainRisk = "Low margins — vulnerable to input cost inflation"
+  else if (peFwd != null && peFwd > sectorPE)
+    mainRisk = `Trading above sector average (${peFwd.toFixed(1)}x vs ${sectorPE.toFixed(1)}x) — growth must justify premium`
+  else if (revenueGrowth != null && revenueGrowth > 30)
+    mainRisk = "Rapid growth may attract competition and compress margins over time"
+  else if (operatingMargin != null && operatingMargin > 30)
+    mainRisk = "High profitability invites competitive pressure and regulatory scrutiny"
+  else
+    mainRisk = `Sector-wide risks: macroeconomic slowdown, regulatory changes in ${sector}`
+
+  // --- Risk Matrix ---
+  // Valuation Risk
+  const valScore = clampScore(
+    peFwd != null
+      ? peFwd > sectorPE * 2
+        ? 8
+        : peFwd > sectorPE * 1.5
+          ? 6
+          : peFwd > sectorPE
+            ? 4
+            : 2
+      : 5
+  )
+
+  // Industry Disruption
+  const disruptScore = clampScore(
+    revenueGrowth != null
+      ? revenueGrowth < 0
+        ? 7
+        : revenueGrowth < 5
+          ? 5
+          : 3
+      : 5
+  )
+
+  // Balance Sheet
+  const bsScore = clampScore(
+    stats?.debtToEquity != null
+      ? stats.debtToEquity > 200
+        ? 8
+        : stats.debtToEquity > 100
+          ? 6
+          : stats.debtToEquity > 50
+            ? 4
+            : 2
+      : 5
+  )
+
+  // Macro/Rates
+  const macroScore = clampScore(
+    quote.beta != null
+      ? Math.abs(quote.beta) > 1.5
+        ? 7
+        : Math.abs(quote.beta) > 1.0
+          ? 5
+          : 3
+      : 5
+  )
+
+  // Competitive Threat
+  const compScore = clampScore(
+    operatingMargin != null
+      ? operatingMargin < 5
+        ? 7
+        : operatingMargin < 15
+          ? 5
+          : 3
+      : 5
+  )
+
+  // Execution Risk
+  const execScore = clampScore(
+    revenueGrowth != null && operatingMargin != null
+      ? revenueGrowth < 0 && operatingMargin < 10
+        ? 8
+        : revenueGrowth < 0 || operatingMargin < 10
+          ? 6
+          : 3
+      : 5
+  )
+
+  const riskMatrix = [
     {
-      appearances: number
-      tokens: string[]
-      tokenSymbols: string[]
-      tokenFirstSeen: (number | null)[]
-      tokenCreatedAts: (number | null)[]  // pairCreatedAt per token (for temporal decay)
-      tokenPnls: number[]                 // pnl per token position (for weighted winRate)
-      totalPnlUsd: number
-      totalUnrealizedUsd: number
-      maxNativeBalance: number
-      totalBuyCount: number
-      totalSellCount: number
-      tokenTags: string[][]
-    }
-  >()
+      name: "Valuation Risk",
+      probability: riskLevel(valScore),
+      impact: riskLevel(Math.min(valScore + 1, 9)) as "Low" | "Medium" | "High",
+      score: valScore,
+      mitigation: "Monitor P/E vs sector. Set stop-loss at support.",
+    },
+    {
+      name: "Industry Disruption",
+      probability: riskLevel(disruptScore),
+      impact: "High" as const,
+      score: disruptScore,
+      mitigation: "Track competitive landscape and innovation pipeline.",
+    },
+    {
+      name: "Balance Sheet",
+      probability: riskLevel(bsScore),
+      impact: riskLevel(bsScore) as "Low" | "Medium" | "High",
+      score: bsScore,
+      mitigation: "Monitor debt covenants and refinancing schedule.",
+    },
+    {
+      name: "Macro / Rates",
+      probability: riskLevel(macroScore),
+      impact: "Medium" as const,
+      score: macroScore,
+      mitigation: "Hedge with sector rotation; watch Fed policy.",
+    },
+    {
+      name: "Competitive Threat",
+      probability: riskLevel(compScore),
+      impact: "Medium" as const,
+      score: compScore,
+      mitigation: "Monitor market share and margin trends quarterly.",
+    },
+    {
+      name: "Execution Risk",
+      probability: riskLevel(execScore),
+      impact: "High" as const,
+      score: execScore,
+      mitigation: "Watch earnings guidance and management turnover.",
+    },
+  ]
 
-  for (const { tokenAddress, tokenInfo, walletTrades } of tokenResults) {
-    for (const [walletAddr, trade] of walletTrades) {
-      const existing = walletMap.get(walletAddr) ?? {
-        appearances: 0,
-        tokens: [],
-        tokenSymbols: [],
-        tokenFirstSeen: [],
-        tokenCreatedAts: [],
-        tokenPnls: [],
-        totalPnlUsd: 0,
-        totalUnrealizedUsd: 0,
-        maxNativeBalance: 0,
-        totalBuyCount: 0,
-        totalSellCount: 0,
-        tokenTags: [],
-      }
-      existing.appearances += 1
-      if (!existing.tokens.includes(tokenAddress)) {
-        existing.tokens.push(tokenAddress)
-        existing.tokenSymbols.push(tokenInfo.symbol)
-        existing.tokenFirstSeen.push(trade.startHoldingAt ?? null)
-        existing.tokenCreatedAts.push(tokenInfo.pairCreatedAt ?? null)
-        existing.tokenPnls.push(trade.pnlUsd)
-      }
-      existing.totalPnlUsd += trade.pnlUsd
-      existing.totalUnrealizedUsd += trade.unrealizedPnlUsd ?? 0
-      if (trade.nativeBalance > existing.maxNativeBalance) existing.maxNativeBalance = trade.nativeBalance
-      existing.totalBuyCount += trade.buyCount
-      existing.totalSellCount += trade.sellCount
-      existing.tokenTags.push(trade.tags)
-      walletMap.set(walletAddr, existing)
-    }
+  const overallRiskScore = Math.round(
+    riskMatrix.reduce((s, r) => s + r.score, 0) / riskMatrix.length
+  )
+
+  // --- Bull / Base / Bear ---
+  const momentumPositive = aboveMA50 === true && aboveMA200 === true
+  const bullProb = momentumPositive ? 35 : 25
+  const bearProb = momentumPositive ? 20 : 30
+  const baseProb = 100 - bullProb - bearProb
+
+  const bullPrice = target2
+  const basePrice = target1
+  const bearPrice = finalStopLoss
+
+  const bullReturn = pctDiff(bullPrice, price)
+  const baseReturn = pctDiff(basePrice, price)
+  const bearReturn = pctDiff(bearPrice, price)
+
+  const expectedReturn =
+    (bullProb * bullReturn + baseProb * baseReturn + bearProb * bearReturn) / 100
+
+  return {
+    verdict,
+    thesis,
+    confidence,
+
+    entry,
+    stopLoss: round2(finalStopLoss),
+    stopLossPct: round2(stopLossPct),
+    target1: round2(target1),
+    target1Pct: round2(target1Pct),
+    target2: round2(target2),
+    target2Pct: round2(target2Pct),
+    riskReward: round2(riskReward),
+
+    checklist,
+    mainRisk,
+
+    ma50: ma50 != null ? round2(ma50) : null,
+    ma200: ma200 != null ? round2(ma200) : null,
+    rsi: rsi != null ? round2(rsi) : null,
+    distanceFromMA50Pct: distanceFromMA50Pct != null ? round2(distanceFromMA50Pct) : null,
+    distanceFromMA200Pct: distanceFromMA200Pct != null ? round2(distanceFromMA200Pct) : null,
+    distanceFrom52High: round2(distanceFrom52High),
+    distanceFrom52Low: round2(distanceFrom52Low),
+
+    peFwd,
+    evEbitda,
+    pfcf: pfcf != null ? round2(pfcf) : null,
+    sectorPE,
+    premiumToSectorPE: premiumToSectorPE != null ? round2(premiumToSectorPE) : null,
+
+    grossMargin: profitMargin, // profit margin as proxy for gross margin
+    operatingMargin: operatingMargin != null ? round2(operatingMargin) : null,
+    fcfMargin: fcfMargin != null ? round2(fcfMargin) : null,
+    debtEbitda: debtEbitda != null ? round2(debtEbitda) : null,
+    roe: roe != null ? round2(roe) : null,
+    revenueGrowth: revenueGrowth != null ? round2(revenueGrowth) : null,
+
+    riskMatrix,
+    overallRiskScore,
+
+    bullCase: {
+      probability: bullProb,
+      returnPct: round2(bullReturn),
+      price: round2(bullPrice),
+    },
+    baseCase: {
+      probability: baseProb,
+      returnPct: round2(baseReturn),
+      price: round2(basePrice),
+    },
+    bearCase: {
+      probability: bearProb,
+      returnPct: round2(bearReturn),
+      price: round2(bearPrice),
+    },
+    expectedReturn: round2(expectedReturn),
+
+    sector,
   }
-
-  const wallets: WalletAnalysis[] = []
-  for (const [address, data] of walletMap) {
-    const tokenCount = data.tokens.length
-
-    // ── Zmiana 4: Bot filter with botRatio ──────────────────────────────────
-    let botTaggedCount = 0
-    for (const tags of data.tokenTags) {
-      if (tags.some(t => BOT_TAGS.has(t))) botTaggedCount++
-    }
-    const botRatio = data.tokenTags.length > 0 ? botTaggedCount / data.tokenTags.length : 0
-
-    // botRatio > 0.70 → reject entirely
-    if (botRatio > 0.70) continue
-
-    const botWarning = botRatio > 0.30 // 0.30 < botRatio <= 0.70
-
-    // ── Zmiana 7: Temporal decay weighted winRate ────────────────────────────
-    let weightedWins = 0
-    let weightedTotal = 0
-    for (let i = 0; i < tokenCount; i++) {
-      const weight = getTimeDecayWeight(data.tokenCreatedAts[i])
-      weightedTotal += weight
-      if (data.tokenPnls[i] > 0) weightedWins += weight
-    }
-    const winRate = weightedTotal > 0 ? (weightedWins / weightedTotal) * 100 : 0
-
-    // ── Zmiana 2: Dynamic winRate threshold ─────────────────────────────────
-    // ── Zmiana 1: Coverage ratio ────────────────────────────────────────────
-    const coverageRatio = totalTokensAnalyzed > 0 ? tokenCount / totalTokensAnalyzed : 0
-
-    // ── Zmiana 1: New Smart Score (computed without early bonus — added later in route.ts)
-    const isSmartMoney =
-      data.totalPnlUsd > 0 &&
-      tokenCount >= 2 &&
-      winRate >= getMinWinRate(tokenCount) &&
-      data.totalBuyCount >= 1 &&
-      data.totalSellCount >= 1
-
-    // Base smart score: coverage(0.40) + pnl(0.35) + consistency(0.25)
-    let smartScore = 0
-    if (isSmartMoney) {
-      const pnlWeight = Math.min(Math.log10(data.totalPnlUsd + 1) / Math.log10(100000), 1.0)
-      const consistency = winRate / 100
-      smartScore = (coverageRatio * 0.40) + (pnlWeight * 0.35) + (consistency * 0.25)
-    }
-
-    wallets.push({
-      address,
-      appearances: data.appearances,
-      tokens: data.tokens,
-      tokenSymbols: data.tokenSymbols,
-      tokenFirstSeen: data.tokenFirstSeen,
-      tokenEntries: [],   // populated in route.ts after price history fetch
-      totalPnlUsd: data.totalPnlUsd,
-      totalUnrealizedUsd: data.totalUnrealizedUsd,
-      solBalanceLamports: data.maxNativeBalance,
-      solBalanceUsd: 0,   // populated in route.ts after solPrice fetch
-      winRate,
-      totalBuyCount: data.totalBuyCount,
-      totalSellCount: data.totalSellCount,
-      smartScore,
-      isSmartMoney,
-      // Zmiana 4
-      botRatio,
-      botWarning,
-      // Zmiana 3 — defaults, populated in route.ts after Phase 4
-      earlyEntryRatio: 0,
-      earlyEntryCount: 0,
-      avgEntryMcap: 0,
-      // Zmiana 1
-      coverageRatio,
-      // Zmiana 9
-      lateEntryWarning: false,
-    })
-  }
-
-  wallets.sort((a, b) => {
-    if (a.isSmartMoney !== b.isSmartMoney) return a.isSmartMoney ? -1 : 1
-    if (a.isSmartMoney) return b.smartScore - a.smartScore
-    return b.totalPnlUsd - a.totalPnlUsd
-  })
-
-  return wallets
 }
 
-export function buildGraphData(
-  wallets: WalletAnalysis[],
-  tokenInfos: Map<string, TokenInfo>
-): GraphData {
-  const nodes: GraphData['nodes'] = []
-  const links: GraphData['links'] = []
-  const addedTokens = new Set<string>()
-
-  for (const [addr, info] of tokenInfos) {
-    addedTokens.add(addr)
-    nodes.push({
-      id: addr,
-      type: 'token',
-      label: info.symbol,
-      val: 8,
-      color: '#3b82f6',
-    })
-  }
-
-  const topWallets = wallets.slice(0, 200)
-  for (const wallet of topWallets) {
-    nodes.push({
-      id: wallet.address,
-      type: 'wallet',
-      label: `${wallet.address.slice(0, 4)}...${wallet.address.slice(-4)}`,
-      val: wallet.isSmartMoney ? 6 : 3,
-      color: wallet.isSmartMoney ? '#ff6b2b' : '#6b7280',
-      pnl: wallet.totalPnlUsd,
-    })
-
-    for (const tokenAddr of wallet.tokens) {
-      if (addedTokens.has(tokenAddr)) {
-        links.push({ source: wallet.address, target: tokenAddr })
-      }
-    }
-  }
-
-  return { nodes, links }
+function round2(v: number): number {
+  return Math.round(v * 100) / 100
 }

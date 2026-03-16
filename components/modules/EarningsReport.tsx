@@ -234,7 +234,11 @@ export default function EarningsReport() {
   const capexQ = (e?.cashFlowQuarterly ?? []).map((c) => ({ date: c.date, value: c.capitalExpenditure }))
   const sbcQ = (e?.cashFlowQuarterly ?? []).map((c) => ({ date: c.date, value: c.stockBasedCompensation }))
   const depCfQ = (e?.cashFlowQuarterly ?? []).map((c) => ({ date: c.date, value: c.depreciation }))
+  const taxesPaidQ = (e?.cashFlowQuarterly ?? []).map((c) => ({ date: c.date, value: c.taxesPaid }))
+  const interestPaidQ = (e?.cashFlowQuarterly ?? []).map((c) => ({ date: c.date, value: c.interestPaid }))
+  const wcQ = (e?.cashFlowQuarterly ?? []).map((c) => ({ date: c.date, value: c.changeInWorkingCapital }))
   const fcfTTM = computeTTM(fcfQ); const opCfTTM = computeTTM(opCfQ); const capexTTM = computeTTM(capexQ); const sbcTTM = computeTTM(sbcQ); const depCfTTM = computeTTM(depCfQ)
+  const taxesPaidTTM = computeTTM(taxesPaidQ); const interestPaidTTM = computeTTM(interestPaidQ); const wcTTM = computeTTM(wcQ)
   const annualFCF = (e?.cashFlowAnnual ?? []).map((c) => ({ date: c.date, value: c.freeCashFlow }))
   const annualSBC = (e?.cashFlowAnnual ?? []).map((c) => ({ date: c.date, value: c.stockBasedCompensation }))
 
@@ -456,24 +460,104 @@ export default function EarningsReport() {
               )
             })()}
 
-            {/* FCF vs NET INCOME RECONCILIATION */}
-            {fcfTTM.length > 0 && netIncomeTTM.length > 0 && (() => {
-              const f = fcfTTM[fcfTTM.length - 1]; const ni = netIncomeTTM.find((n) => n.date === f.date); const sbc = sbcTTM.find((s) => s.date === f.date); const da = depCfTTM.find((d) => d.date === f.date); const oc = opCfTTM.find((o) => o.date === f.date); const cx = capexTTM.find((c) => c.date === f.date)
-              if (!ni) return null
-              const wc = oc ? oc.value - (ni.value + (sbc?.value ?? 0) + (da?.value ?? 0)) : null
+            {/* JAK LICZYMY FCF? — RECONCILIATION FROM EBITDA */}
+            {fcfTTM.length > 0 && (() => {
+              // Bank/Financial Services detection — EBITDA not standard
+              const sector = e.sector ?? null
+              const isBank = sector === "Financial Services" || sector === "Banks"
+              if (isBank) {
+                return (
+                  <div className="bg-bloomberg-card border border-bloomberg-border rounded p-4">
+                    <div className="text-xs text-bloomberg-amber font-bold mb-3">JAK LICZYMY FCF? — RECONCILIATION</div>
+                    <div className="text-xs text-muted-foreground">⚠️ Reconciliation niedostępne — EBITDA nie jest standardową metryką dla banków i instytucji finansowych.</div>
+                  </div>
+                )
+              }
+
+              const f = fcfTTM[fcfTTM.length - 1]
+              const ebitda = ebitdaTTM.find((eb) => eb.date === f.date)
+              const tp = taxesPaidTTM.find((t) => t.date === f.date)
+              const ip = interestPaidTTM.find((i) => i.date === f.date)
+              const wc = wcTTM.find((w) => w.date === f.date)
+              const oc = opCfTTM.find((o) => o.date === f.date)
+              const cx = capexTTM.find((c) => c.date === f.date)
+
+              if (!ebitda && !oc) return null
+
+              const ebitdaVal = ebitda?.value ?? null
+              const taxVal = tp?.value ?? null
+              const intPaidVal = ip?.value ?? null
+              const wcVal = wc?.value ?? null
+              const ocVal = oc?.value ?? null
+              const cxVal = cx?.value ?? null
+              const fcfVal = f.value
+
+              // Check if FCF table TTM diverges > 5%
+              const fcfTableVal = fcfTTM.length > 0 ? fcfTTM[fcfTTM.length - 1].value : null
+              const hasDivergence = fcfTableVal != null && fcfVal !== 0 && Math.abs((fcfVal - fcfTableVal) / Math.abs(fcfTableVal)) > 0.05
+
+              // FCF Conversion
+              const convPct = ebitdaVal && ebitdaVal !== 0 ? (fcfVal / ebitdaVal) * 100 : null
+              const convLabel = convPct == null ? null : convPct < 0 ? "Negative FCF" : convPct >= 50 ? "Excellent conversion" : convPct >= 25 ? "Moderate conversion" : "Weak conversion"
+              const convColor = convPct == null ? "text-muted-foreground" : convPct >= 50 ? "text-bloomberg-green" : convPct >= 25 ? "text-bloomberg-amber" : "text-bloomberg-red"
+
+              const hasAsterisk = taxVal == null || intPaidVal == null
+
               return (
                 <div className="bg-bloomberg-card border border-bloomberg-green/30 rounded p-4">
-                  <div className="text-xs text-bloomberg-green font-bold mb-3">DLACZEGO FCF ≠ NET INCOME? — RECONCILIATION ({f.label})</div>
-                  <div className="overflow-x-auto"><table className="w-full text-xs"><tbody>
-                    <tr className="border-b border-bloomberg-border/50"><td className="py-1.5">Net Income (GAAP)</td><td className={`py-1.5 text-right font-bold ${ni.value >= 0 ? "text-bloomberg-green" : "text-bloomberg-red"}`}>{fmtBigValue(ni.value, q.currency)}</td></tr>
-                    {sbc && <tr className="border-b border-bloomberg-border/50"><td className="py-1.5">+ Stock-Based Compensation (SBC)</td><td className="py-1.5 text-right text-bloomberg-green font-bold">+{fmtBigValue(sbc.value, q.currency)}</td></tr>}
-                    {da && <tr className="border-b border-bloomberg-border/50"><td className="py-1.5">+ Depreciation & Amortization</td><td className="py-1.5 text-right text-bloomberg-green font-bold">+{fmtBigValue(da.value, q.currency)}</td></tr>}
-                    {wc != null && <tr className="border-b border-bloomberg-border/50"><td className="py-1.5">+/- Working Capital & Other</td><td className={`py-1.5 text-right font-bold ${wc >= 0 ? "text-bloomberg-green" : "text-bloomberg-red"}`}>{wc >= 0 ? "+" : ""}{fmtBigValue(wc, q.currency)}</td></tr>}
-                    {oc && <tr className="border-b border-bloomberg-border"><td className="py-1.5 font-bold">= Operating Cash Flow</td><td className="py-1.5 text-right font-bold">{fmtBigValue(oc.value, q.currency)}</td></tr>}
-                    {cx && <tr className="border-b border-bloomberg-border/50"><td className="py-1.5">- Capital Expenditures</td><td className="py-1.5 text-right text-bloomberg-red font-bold">{fmtBigValue(cx.value, q.currency)}</td></tr>}
-                    <tr><td className="py-1.5 font-bold text-bloomberg-green">= Free Cash Flow</td><td className={`py-1.5 text-right font-bold text-sm ${f.value >= 0 ? "text-bloomberg-green" : "text-bloomberg-red"}`}>{fmtBigValue(f.value, q.currency)}</td></tr>
-                  </tbody></table></div>
-                  <Explainer text={`Net Income (${fmtBigValue(ni.value, q.currency)}) ${ni.value < 0 ? "jest ujemny przez koszty niepieniężne" : "jest powiększony o"}: SBC${sbc ? ` (${fmtBigValue(sbc.value, q.currency)})` : ""} i D&A. FCF ${f.value >= 0 ? "> 0 oznacza realną gotówkę" : "< 0 — spółka pali gotówkę"}.`} />
+                  <div className="text-xs text-bloomberg-green font-bold mb-3">JAK LICZYMY FCF? — RECONCILIATION ({f.label})</div>
+                  <div className="overflow-x-auto"><table className="w-full text-xs">
+                    <thead><tr className="border-b border-bloomberg-border"><th className="text-left py-2 text-muted-foreground">POZYCJA</th><th className="text-right py-2 text-muted-foreground">WARTOŚĆ</th><th className="text-left py-2 text-muted-foreground pl-4">UWAGA</th></tr></thead>
+                    <tbody>
+                      <tr className="border-b border-bloomberg-border/50">
+                        <td className={`py-1.5 font-bold ${ebitdaVal != null && ebitdaVal < 0 ? "text-bloomberg-red" : ""}`}>EBITDA</td>
+                        <td className={`py-1.5 text-right font-bold ${ebitdaVal != null && ebitdaVal < 0 ? "text-bloomberg-red" : ""}`}>{ebitdaVal != null ? fmtBigValue(ebitdaVal, q.currency) : "N/A"}</td>
+                        <td className="py-1.5 text-muted-foreground pl-4 text-[10px]">Operating Income + D&A</td>
+                      </tr>
+                      <tr className="border-b border-bloomberg-border/50">
+                        <td className="py-1.5">- Taxes Paid (Cash){taxVal == null ? " *" : ""}</td>
+                        <td className="py-1.5 text-right text-bloomberg-red font-bold">{taxVal != null ? `-${fmtBigValue(Math.abs(taxVal), q.currency)}` : "N/A"}</td>
+                        <td className="py-1.5 text-muted-foreground pl-4 text-[10px]">z cash flow statement</td>
+                      </tr>
+                      <tr className="border-b border-bloomberg-border/50">
+                        <td className="py-1.5">- Interest Paid (Cash){intPaidVal == null ? " *" : ""}</td>
+                        <td className="py-1.5 text-right text-bloomberg-red font-bold">{intPaidVal != null ? `-${fmtBigValue(Math.abs(intPaidVal), q.currency)}` : "N/A"}</td>
+                        <td className="py-1.5 text-muted-foreground pl-4 text-[10px]">z cash flow statement</td>
+                      </tr>
+                      <tr className="border-b border-bloomberg-border/50">
+                        <td className="py-1.5">+/- Working Capital Changes</td>
+                        <td className={`py-1.5 text-right font-bold ${wcVal != null && wcVal >= 0 ? "text-bloomberg-green" : "text-bloomberg-red"}`}>{wcVal != null ? `${wcVal >= 0 ? "+" : ""}${fmtBigValue(wcVal, q.currency)}` : "N/A"}</td>
+                        <td className="py-1.5 text-muted-foreground pl-4 text-[10px]">zmiany kapitału obrotowego</td>
+                      </tr>
+                      <tr className="border-b border-bloomberg-border">
+                        <td className="py-1.5 font-bold">= Operating Cash Flow</td>
+                        <td className="py-1.5 text-right font-bold">{ocVal != null ? fmtBigValue(ocVal, q.currency) : "N/A"}</td>
+                        <td className="py-1.5 text-muted-foreground pl-4 text-[10px]">weryfikuj z Yahoo Finance</td>
+                      </tr>
+                      <tr className="border-b border-bloomberg-border/50">
+                        <td className="py-1.5">- Capital Expenditures (CapEx)</td>
+                        <td className="py-1.5 text-right text-bloomberg-red font-bold">{cxVal != null ? fmtBigValue(cxVal, q.currency) : "N/A"}</td>
+                        <td className="py-1.5 text-muted-foreground pl-4 text-[10px]">inwestycje w środki trwałe</td>
+                      </tr>
+                      <tr>
+                        <td className="py-2 font-bold text-sm">= FREE CASH FLOW</td>
+                        <td className={`py-2 text-right font-bold text-sm ${fcfVal >= 0 ? "text-bloomberg-green" : "text-bloomberg-red"}`}>{fmtBigValue(fcfVal, q.currency)}</td>
+                        <td className="py-2 pl-4"></td>
+                      </tr>
+                    </tbody>
+                  </table></div>
+
+                  {hasAsterisk && <div className="text-[10px] text-muted-foreground mt-2 italic">* Pozycja niedostępna bezpośrednio w Yahoo Finance — uwzględniona w Working Capital & Other.</div>}
+
+                  {hasDivergence && <div className="text-[10px] text-bloomberg-amber mt-2">⚠️ Różnica w obliczeniach vs FCF TTM Table — możliwe pozycje jednorazowe lub różna metodologia TTM w tym okresie.</div>}
+
+                  <div className="text-[10px] text-muted-foreground mt-3 leading-relaxed">EBITDA to zysk operacyjny przed odsetkami, podatkami i amortyzacją. Odejmując podatki, odsetki i CapEx — dochodzimy do gotówki którą spółka faktycznie generuje dla akcjonariuszy (FCF).</div>
+
+                  {convPct != null && ebitdaVal != null && (
+                    <div className={`mt-2 text-xs font-bold ${convColor}`}>
+                      FCF Conversion: FCF ({fmtBigValue(fcfVal, q.currency)}) = {convPct.toFixed(0)}% EBITDA ({fmtBigValue(ebitdaVal, q.currency)}) — {convLabel}
+                    </div>
+                  )}
                 </div>
               )
             })()}
