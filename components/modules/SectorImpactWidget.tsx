@@ -27,31 +27,31 @@ const SECTOR_ICON: Record<string, string> = {
 }
 
 const SECTOR_PL: Record<string, string> = {
-  "Information Technology": "Technologia",
+  "Information Technology": "Technologia (IT)",
   "Healthcare": "Ochrona zdrowia",
   "Financials": "Finanse",
-  "Consumer Discretionary": "Dobra luksusowe",
-  "Consumer Staples": "Dobra podst.",
+  "Consumer Discretionary": "Dobra uznaniowe",
+  "Consumer Staples": "Dobra podstawowe",
   "Energy": "Energetyka",
   "Industrials": "Przemysł",
   "Materials": "Surowce",
-  "Utilities": "Media / Użytkowe",
+  "Utilities": "Użytkowe",
   "Real Estate": "Nieruchomości",
   "Communication Services": "Komunikacja",
 }
 
 const SECTOR_PL_FULL: Record<string, string> = {
-  "Information Technology": "Technologia informatyczna",
+  "Information Technology": "Technologia (IT)",
   "Healthcare": "Ochrona zdrowia",
-  "Financials": "Finanse i bankowość",
-  "Consumer Discretionary": "Dobra luksusowe i konsumenckie",
-  "Consumer Staples": "Dobra podstawowe",
-  "Energy": "Energetyka i surowce energetyczne",
-  "Industrials": "Przemysł i obronność",
-  "Materials": "Surowce i materiały",
-  "Utilities": "Media i usługi użytkowe",
-  "Real Estate": "Nieruchomości",
-  "Communication Services": "Usługi komunikacyjne",
+  "Financials": "Finanse",
+  "Consumer Discretionary": "Dobra uznaniowe (Consumer Discretionary)",
+  "Consumer Staples": "Dobra podstawowe (Consumer Staples)",
+  "Energy": "Energetyka",
+  "Industrials": "Przemysł",
+  "Materials": "Surowce (Materials)",
+  "Utilities": "Użytkowe (Utilities)",
+  "Real Estate": "Nieruchomości (REITs)",
+  "Communication Services": "Komunikacja (Communication Services)",
 }
 
 const EVENT_PL: Record<string, string> = {
