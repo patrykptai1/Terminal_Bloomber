@@ -7,6 +7,7 @@ import HorizontalBar from "@/components/charts/HorizontalBar"
 import SectorImpactWidget from "@/components/modules/SectorImpactWidget"
 import type { WorldNewsItem, WorldNewsData } from "@/lib/worldnews"
 import type { WorldNewsItemInput } from "@/lib/sectorImpact"
+import { getTabCache, setTabCache, CACHE_KEYS } from "@/lib/tabCache"
 
 // --- Constants ---
 
@@ -73,8 +74,8 @@ function timeAgo(dateStr: string): string {
 }
 
 export default function WorldNewsRadar() {
-  const [data, setData] = useState<WorldNewsData | null>(null)
-  const [loading, setLoading] = useState(true)
+  const [data, setData] = useState<WorldNewsData | null>(() => getTabCache<WorldNewsData>(CACHE_KEYS.WORLD_NEWS_DATA))
+  const [loading, setLoading] = useState(!getTabCache(CACHE_KEYS.WORLD_NEWS_DATA))
   const [error, setError] = useState<string | null>(null)
   const [categoryFilter, setCategoryFilter] = useState<string>("all")
   const [regionFilter, setRegionFilter] = useState<string>("all")
@@ -95,6 +96,7 @@ export default function WorldNewsRadar() {
       if (!res.ok) throw new Error("Failed to fetch")
       const json: WorldNewsData = await res.json()
       setData(json)
+      setTabCache(CACHE_KEYS.WORLD_NEWS_DATA, json)
     } catch (e) {
       setError(e instanceof Error ? e.message : "Unknown error")
     } finally {

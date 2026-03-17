@@ -3,6 +3,7 @@
 import { useState, useMemo, useCallback } from "react"
 import { TrendingUp, TrendingDown, ChevronDown, ChevronUp, Zap, ExternalLink, Shield, Star, Brain, Loader2, Link2, ArrowRight } from "lucide-react"
 import { analyzeNewsImpacts, GICS_SECTORS, type WorldNewsItemInput, type ImpactAnalysis, type GICSSector } from "@/lib/sectorImpact"
+import { getTabCache, setTabCache, CACHE_KEYS } from "@/lib/tabCache"
 
 // ── Props ─────────────────────────────────────────────────────
 
@@ -395,8 +396,8 @@ export default function SectorImpactWidget({ newsItems }: SectorImpactWidgetProp
   const [expandedTheme, setExpandedTheme] = useState<number | null>(null)
   const [aiRadarExpanded, setAiRadarExpanded] = useState(false)
 
-  // AI state
-  const [aiResponse, setAiResponse] = useState<AIResponse | null>(null)
+  // AI state — restore from tab cache on mount
+  const [aiResponse, setAiResponse] = useState<AIResponse | null>(() => getTabCache<AIResponse>(CACHE_KEYS.WORLD_NEWS_AI_RESPONSE))
   const [aiLoading, setAiLoading] = useState(false)
   const [aiError, setAiError] = useState<string | null>(null)
 
@@ -460,6 +461,7 @@ export default function SectorImpactWidget({ newsItems }: SectorImpactWidgetProp
       const data = await res.json()
       if (data.error) throw new Error(data.error)
       setAiResponse(data)
+      setTabCache(CACHE_KEYS.WORLD_NEWS_AI_RESPONSE, data)
       setExpandedTheme(null)
     } catch (e: unknown) {
       setAiError(e instanceof Error ? e.message : "Błąd analizy Grok")
