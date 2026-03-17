@@ -10,6 +10,7 @@ import StockCompare from "@/components/modules/StockCompare"
 import PortfolioBuilder from "@/components/modules/PortfolioBuilder"
 import EntryTiming from "@/components/modules/EntryTiming"
 import AnalystRecommendations from "@/components/modules/AnalystRecommendations"
+import SectorScreener from "@/components/modules/SectorScreener"
 import WorldNewsRadar from "@/components/modules/WorldNewsRadar"
 import type { TabId } from "@/types"
 
@@ -22,16 +23,17 @@ const TAB_TITLES: Record<TabId, string> = {
   portfolio: "PORTFOLIO BUILDER",
   entry: "ENTRY TIMING",
   analyst: "ANALYST RECOMMENDATIONS",
+  sectors: "SECTORS",
   worldnews: "WORLD NEWS RADAR",
 }
 
-const TAB_KEYS: TabId[] = ["analysis", "screener", "earnings", "risk", "compare", "portfolio", "entry", "analyst", "worldnews"]
+const TAB_KEYS: TabId[] = ["analysis", "screener", "earnings", "risk", "compare", "portfolio", "entry", "analyst", "sectors", "worldnews"]
 
 export default function Home() {
   const [activeTab, setActiveTab] = useState<TabId>("analysis")
 
   const handleKeyDown = useCallback((e: KeyboardEvent) => {
-    const fKey = e.key.match(/^F(\d)$/)
+    const fKey = e.key.match(/^F(\d+)$/)
     if (fKey) {
       const idx = parseInt(fKey[1]) - 1
       if (idx >= 0 && idx < TAB_KEYS.length) {
@@ -65,6 +67,7 @@ export default function Home() {
         {activeTab === "portfolio" && <PortfolioBuilder />}
         {activeTab === "entry" && <EntryTiming />}
         {activeTab === "analyst" && <AnalystRecommendations />}
+        {activeTab === "sectors" && <SectorScreener />}
         {activeTab === "worldnews" && <WorldNewsRadar />}
       </main>
 
