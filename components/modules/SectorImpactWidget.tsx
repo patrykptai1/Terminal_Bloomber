@@ -1,8 +1,8 @@
 "use client"
 
 import { useState, useMemo } from "react"
-import { TrendingUp, TrendingDown, ChevronDown, ChevronUp, Zap, BarChart3, Target, ExternalLink } from "lucide-react"
-import { analyzeNewsImpacts, GICS_SECTORS, type WorldNewsItemInput, type SectorSummary, type ImpactAnalysis, type CompanyTicker, type GICSSector } from "@/lib/sectorImpact"
+import { TrendingUp, TrendingDown, ChevronDown, ChevronUp, Zap, Target, ExternalLink, Shield, Star } from "lucide-react"
+import { analyzeNewsImpacts, GICS_SECTORS, type WorldNewsItemInput, type SectorSummary, type ImpactAnalysis, type CompanyTicker, type GICSSector, type TopTicker } from "@/lib/sectorImpact"
 
 // ── Props ─────────────────────────────────────────────────────
 
@@ -10,7 +10,7 @@ interface SectorImpactWidgetProps {
   newsItems: WorldNewsItemInput[]
 }
 
-// ── Sector Icons (emoji) ──────────────────────────────────────
+// ── Polish translations ───────────────────────────────────────
 
 const SECTOR_ICON: Record<string, string> = {
   "Information Technology": "💻",
@@ -26,18 +26,44 @@ const SECTOR_ICON: Record<string, string> = {
   "Communication Services": "📡",
 }
 
-const SECTOR_SHORT: Record<string, string> = {
-  "Information Technology": "IT / Tech",
-  "Healthcare": "Healthcare",
-  "Financials": "Financials",
-  "Consumer Discretionary": "Cons. Disc.",
-  "Consumer Staples": "Cons. Staples",
-  "Energy": "Energy",
-  "Industrials": "Industrials",
-  "Materials": "Materials",
-  "Utilities": "Utilities",
-  "Real Estate": "Real Estate",
-  "Communication Services": "Comm. Serv.",
+const SECTOR_PL: Record<string, string> = {
+  "Information Technology": "Technologia",
+  "Healthcare": "Ochrona zdrowia",
+  "Financials": "Finanse",
+  "Consumer Discretionary": "Dobra luksusowe",
+  "Consumer Staples": "Dobra podst.",
+  "Energy": "Energetyka",
+  "Industrials": "Przemysł",
+  "Materials": "Surowce",
+  "Utilities": "Media / Użytkowe",
+  "Real Estate": "Nieruchomości",
+  "Communication Services": "Komunikacja",
+}
+
+const EVENT_PL: Record<string, string> = {
+  "Middle East Conflict": "Konflikt na Bliskim Wschodzie",
+  "Persian Gulf / Hormuz Disruption": "Zagrożenie Zatoki Perskiej / Hormuz",
+  "China-Taiwan Tensions": "Napięcia Chiny-Tajwan",
+  "Ukraine-Russia Conflict": "Konflikt Ukraina-Rosja",
+  "US-China Trade War / Tariffs": "Wojna handlowa USA-Chiny / Cła",
+  "Fed Rate Hike / Hawkish": "Podwyżka stóp Fed / Jastrzębia polityka",
+  "Fed Rate Cut / Dovish": "Obniżka stóp Fed / Gołębia polityka",
+  "Inflation Surge": "Wzrost inflacji",
+  "Oil Price Spike / OPEC Cuts": "Skok cen ropy / Cięcia OPEC",
+  "AI / Technology Breakthrough": "Przełom AI / Technologiczny",
+  "Pandemic / Disease Outbreak": "Pandemia / Epidemia",
+  "Natural Disaster": "Klęska żywiołowa",
+  "Recession / Economic Downturn": "Recesja / Spowolnienie gospodarcze",
+  "Supply Chain Disruption": "Zakłócenie łańcucha dostaw",
+  "International Sanctions": "Sankcje międzynarodowe",
+  "Climate Policy / Green Push": "Polityka klimatyczna / Zielony zwrot",
+  "Peace / De-escalation": "Pokój / Deeskalacja",
+}
+
+const IMPACT_PL: Record<string, string> = {
+  "bullish": "WZROSTOWY",
+  "bearish": "SPADKOWY",
+  "mixed": "MIESZANY",
 }
 
 // ── Main Component ────────────────────────────────────────────
@@ -48,11 +74,10 @@ export default function SectorImpactWidget({ newsItems }: SectorImpactWidgetProp
   const [expandedTicker, setExpandedTicker] = useState<string | null>(null)
 
   const analysis: ImpactAnalysis = useMemo(() => {
-    if (newsItems.length === 0) return { bullish: [], bearish: [], mixed: [], totalNewsAnalyzed: 0, eventsDetected: 0 }
+    if (newsItems.length === 0) return { bullish: [], bearish: [], mixed: [], totalNewsAnalyzed: 0, eventsDetected: 0, topBeneficiaries: [], topAtRisk: [] }
     return analyzeNewsImpacts(newsItems)
   }, [newsItems])
 
-  // Merge mixed into both bullish and bearish views
   const sectors = activeTab === "bullish"
     ? [...analysis.bullish, ...analysis.mixed]
     : [...analysis.bearish, ...analysis.mixed]
@@ -67,19 +92,19 @@ export default function SectorImpactWidget({ newsItems }: SectorImpactWidgetProp
 
   return (
     <div className="bg-bloomberg-card border border-bloomberg-border rounded flex flex-col h-full">
-      {/* HEADER */}
+      {/* NAGŁÓWEK */}
       <div className="px-3 py-2 border-b border-bloomberg-border">
         <div className="flex items-center gap-1.5 mb-1">
           <Zap className="w-3 h-3 text-bloomberg-amber" />
-          <span className="text-[10px] text-bloomberg-amber font-bold tracking-wider">SECTOR IMPACT</span>
-          <span className="text-[9px] text-muted-foreground ml-auto">US MARKET</span>
+          <span className="text-[10px] text-bloomberg-amber font-bold tracking-wider">WPŁYW NA SEKTORY</span>
+          <span className="text-[9px] text-muted-foreground ml-auto">RYNEK US</span>
         </div>
         <div className="text-[9px] text-muted-foreground">
-          {analysis.eventsDetected} events | {totalSectors} sectors | S&P 500 + NASDAQ
+          {analysis.eventsDetected} wydarzeń | {totalSectors} sektorów | S&P 500 + NASDAQ
         </div>
       </div>
 
-      {/* TAB BUTTONS */}
+      {/* PRZYCISKI ZAKŁADEK */}
       <div className="flex border-b border-bloomberg-border">
         <button
           onClick={() => { setActiveTab("bearish"); setExpandedSector(null); setExpandedTicker(null) }}
@@ -90,7 +115,7 @@ export default function SectorImpactWidget({ newsItems }: SectorImpactWidgetProp
           }`}
         >
           <TrendingDown className="w-3 h-3" />
-          NEGATIVE ({analysis.bearish.length + analysis.mixed.length})
+          NEGATYWNE ({analysis.bearish.length + analysis.mixed.length})
         </button>
         <button
           onClick={() => { setActiveTab("bullish"); setExpandedSector(null); setExpandedTicker(null) }}
@@ -101,11 +126,11 @@ export default function SectorImpactWidget({ newsItems }: SectorImpactWidgetProp
           }`}
         >
           <TrendingUp className="w-3 h-3" />
-          POSITIVE ({analysis.bullish.length + analysis.mixed.length})
+          POZYTYWNE ({analysis.bullish.length + analysis.mixed.length})
         </button>
       </div>
 
-      {/* SECTOR LIST */}
+      {/* LISTA SEKTORÓW */}
       <div className="flex-1 overflow-y-auto">
         {sectors.length === 0 ? (
           <div className="p-4 text-center text-muted-foreground text-[10px]">
@@ -124,15 +149,14 @@ export default function SectorImpactWidget({ newsItems }: SectorImpactWidgetProp
 
               return (
                 <div key={sector.sector}>
-                  {/* Sector Row */}
                   <button
                     onClick={() => { setExpandedSector(isExpanded ? null : sector.sector); setExpandedTicker(null) }}
                     className={`w-full px-3 py-2 flex items-center gap-2 text-left transition-colors hover:bg-bloomberg-card/80 ${isExpanded ? bgColor : ""}`}
                   >
                     <span className="text-sm">{SECTOR_ICON[sector.sector] ?? "📊"}</span>
                     <div className="flex-1 min-w-0">
-                      <div className="text-[11px] font-bold text-foreground leading-tight">{SECTOR_SHORT[sector.sector] ?? sector.sector}</div>
-                      <div className="text-[9px] text-muted-foreground truncate">{sector.eventNames[0]}</div>
+                      <div className="text-[11px] font-bold text-foreground leading-tight">{SECTOR_PL[sector.sector] ?? sector.sector}</div>
+                      <div className="text-[9px] text-muted-foreground truncate">{EVENT_PL[sector.eventNames[0]] ?? sector.eventNames[0]}</div>
                     </div>
                     <div className="flex items-center gap-1.5 shrink-0">
                       <span className={`w-1.5 h-1.5 rounded-full ${confDot}`} />
@@ -142,26 +166,26 @@ export default function SectorImpactWidget({ newsItems }: SectorImpactWidgetProp
                     </div>
                   </button>
 
-                  {/* Expanded */}
                   {isExpanded && (
                     <div className={`px-3 pb-3 ${bgColor}`}>
-                      {/* Event trigger */}
+                      {/* Wyzwalacz */}
                       <div className="mb-2">
-                        <div className="text-[9px] text-bloomberg-amber font-bold mb-1">TRIGGER</div>
+                        <div className="text-[9px] text-bloomberg-amber font-bold mb-1">WYZWALACZ</div>
                         {sector.eventNames.map((en, i) => (
-                          <div key={i} className="text-[10px] text-muted-foreground">▸ {en}</div>
+                          <div key={i} className="text-[10px] text-muted-foreground">▸ {EVENT_PL[en] ?? en}</div>
                         ))}
                       </div>
 
-                      {/* Why */}
+                      {/* Wpływ */}
                       <div className="mb-2">
                         <div className="text-[9px] text-bloomberg-amber font-bold mb-1">WPŁYW NA SEKTOR</div>
+                        <div className={`text-[10px] font-bold mb-1 ${color}`}>{IMPACT_PL[sector.impact]}</div>
                         {sector.reasons.map((r, i) => (
                           <div key={i} className="text-[10px] text-muted-foreground mb-1 leading-snug">{r}</div>
                         ))}
                       </div>
 
-                      {/* Related news */}
+                      {/* Powiązane newsy */}
                       <div className="mb-2">
                         <div className="text-[9px] text-bloomberg-amber font-bold mb-1">POWIĄZANE NEWSY ({sector.newsCount})</div>
                         {sector.newsItems.slice(0, 3).map((ni) => (
@@ -177,7 +201,7 @@ export default function SectorImpactWidget({ newsItems }: SectorImpactWidgetProp
                         )}
                       </div>
 
-                      {/* Tickers */}
+                      {/* Spółki */}
                       <div>
                         <div className="text-[9px] text-bloomberg-amber font-bold mb-1 flex items-center gap-1">
                           <Target className="w-3 h-3" />
@@ -185,11 +209,11 @@ export default function SectorImpactWidget({ newsItems }: SectorImpactWidgetProp
                         </div>
                         <div className="space-y-1">
                           {sector.tickers.map((t) => {
-                            const isTickerExpanded = expandedTicker === t.symbol
+                            const isTickerExpanded = expandedTicker === `${sector.sector}_${t.symbol}`
                             return (
                               <div key={t.symbol}>
                                 <button
-                                  onClick={() => setExpandedTicker(isTickerExpanded ? null : t.symbol)}
+                                  onClick={() => setExpandedTicker(isTickerExpanded ? null : `${sector.sector}_${t.symbol}`)}
                                   className={`w-full flex items-center gap-2 px-2 py-1 rounded border text-left transition-colors ${
                                     isTickerExpanded ? "border-bloomberg-green/40 bg-bloomberg-green/5" : "border-bloomberg-border/50 hover:border-bloomberg-green/30"
                                   }`}
@@ -202,20 +226,12 @@ export default function SectorImpactWidget({ newsItems }: SectorImpactWidgetProp
                                   <div className="ml-2 mt-1 mb-1 pl-2 border-l border-bloomberg-green/30">
                                     <div className="text-[10px] text-foreground leading-snug mb-1.5">{t.why}</div>
                                     <div className="flex gap-1.5">
-                                      <a
-                                        href={`https://finance.yahoo.com/quote/${t.symbol}`}
-                                        target="_blank"
-                                        rel="noopener noreferrer"
-                                        className="inline-flex items-center gap-0.5 text-[9px] px-1.5 py-0.5 bg-bloomberg-green/20 text-bloomberg-green border border-bloomberg-green/30 rounded hover:bg-bloomberg-green/30 transition-colors"
-                                      >
+                                      <a href={`https://finance.yahoo.com/quote/${t.symbol}`} target="_blank" rel="noopener noreferrer"
+                                        className="inline-flex items-center gap-0.5 text-[9px] px-1.5 py-0.5 bg-bloomberg-green/20 text-bloomberg-green border border-bloomberg-green/30 rounded hover:bg-bloomberg-green/30 transition-colors">
                                         Yahoo <ExternalLink className="w-2.5 h-2.5" />
                                       </a>
-                                      <a
-                                        href={`https://www.google.com/finance/quote/${t.symbol}:NASDAQ`}
-                                        target="_blank"
-                                        rel="noopener noreferrer"
-                                        className="inline-flex items-center gap-0.5 text-[9px] px-1.5 py-0.5 bg-bloomberg-blue/20 text-bloomberg-blue border border-bloomberg-blue/30 rounded hover:bg-bloomberg-blue/30 transition-colors"
-                                      >
+                                      <a href={`https://www.google.com/finance/quote/${t.symbol}:NASDAQ`} target="_blank" rel="noopener noreferrer"
+                                        className="inline-flex items-center gap-0.5 text-[9px] px-1.5 py-0.5 bg-bloomberg-blue/20 text-bloomberg-blue border border-bloomberg-blue/30 rounded hover:bg-bloomberg-blue/30 transition-colors">
                                         Google <ExternalLink className="w-2.5 h-2.5" />
                                       </a>
                                     </div>
@@ -235,9 +251,72 @@ export default function SectorImpactWidget({ newsItems }: SectorImpactWidgetProp
         )}
       </div>
 
-      {/* GICS OVERVIEW GRID — all 11 sectors status */}
+      {/* ═══ TOP 3 BENEFICJENCI + TOP 3 ZAGROŻONE ═══ */}
+      {(analysis.topBeneficiaries.length > 0 || analysis.topAtRisk.length > 0) && (
+        <div className="border-t border-bloomberg-border">
+          {/* TOP 3 BENEFICJENCI */}
+          {analysis.topBeneficiaries.length > 0 && (
+            <div className="px-3 py-2 border-b border-bloomberg-border/50">
+              <div className="flex items-center gap-1.5 mb-1.5">
+                <Star className="w-3 h-3 text-bloomberg-green" />
+                <span className="text-[9px] text-bloomberg-green font-bold tracking-wider">TOP 3 — BENEFICJENCI</span>
+              </div>
+              <div className="text-[8px] text-muted-foreground mb-1.5">Spółki, które mogą zyskać na obecnej sytuacji</div>
+              {analysis.topBeneficiaries.map((t, i) => (
+                <div key={t.symbol} className="flex items-start gap-2 mb-1.5 last:mb-0">
+                  <span className="text-[10px] font-bold text-bloomberg-green w-4">{i + 1}.</span>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-1.5">
+                      <span className="text-[11px] font-bold text-bloomberg-green">{t.symbol}</span>
+                      <span className="text-[9px] text-muted-foreground truncate">{t.name}</span>
+                      <span className="text-[7px] text-muted-foreground shrink-0 border border-bloomberg-border/50 px-1 rounded">{t.index}</span>
+                    </div>
+                    <div className="text-[9px] text-muted-foreground leading-snug mt-0.5">
+                      {t.reasons.filter(r => r.startsWith("↑")).slice(0, 2).map(r => r.replace("↑ ", "")).join("; ")}
+                    </div>
+                    <div className="text-[8px] text-bloomberg-amber/70 mt-0.5">
+                      {t.events.map(e => EVENT_PL[e] ?? e).slice(0, 2).join(", ")}
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {/* TOP 3 ZAGROŻONE */}
+          {analysis.topAtRisk.length > 0 && (
+            <div className="px-3 py-2 border-b border-bloomberg-border/50">
+              <div className="flex items-center gap-1.5 mb-1.5">
+                <Shield className="w-3 h-3 text-bloomberg-red" />
+                <span className="text-[9px] text-bloomberg-red font-bold tracking-wider">TOP 3 — UWAGA NA TE SPÓŁKI</span>
+              </div>
+              <div className="text-[8px] text-muted-foreground mb-1.5">Spółki zagrożone obecną sytuacją — ostrożność w portfelu</div>
+              {analysis.topAtRisk.map((t, i) => (
+                <div key={t.symbol} className="flex items-start gap-2 mb-1.5 last:mb-0">
+                  <span className="text-[10px] font-bold text-bloomberg-red w-4">{i + 1}.</span>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-1.5">
+                      <span className="text-[11px] font-bold text-bloomberg-red">{t.symbol}</span>
+                      <span className="text-[9px] text-muted-foreground truncate">{t.name}</span>
+                      <span className="text-[7px] text-muted-foreground shrink-0 border border-bloomberg-border/50 px-1 rounded">{t.index}</span>
+                    </div>
+                    <div className="text-[9px] text-muted-foreground leading-snug mt-0.5">
+                      {t.reasons.filter(r => r.startsWith("↓")).slice(0, 2).map(r => r.replace("↓ ", "")).join("; ")}
+                    </div>
+                    <div className="text-[8px] text-bloomberg-amber/70 mt-0.5">
+                      {t.events.map(e => EVENT_PL[e] ?? e).slice(0, 2).join(", ")}
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* SEKTORY GICS — STATUS */}
       <div className="border-t border-bloomberg-border px-3 py-2">
-        <div className="text-[9px] text-bloomberg-amber font-bold mb-1.5">GICS SECTORS — STATUS</div>
+        <div className="text-[9px] text-bloomberg-amber font-bold mb-1.5">SEKTORY GICS — STATUS</div>
         <div className="grid grid-cols-3 gap-1">
           {GICS_SECTORS.map((s) => {
             const bull = analysis.bullish.find(x => x.sector === s)
@@ -255,7 +334,7 @@ export default function SectorImpactWidget({ newsItems }: SectorImpactWidgetProp
             return (
               <div key={s} className={`flex items-center gap-1 px-1 py-0.5 rounded border border-bloomberg-border/30 ${bgClass}`}>
                 <span className="text-[10px]">{SECTOR_ICON[s]}</span>
-                <span className="text-[8px] text-muted-foreground flex-1 truncate">{SECTOR_SHORT[s]}</span>
+                <span className="text-[8px] text-muted-foreground flex-1 truncate">{SECTOR_PL[s]}</span>
                 <span className={`text-[10px] font-bold ${labelColor}`}>{label}</span>
               </div>
             )

@@ -46,6 +46,16 @@ export interface EventPattern {
   effects: SectorEffect[]
 }
 
+export interface TopTicker {
+  symbol: string
+  name: string
+  index: "S&P500" | "NASDAQ" | "BOTH"
+  score: number
+  reasons: string[]
+  events: string[]
+  sectors: string[]
+}
+
 export interface WorldNewsItemInput {
   id: string
   title: string
@@ -74,6 +84,8 @@ export interface ImpactAnalysis {
   mixed: SectorSummary[]
   totalNewsAnalyzed: number
   eventsDetected: number
+  topBeneficiaries: TopTicker[]
+  topAtRisk: TopTicker[]
 }
 
 // ── Knowledge Base: Events → GICS Sectors → US Tickers ───────
@@ -989,5 +1001,45 @@ export function analyzeNewsImpacts(newsItems: WorldNewsItemInput[]): ImpactAnaly
   bearish.sort(sorter)
   mixed.sort(sorter)
 
-  return { bullish, bearish, mixed, totalNewsAnalyzed: newsItems.length, eventsDetected }
+  // ── Compute TOP tickers ──
+  const tickerScores = new Map<string, { ticker: CompanyTicker; bullishScore: number; bearishScore: number; reasons: Set<string>; events: Set<string>; sectors: Set<string> }>()
+
+  for (const match of allMatches) {
+    const confWeight = match.news.impact === "high" ? 3 : match.news.impact === "medium" ? 2 : 1
+    for (const effect of match.effects) {
+      for (const t of effect.tickers) {
+        if (!tickerScores.has(t.symbol)) {
+          tickerScores.set(t.symbol, { ticker: t, bullishScore: 0, bearishScore: 0, reasons: new Set(), events: new Set(), sectors: new Set() })
+        }
+        const entry = tickerScores.get(t.symbol)!
+        entry.sectors.add(effect.sector)
+        entry.events.add(match.eventName)
+        if (effect.impact === "bullish") {
+          entry.bullishScore += confWeight
+          entry.reasons.add(`↑ ${t.why}`)
+        } else if (effect.impact === "bearish") {
+          entry.bearishScore += confWeight
+          entry.reasons.add(`↓ ${t.why}`)
+        } else {
+          entry.bullishScore += confWeight * 0.3
+          entry.bearishScore += confWeight * 0.3
+          entry.reasons.add(`↕ ${t.why}`)
+        }
+      }
+    }
+  }
+
+  const topBeneficiaries: TopTicker[] = Array.from(tickerScores.values())
+    .filter(e => e.bullishScore > e.bearishScore)
+    .sort((a, b) => (b.bullishScore - b.bearishScore) - (a.bullishScore - a.bearishScore))
+    .slice(0, 3)
+    .map(e => ({ symbol: e.ticker.symbol, name: e.ticker.name, index: e.ticker.index, score: e.bullishScore - e.bearishScore, reasons: Array.from(e.reasons), events: Array.from(e.events), sectors: Array.from(e.sectors) }))
+
+  const topAtRisk: TopTicker[] = Array.from(tickerScores.values())
+    .filter(e => e.bearishScore > e.bullishScore)
+    .sort((a, b) => (b.bearishScore - b.bullishScore) - (a.bearishScore - a.bullishScore))
+    .slice(0, 3)
+    .map(e => ({ symbol: e.ticker.symbol, name: e.ticker.name, index: e.ticker.index, score: e.bearishScore - e.bullishScore, reasons: Array.from(e.reasons), events: Array.from(e.events), sectors: Array.from(e.sectors) }))
+
+  return { bullish, bearish, mixed, totalNewsAnalyzed: newsItems.length, eventsDetected, topBeneficiaries, topAtRisk }
 }
