@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect, useRef, useCallback } from "react"
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell, ReferenceLine, ScatterChart, Scatter, ZAxis } from "recharts"
 import TerminalInput from "@/components/TerminalInput"
 import MiniSparkline from "@/components/charts/MiniSparkline"
@@ -92,17 +92,24 @@ function periodLabel(period: string): string {
 
 // ── Component ────────────────────────────────────────────────
 
+const LS_KEY_ANALYST = "bloomberg_last_ticker_analyst"
+
 export default function AnalystRecommendations() {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [quote, setQuote] = useState<QuoteData | null>(null)
   const [analyst, setAnalyst] = useState<AnalystData | null>(null)
+  const [lastTicker, setLastTicker] = useState("")
+  const didAutoLoad = useRef(false)
 
-  async function handleSearch(ticker: string) {
+  const handleSearch = useCallback(async (ticker: string) => {
     setLoading(true)
     setError(null)
+    const t = ticker.toUpperCase().trim()
+    setLastTicker(t)
+    try { localStorage.setItem(LS_KEY_ANALYST, t) } catch {}
     try {
-      const res = await fetch(`/api/analyst?ticker=${encodeURIComponent(ticker)}`)
+      const res = await fetch(`/api/analyst?ticker=${encodeURIComponent(t)}`)
       const data = await res.json()
       if (data.error) throw new Error(data.error)
       setQuote(data.quote)
@@ -114,7 +121,13 @@ export default function AnalystRecommendations() {
     } finally {
       setLoading(false)
     }
-  }
+  }, [])
+
+  useEffect(() => {
+    if (didAutoLoad.current) return
+    didAutoLoad.current = true
+    try { const saved = localStorage.getItem(LS_KEY_ANALYST); if (saved) { setLastTicker(saved); handleSearch(saved) } } catch {}
+  }, [handleSearch])
 
   return (
     <div className="space-y-4">
@@ -123,6 +136,7 @@ export default function AnalystRecommendations() {
         onSubmit={handleSearch}
         loading={loading}
         label="ANALYST>"
+        defaultValue={lastTicker}
       />
 
       {error && (

@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect, useRef, useCallback } from "react"
 import { CheckCircle, XCircle, Minus, AlertTriangle, TrendingUp, TrendingDown, Info } from "lucide-react"
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip as ReTooltip } from "recharts"
 import TerminalInput from "@/components/TerminalInput"
@@ -188,16 +188,29 @@ function buildSnapshot(e: EarningsData, q: QuoteData, fcfTTM: TTMPoint[], revenu
    MAIN COMPONENT
    ══════════════════════════════════════════════════════════════ */
 
+const LS_KEY_EARNINGS = "bloomberg_last_ticker_earnings"
+
 export default function EarningsReport() {
   const [loading, setLoading] = useState(false)
   const [data, setData] = useState<{ quote: QuoteData; earnings: EarningsData } | null>(null)
   const [error, setError] = useState("")
+  const [lastTicker, setLastTicker] = useState("")
+  const didAutoLoad = useRef(false)
 
-  const handleAnalyze = async (ticker: string) => {
+  const handleAnalyze = useCallback(async (ticker: string) => {
     setLoading(true); setError(""); setData(null)
-    try { const res = await fetch("/api/earnings", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ticker }) }); const json = await res.json(); if (json.error) throw new Error(json.error); setData(json) }
+    const t = ticker.toUpperCase().trim()
+    setLastTicker(t)
+    try { localStorage.setItem(LS_KEY_EARNINGS, t) } catch {}
+    try { const res = await fetch("/api/earnings", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ticker: t }) }); const json = await res.json(); if (json.error) throw new Error(json.error); setData(json) }
     catch (e: unknown) { setError(e instanceof Error ? e.message : "Failed") } finally { setLoading(false) }
-  }
+  }, [])
+
+  useEffect(() => {
+    if (didAutoLoad.current) return
+    didAutoLoad.current = true
+    try { const saved = localStorage.getItem(LS_KEY_EARNINGS); if (saved) { setLastTicker(saved); handleAnalyze(saved) } } catch {}
+  }, [handleAnalyze])
 
   const q = data?.quote; const e = data?.earnings
   const fwdQ = (e?.forwardEstimates ?? []).filter((f) => f.period === "0q" || f.period === "+1q")
@@ -274,7 +287,7 @@ export default function EarningsReport() {
   return (
     <div className="space-y-4">
       <div className="text-xs text-muted-foreground mb-2">Earnings report — EPS, Revenue, EBITDA, FCF & Net Income with TTM analysis (Yahoo Finance)</div>
-      <TerminalInput placeholder="Enter ticker (e.g. AAPL, GOOGL, TSLA)" onSubmit={handleAnalyze} loading={loading} label="EARNINGS >" />
+      <TerminalInput placeholder="Enter ticker (e.g. AAPL, GOOGL, TSLA)" onSubmit={handleAnalyze} loading={loading} label="EARNINGS >" defaultValue={lastTicker} />
       {error && <div className="flex items-center gap-2 text-bloomberg-red text-sm p-3 bg-bloomberg-red/10 border border-bloomberg-red/20 rounded"><AlertTriangle className="w-4 h-4" />{error}</div>}
 
       {q && e && (

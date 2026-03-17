@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect, useRef, useCallback } from "react"
 import { AlertTriangle, Trophy, Target, Shield, TrendingUp, Zap, Award, ArrowRight } from "lucide-react"
 import type { QuoteData, KeyStatistics } from "@/lib/yahoo"
 import type { FullAnalysis } from "@/lib/analysis"
@@ -30,23 +30,31 @@ interface CompareData {
   analysisB: FullAnalysis
 }
 
+const LS_KEY_COMPARE = "bloomberg_last_tickers_compare"
+
 export default function StockCompare() {
   const [tickerA, setTickerA] = useState("")
   const [tickerB, setTickerB] = useState("")
   const [loading, setLoading] = useState(false)
   const [data, setData] = useState<CompareData | null>(null)
   const [error, setError] = useState("")
+  const didAutoLoad = useRef(false)
 
-  const handleCompare = async () => {
-    if (!tickerA || !tickerB) return
+  const handleCompare = useCallback(async (tA?: string, tB?: string) => {
+    const a = (tA ?? tickerA).toUpperCase().trim()
+    const b = (tB ?? tickerB).toUpperCase().trim()
+    if (!a || !b) return
+    if (tA) setTickerA(a)
+    if (tB) setTickerB(b)
     setLoading(true)
     setError("")
     setData(null)
+    try { localStorage.setItem(LS_KEY_COMPARE, JSON.stringify({ a, b })) } catch {}
     try {
       const res = await fetch("/api/compare", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ tickerA, tickerB }),
+        body: JSON.stringify({ tickerA: a, tickerB: b }),
       })
       const json = await res.json()
       if (json.error) throw new Error(json.error)
@@ -56,7 +64,16 @@ export default function StockCompare() {
     } finally {
       setLoading(false)
     }
-  }
+  }, [tickerA, tickerB])
+
+  useEffect(() => {
+    if (didAutoLoad.current) return
+    didAutoLoad.current = true
+    try {
+      const saved = localStorage.getItem(LS_KEY_COMPARE)
+      if (saved) { const { a, b } = JSON.parse(saved); if (a && b) { setTickerA(a); setTickerB(b); handleCompare(a, b) } }
+    } catch {}
+  }, [handleCompare])
 
   const qA = data?.quoteA
   const qB = data?.quoteB
@@ -95,7 +112,7 @@ export default function StockCompare() {
           </div>
         </div>
         <button
-          onClick={handleCompare}
+          onClick={() => handleCompare()}
           disabled={loading || !tickerA || !tickerB}
           className="px-6 py-2 bg-bloomberg-green/20 text-bloomberg-green border border-bloomberg-green/30 rounded text-xs font-bold hover:bg-bloomberg-green/30 disabled:opacity-40 transition-colors"
         >

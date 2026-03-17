@@ -8,11 +8,16 @@ interface TerminalInputProps {
   onSubmit: (value: string) => void
   loading?: boolean
   label?: string
+  defaultValue?: string
 }
 
-export default function TerminalInput({ placeholder, onSubmit, loading, label }: TerminalInputProps) {
-  const [value, setValue] = useState("")
+export default function TerminalInput({ placeholder, onSubmit, loading, label, defaultValue }: TerminalInputProps) {
+  const [value, setValue] = useState(defaultValue ?? "")
   const inputRef = useRef<HTMLInputElement>(null)
+
+  useEffect(() => {
+    if (defaultValue) setValue(defaultValue)
+  }, [defaultValue])
 
   useEffect(() => {
     inputRef.current?.focus()

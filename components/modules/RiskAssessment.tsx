@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect, useRef, useCallback } from "react"
 import { AlertTriangle, Shield, TrendingDown, Target, Activity } from "lucide-react"
 import TerminalInput from "@/components/TerminalInput"
 import GaugeChart from "@/components/charts/GaugeChart"
@@ -77,20 +77,27 @@ function probColor(p: string): string {
 
 // ── Component ────────────────────────────────────────────────────
 
+const LS_KEY_RISK = "bloomberg_last_ticker_risk"
+
 export default function RiskAssessment() {
   const [loading, setLoading] = useState(false)
   const [data, setData] = useState<ApiResponse | null>(null)
   const [error, setError] = useState("")
+  const [lastTicker, setLastTicker] = useState("")
+  const didAutoLoad = useRef(false)
 
-  const handleAnalyze = async (ticker: string) => {
+  const handleAnalyze = useCallback(async (ticker: string) => {
     setLoading(true)
     setError("")
     setData(null)
+    const t = ticker.toUpperCase().trim()
+    setLastTicker(t)
+    try { localStorage.setItem(LS_KEY_RISK, t) } catch {}
     try {
       const res = await fetch("/api/risk", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ ticker }),
+        body: JSON.stringify({ ticker: t }),
       })
       const json = await res.json()
       if (json.error) throw new Error(json.error)
@@ -100,7 +107,13 @@ export default function RiskAssessment() {
     } finally {
       setLoading(false)
     }
-  }
+  }, [])
+
+  useEffect(() => {
+    if (didAutoLoad.current) return
+    didAutoLoad.current = true
+    try { const saved = localStorage.getItem(LS_KEY_RISK); if (saved) { setLastTicker(saved); handleAnalyze(saved) } } catch {}
+  }, [handleAnalyze])
 
   const q = data?.quote
   const s = data?.stats
@@ -116,6 +129,7 @@ export default function RiskAssessment() {
         onSubmit={handleAnalyze}
         loading={loading}
         label="RISK >"
+        defaultValue={lastTicker}
       />
 
       {error && (

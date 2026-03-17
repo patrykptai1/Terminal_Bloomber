@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useMemo } from "react"
+import { useState, useMemo, useEffect, useRef, useCallback } from "react"
 import {
   Target,
   AlertTriangle,
@@ -96,20 +96,27 @@ function fmtP(n: number | null | undefined, currency = "USD"): string {
   return fmtCurrencyPrice(n, currency)
 }
 
+const LS_KEY_ENTRY = "bloomberg_last_ticker_entry"
+
 export default function EntryTiming() {
   const [loading, setLoading] = useState(false)
   const [data, setData] = useState<EntryData | null>(null)
   const [error, setError] = useState("")
+  const [lastTicker, setLastTicker] = useState("")
+  const didAutoLoad = useRef(false)
 
-  const handleAnalyze = async (ticker: string) => {
+  const handleAnalyze = useCallback(async (ticker: string) => {
     setLoading(true)
     setError("")
     setData(null)
+    const t = ticker.toUpperCase().trim()
+    setLastTicker(t)
+    try { localStorage.setItem(LS_KEY_ENTRY, t) } catch {}
     try {
       const res = await fetch("/api/entry", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ ticker }),
+        body: JSON.stringify({ ticker: t }),
       })
       const json = await res.json()
       if (json.error) throw new Error(json.error)
@@ -119,7 +126,13 @@ export default function EntryTiming() {
     } finally {
       setLoading(false)
     }
-  }
+  }, [])
+
+  useEffect(() => {
+    if (didAutoLoad.current) return
+    didAutoLoad.current = true
+    try { const saved = localStorage.getItem(LS_KEY_ENTRY); if (saved) { setLastTicker(saved); handleAnalyze(saved) } } catch {}
+  }, [handleAnalyze])
 
   // Compute MA50/MA200 overlays from full history client-side
   const chartData = useMemo(() => {
@@ -247,6 +260,7 @@ export default function EntryTiming() {
         onSubmit={handleAnalyze}
         loading={loading}
         label="ENTRY >"
+        defaultValue={lastTicker}
       />
 
       {error && (

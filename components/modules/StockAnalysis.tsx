@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect, useRef, useCallback } from "react"
 import { TrendingUp, TrendingDown, AlertTriangle, ShieldAlert } from "lucide-react"
 import TerminalInput from "@/components/TerminalInput"
 import PriceChart from "@/components/charts/PriceChart"
@@ -143,20 +143,27 @@ interface ApiResponse {
   history: HistoricalPrice[]
 }
 
+const LS_KEY = "bloomberg_last_ticker_analysis"
+
 export default function StockAnalysis() {
   const [loading, setLoading] = useState(false)
   const [data, setData] = useState<ApiResponse | null>(null)
   const [error, setError] = useState("")
+  const [lastTicker, setLastTicker] = useState("")
+  const didAutoLoad = useRef(false)
 
-  const handleAnalyze = async (ticker: string) => {
+  const handleAnalyze = useCallback(async (ticker: string) => {
     setLoading(true)
     setError("")
     setData(null)
+    const t = ticker.toUpperCase().trim()
+    setLastTicker(t)
+    try { localStorage.setItem(LS_KEY, t) } catch {}
     try {
       const res = await fetch("/api/analyze", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ ticker }),
+        body: JSON.stringify({ ticker: t }),
       })
       const json = await res.json()
       if (json.error) throw new Error(json.error)
@@ -166,7 +173,16 @@ export default function StockAnalysis() {
     } finally {
       setLoading(false)
     }
-  }
+  }, [])
+
+  useEffect(() => {
+    if (didAutoLoad.current) return
+    didAutoLoad.current = true
+    try {
+      const saved = localStorage.getItem(LS_KEY)
+      if (saved) { setLastTicker(saved); handleAnalyze(saved) }
+    } catch {}
+  }, [handleAnalyze])
 
   const q = data?.quote
   const a = data?.analysis
@@ -183,6 +199,7 @@ export default function StockAnalysis() {
         onSubmit={handleAnalyze}
         loading={loading}
         label="ANALYZE >"
+        defaultValue={lastTicker}
       />
 
       {error && (
