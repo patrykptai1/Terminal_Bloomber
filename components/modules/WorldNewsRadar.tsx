@@ -4,7 +4,9 @@ import { useState, useEffect, useCallback, useRef } from "react"
 import { createPortal } from "react-dom"
 import DonutChart from "@/components/charts/DonutChart"
 import HorizontalBar from "@/components/charts/HorizontalBar"
+import SectorImpactWidget from "@/components/modules/SectorImpactWidget"
 import type { WorldNewsItem, WorldNewsData } from "@/lib/worldnews"
+import type { WorldNewsItemInput } from "@/lib/sectorImpact"
 
 // --- Constants ---
 
@@ -308,6 +310,22 @@ export default function WorldNewsRadar() {
             ))}
           </div>
         </div>
+      )}
+
+      {/* SECTION 4.5: SECTOR IMPACT WIDGET */}
+      {data && data.items.length > 0 && (
+        <SectorImpactWidget
+          newsItems={data.items.map((item): WorldNewsItemInput => ({
+            id: item.id,
+            title: item.title,
+            description: item.description,
+            sentiment: item.sentiment,
+            category: item.category,
+            region: item.region,
+            date: item.date,
+            impact: item.impact,
+          }))}
+        />
       )}
 
       {/* SECTION 5: NEWS FEED */}
