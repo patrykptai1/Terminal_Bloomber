@@ -122,10 +122,22 @@ export default function WorldNewsRadar() {
   // Stats from unfiltered data
   const stats = data?.stats
 
+  // Prepare news items for sector impact analysis
+  const sectorNewsItems: WorldNewsItemInput[] = (data?.items ?? []).map((item) => ({
+    id: item.id,
+    title: item.title,
+    description: item.description,
+    sentiment: item.sentiment,
+    category: item.category,
+    region: item.region,
+    date: item.date,
+    impact: item.impact,
+  }))
+
   // --- Render ---
   return (
-    <div className="space-y-4 font-mono">
-      {/* SECTION 1: RADAR HEADER */}
+    <div className="font-mono">
+      {/* SECTION 1: RADAR HEADER (full width) */}
       <div className="bg-bloomberg-card border border-bloomberg-border rounded p-4">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
@@ -154,6 +166,12 @@ export default function WorldNewsRadar() {
         </div>
         {error && <p className="text-bloomberg-red text-xs mt-2">ERROR: {error}</p>}
       </div>
+
+      {/* 2-COLUMN LAYOUT: News (left) + Sector Impact (right) */}
+      <div className="flex gap-4 mt-4">
+
+      {/* LEFT COLUMN — News content */}
+      <div className="flex-1 min-w-0 space-y-4">
 
       {/* SECTION 2: STATS DASHBOARD */}
       {stats && (
@@ -312,22 +330,6 @@ export default function WorldNewsRadar() {
         </div>
       )}
 
-      {/* SECTION 4.5: SECTOR IMPACT WIDGET */}
-      {data && data.items.length > 0 && (
-        <SectorImpactWidget
-          newsItems={data.items.map((item): WorldNewsItemInput => ({
-            id: item.id,
-            title: item.title,
-            description: item.description,
-            sentiment: item.sentiment,
-            category: item.category,
-            region: item.region,
-            date: item.date,
-            impact: item.impact,
-          }))}
-        />
-      )}
-
       {/* SECTION 5: NEWS FEED */}
       <div className="bg-bloomberg-card border border-bloomberg-border rounded">
         <div className="p-3 border-b border-bloomberg-border flex items-center justify-between">
@@ -419,6 +421,17 @@ export default function WorldNewsRadar() {
           </div>
         </div>
       )}
+
+      </div>{/* END LEFT COLUMN */}
+
+      {/* RIGHT COLUMN — Sector Impact Widget */}
+      <div className="w-80 shrink-0 sticky top-4 self-start">
+        {sectorNewsItems.length > 0 && (
+          <SectorImpactWidget newsItems={sectorNewsItems} />
+        )}
+      </div>
+
+      </div>{/* END 2-COLUMN LAYOUT */}
     </div>
   )
 }

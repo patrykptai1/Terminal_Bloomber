@@ -1,21 +1,39 @@
 /**
- * Geopolitical Sector Impact Analyzer
+ * Geopolitical Sector Impact Analyzer — US Market (GICS Sectors)
  *
- * Maps world events → affected economic sectors → impact direction → companies
- * Uses pattern matching with a comprehensive geopolitical knowledge base.
+ * Maps world news events → GICS sectors (S&P 500 / NASDAQ) → impact direction → tickers
+ * Only US-listed companies on NASDAQ and S&P 500.
  */
+
+// ── GICS Sectors ──────────────────────────────────────────────
+
+export const GICS_SECTORS = [
+  "Information Technology",
+  "Healthcare",
+  "Financials",
+  "Consumer Discretionary",
+  "Consumer Staples",
+  "Energy",
+  "Industrials",
+  "Materials",
+  "Utilities",
+  "Real Estate",
+  "Communication Services",
+] as const
+
+export type GICSSector = (typeof GICS_SECTORS)[number]
 
 // ── Types ─────────────────────────────────────────────────────
 
 export interface CompanyTicker {
   symbol: string
   name: string
+  index: "S&P500" | "NASDAQ" | "BOTH"
   why: string
 }
 
 export interface SectorEffect {
-  sector: string
-  subsector?: string
+  sector: GICSSector
   impact: "bullish" | "bearish" | "mixed"
   reason: string
   tickers: CompanyTicker[]
@@ -24,832 +42,645 @@ export interface SectorEffect {
 export interface EventPattern {
   id: string
   name: string
-  /** At least ONE keyword from each group must match (AND between groups, OR within group) */
   keywordGroups: string[][]
-  /** Region filter — only match if news is from this region (optional) */
-  regionFilter?: string[]
   effects: SectorEffect[]
 }
 
-export interface NewsImpactResult {
-  newsId: string
-  newsTitle: string
-  newsSentiment: "positive" | "negative" | "neutral"
-  newsCategory: string
-  newsRegion: string
-  newsDate: string
-  matchedEvents: {
-    eventId: string
-    eventName: string
-    effects: (SectorEffect & { confidence: "high" | "medium" | "low" })[]
-  }[]
+export interface WorldNewsItemInput {
+  id: string
+  title: string
+  description?: string
+  sentiment: "positive" | "negative" | "neutral"
+  category: string
+  region: string
+  date: string
+  impact: string
 }
 
 export interface SectorSummary {
-  sector: string
-  subsector?: string
+  sector: GICSSector
   impact: "bullish" | "bearish" | "mixed"
   newsCount: number
   reasons: string[]
   tickers: CompanyTicker[]
   newsItems: { id: string; title: string; sentiment: string }[]
   confidence: "high" | "medium" | "low"
+  eventNames: string[]
 }
 
 export interface ImpactAnalysis {
-  positive: SectorSummary[]  // sectors that BENEFIT
-  negative: SectorSummary[]  // sectors that SUFFER
+  bullish: SectorSummary[]
+  bearish: SectorSummary[]
   mixed: SectorSummary[]
   totalNewsAnalyzed: number
   eventsDetected: number
 }
 
-// ── Knowledge Base ────────────────────────────────────────────
+// ── Knowledge Base: Events → GICS Sectors → US Tickers ───────
 
 const EVENT_PATTERNS: EventPattern[] = [
-  // ═══════════════════════════════════════════════════
-  // MIDDLE EAST CONFLICT
-  // ═══════════════════════════════════════════════════
+  // ═══ MIDDLE EAST CONFLICT ═══
   {
     id: "mideast_war",
-    name: "Middle East Military Conflict",
+    name: "Middle East Conflict",
     keywordGroups: [
       ["iran", "iraq", "syria", "yemen", "lebanon", "hezbollah", "houthi", "gaza", "israel", "middle east", "persian gulf"],
-      ["war", "attack", "strike", "missile", "bomb", "military", "conflict", "invasion", "offensive", "airstrikes", "troops"]
+      ["war", "attack", "strike", "missile", "bomb", "military", "conflict", "invasion", "offensive", "airstrikes"]
     ],
     effects: [
       {
         sector: "Energy",
-        subsector: "Oil & Gas",
         impact: "bullish",
-        reason: "Middle East conflict threatens oil supply routes (Strait of Hormuz handles 20% of global oil). Supply disruption = higher oil prices.",
+        reason: "Oil supply risk (Strait of Hormuz = 20% global oil). US producers benefit from price spikes.",
         tickers: [
-          { symbol: "XOM", name: "ExxonMobil", why: "Largest US oil producer — benefits from higher crude prices" },
-          { symbol: "CVX", name: "Chevron", why: "Major US oil company — increased revenue from price spikes" },
-          { symbol: "OXY", name: "Occidental Petroleum", why: "Significant US shale producer — higher margins" },
-          { symbol: "COP", name: "ConocoPhillips", why: "Pure-play E&P — direct beneficiary of oil price increases" },
-          { symbol: "HAL", name: "Halliburton", why: "Oilfield services — more drilling activity when prices rise" },
-          { symbol: "SLB", name: "Schlumberger", why: "Oilfield services leader — capex increases with oil prices" },
+          { symbol: "XOM", name: "ExxonMobil", index: "S&P500", why: "Largest US oil producer — direct revenue from oil price spike" },
+          { symbol: "CVX", name: "Chevron", index: "S&P500", why: "Major integrated oil — higher crude realizations" },
+          { symbol: "COP", name: "ConocoPhillips", index: "S&P500", why: "Pure-play E&P — maximum leverage to oil price" },
+          { symbol: "OXY", name: "Occidental Petroleum", index: "S&P500", why: "Permian Basin producer — Buffett-backed" },
+          { symbol: "HAL", name: "Halliburton", index: "S&P500", why: "Oilfield services — more drilling at higher prices" },
         ]
       },
       {
-        sector: "Defense & Aerospace",
-        subsector: "Defense Contractors",
+        sector: "Industrials",
         impact: "bullish",
-        reason: "Military conflict increases defense spending. Governments order more weapons, ammunition, and defense systems.",
+        reason: "Defense spending surge. US contractors receive accelerated orders for weapons, missiles, drones.",
         tickers: [
-          { symbol: "LMT", name: "Lockheed Martin", why: "F-35, missile systems — largest US defense contractor" },
-          { symbol: "RTX", name: "RTX (Raytheon)", why: "Patriot missiles, air defense systems — directly deployed in conflicts" },
-          { symbol: "NOC", name: "Northrop Grumman", why: "B-21 bomber, drones, surveillance systems" },
-          { symbol: "GD", name: "General Dynamics", why: "Tanks, submarines, ammunition — ground war beneficiary" },
-          { symbol: "LHX", name: "L3Harris Technologies", why: "Communication & electronic warfare systems" },
-          { symbol: "BA", name: "Boeing", why: "Defense division — fighter jets, military aircraft" },
+          { symbol: "LMT", name: "Lockheed Martin", index: "S&P500", why: "F-35, Patriot — #1 US defense contractor" },
+          { symbol: "RTX", name: "RTX (Raytheon)", index: "S&P500", why: "Patriot missiles, air defense — directly deployed" },
+          { symbol: "NOC", name: "Northrop Grumman", index: "S&P500", why: "B-21 stealth bomber, surveillance drones" },
+          { symbol: "GD", name: "General Dynamics", index: "S&P500", why: "Ammunition, tanks, submarines" },
+          { symbol: "LHX", name: "L3Harris", index: "S&P500", why: "Electronic warfare, communications" },
         ]
       },
       {
-        sector: "Transport",
-        subsector: "Airlines",
+        sector: "Materials",
+        impact: "bullish",
+        reason: "Gold = safe-haven demand. Investors flee to precious metals during geopolitical uncertainty.",
+        tickers: [
+          { symbol: "NEM", name: "Newmont Mining", index: "S&P500", why: "Largest gold miner — leverage to gold price" },
+          { symbol: "FCX", name: "Freeport-McMoRan", index: "S&P500", why: "Copper/gold — commodity supercycle" },
+        ]
+      },
+      {
+        sector: "Consumer Discretionary",
         impact: "bearish",
-        reason: "Higher fuel costs from oil price spikes. Route disruptions around conflict zones. Insurance costs rise.",
+        reason: "Airlines hit by fuel costs + route disruptions. Travel/leisure demand softens.",
         tickers: [
-          { symbol: "DAL", name: "Delta Air Lines", why: "Fuel is ~25% of costs — jet fuel price spikes hit margins" },
-          { symbol: "UAL", name: "United Airlines", why: "International routes affected by conflict zone rerouting" },
-          { symbol: "LUV", name: "Southwest Airlines", why: "Less hedging — more exposed to fuel price volatility" },
+          { symbol: "DAL", name: "Delta Air Lines", index: "S&P500", why: "Fuel ~25% of costs — jet fuel spike" },
+          { symbol: "UAL", name: "United Airlines", index: "NASDAQ", why: "International routes disrupted" },
+          { symbol: "BKNG", name: "Booking Holdings", index: "NASDAQ", why: "Travel bookings decline in conflict zones" },
         ]
       },
       {
-        sector: "Shipping & Logistics",
-        subsector: "Maritime Transport",
-        impact: "mixed",
-        reason: "Suez Canal / Red Sea disruption forces longer routes (Cape of Good Hope). Higher shipping rates benefit shipping companies but hurt importers.",
-        tickers: [
-          { symbol: "ZIM", name: "ZIM Shipping", why: "Container shipping — rates spike during route disruptions" },
-          { symbol: "GOGL", name: "Golden Ocean", why: "Dry bulk shipping — longer routes = more vessel utilization" },
-          { symbol: "FDX", name: "FedEx", why: "Air freight alternative demand increases — but fuel costs rise" },
-        ]
-      },
-      {
-        sector: "Precious Metals",
-        subsector: "Gold & Silver",
-        impact: "bullish",
-        reason: "War = safe-haven demand. Investors flee to gold during geopolitical uncertainty.",
-        tickers: [
-          { symbol: "GLD", name: "SPDR Gold ETF", why: "Direct gold exposure — safe haven demand spike" },
-          { symbol: "NEM", name: "Newmont Mining", why: "Largest gold miner — leverage to gold price increases" },
-          { symbol: "GOLD", name: "Barrick Gold", why: "Major gold producer — margins expand with higher gold" },
-          { symbol: "WPM", name: "Wheaton Precious Metals", why: "Streaming company — fixed costs, rising gold/silver prices" },
-        ]
-      },
-      {
-        sector: "Insurance",
-        subsector: "Reinsurance",
+        sector: "Financials",
         impact: "bearish",
-        reason: "War risk claims increase. Property, cargo, and political risk insurance payouts.",
+        reason: "Insurance claims spike. Political risk, cargo, and property insurance payouts increase.",
         tickers: [
-          { symbol: "BRK.B", name: "Berkshire Hathaway", why: "Major reinsurer — exposed to catastrophic claims" },
-          { symbol: "ALL", name: "Allstate", why: "Insurance claims from supply chain disruptions" },
+          { symbol: "BRK.B", name: "Berkshire Hathaway", index: "S&P500", why: "Major reinsurer — catastrophic claims" },
+          { symbol: "TRV", name: "Travelers", index: "S&P500", why: "P&C insurer — war risk exposure" },
         ]
       }
     ]
   },
 
-  // ═══════════════════════════════════════════════════
-  // PERSIAN GULF / STRAIT OF HORMUZ
-  // ═══════════════════════════════════════════════════
+  // ═══ GULF / HORMUZ / QATAR ═══
   {
-    id: "hormuz_disruption",
-    name: "Strait of Hormuz / Gulf Disruption",
+    id: "gulf_disruption",
+    name: "Persian Gulf / Hormuz Disruption",
     keywordGroups: [
-      ["hormuz", "persian gulf", "gulf of oman", "qatar", "bahrain", "kuwait", "uae", "abu dhabi", "dubai"],
-      ["blockade", "disrupt", "threat", "close", "attack", "mine", "naval", "embargo", "sanctions", "conflict", "war"]
+      ["hormuz", "persian gulf", "qatar", "bahrain", "kuwait", "uae", "abu dhabi"],
+      ["blockade", "disrupt", "threat", "close", "attack", "naval", "embargo", "sanctions", "war"]
     ],
     effects: [
       {
         sector: "Energy",
-        subsector: "LNG / Natural Gas",
         impact: "bullish",
-        reason: "Qatar is world's largest LNG exporter. Gulf disruption = LNG supply crisis. US & Australian LNG producers benefit enormously.",
+        reason: "Qatar = world's largest LNG exporter. Gulf disruption = LNG crisis. US LNG exporters become critical replacement supply.",
         tickers: [
-          { symbol: "LNG", name: "Cheniere Energy", why: "Largest US LNG exporter — replacement supply for Qatar LNG" },
-          { symbol: "AR", name: "Antero Resources", why: "Major US natgas producer — feeds LNG export terminals" },
-          { symbol: "EQT", name: "EQT Corporation", why: "Largest US natural gas producer — price spike beneficiary" },
+          { symbol: "LNG", name: "Cheniere Energy", index: "S&P500", why: "Largest US LNG exporter — replacement for Qatar LNG" },
+          { symbol: "EQT", name: "EQT Corporation", index: "S&P500", why: "Largest US natural gas producer" },
         ]
       },
       {
-        sector: "Industrial Gas",
-        subsector: "Helium",
+        sector: "Materials",
         impact: "bullish",
-        reason: "Qatar produces ~30% of global helium. Gulf disruption = massive helium supply shortage. US producers (from Federal Helium Reserve) benefit.",
+        reason: "Qatar = ~30% global helium. Gulf disruption = helium shortage. US industrial gas companies have pricing power.",
         tickers: [
-          { symbol: "APD", name: "Air Products & Chemicals", why: "Major helium producer — US-based supply becomes critical" },
-          { symbol: "LIN", name: "Linde plc", why: "Global industrial gas leader — helium pricing power" },
-          { symbol: "RGLD", name: "Royal Helium", why: "Canadian helium exploration — benefits from supply scarcity" },
+          { symbol: "APD", name: "Air Products", index: "S&P500", why: "Major helium producer — US-based supply critical" },
+          { symbol: "LIN", name: "Linde plc", index: "S&P500", why: "Global industrial gas leader — helium pricing power" },
         ]
       },
       {
-        sector: "Semiconductors",
-        subsector: "Chip Manufacturing",
+        sector: "Information Technology",
         impact: "bearish",
-        reason: "Helium is critical for semiconductor manufacturing (cooling, leak detection). Helium shortage = chip production disruption.",
+        reason: "Helium critical for semiconductor manufacturing (cooling, leak detection). Shortage = chip production disruption.",
         tickers: [
-          { symbol: "INTC", name: "Intel", why: "Major chip fabs use helium — production at risk" },
-          { symbol: "TSM", name: "TSMC", why: "World's largest chip manufacturer — helium-dependent processes" },
-          { symbol: "ASML", name: "ASML", why: "EUV lithography requires helium coolant" },
-        ]
-      },
-      {
-        sector: "Fertilizers",
-        subsector: "Ammonia / Urea",
-        impact: "bullish",
-        reason: "Gulf states are major ammonia/urea exporters. Supply disruption = higher fertilizer prices.",
-        tickers: [
-          { symbol: "NTR", name: "Nutrien", why: "World's largest fertilizer company — benefits from supply shortage" },
-          { symbol: "MOS", name: "Mosaic", why: "Major US fertilizer producer — pricing power increase" },
-          { symbol: "CF", name: "CF Industries", why: "US nitrogen fertilizer — replacement supplier" },
-        ]
-      },
-      {
-        sector: "Aluminum",
-        subsector: "Smelting",
-        impact: "mixed",
-        reason: "UAE (Emirates Global Aluminium) is world's 5th largest aluminum producer. Supply disruption pushes prices up — good for non-Gulf producers, bad for consumers.",
-        tickers: [
-          { symbol: "AA", name: "Alcoa", why: "US aluminum producer — benefits from higher aluminum prices" },
-          { symbol: "CENX", name: "Century Aluminum", why: "US smelter — domestic supply premium" },
+          { symbol: "INTC", name: "Intel", index: "BOTH", why: "US fabs use helium — production at risk" },
+          { symbol: "NVDA", name: "NVIDIA", index: "BOTH", why: "GPU supply chain dependent on TSMC helium processes" },
+          { symbol: "AMAT", name: "Applied Materials", index: "NASDAQ", why: "Chip equipment uses helium in manufacturing" },
         ]
       }
     ]
   },
 
-  // ═══════════════════════════════════════════════════
-  // CHINA-TAIWAN TENSIONS
-  // ═══════════════════════════════════════════════════
+  // ═══ CHINA-TAIWAN TENSIONS ═══
   {
     id: "china_taiwan",
     name: "China-Taiwan Tensions",
     keywordGroups: [
-      ["china", "taiwan", "beijing", "taipei", "pla"],
-      ["tension", "military", "exercise", "blockade", "invasion", "threat", "strait", "conflict", "sanctions", "drills"]
+      ["china", "taiwan", "beijing", "taipei"],
+      ["tension", "military", "blockade", "invasion", "threat", "strait", "drills", "exercise", "conflict"]
     ],
     effects: [
       {
-        sector: "Semiconductors",
-        subsector: "Advanced Chips",
+        sector: "Information Technology",
         impact: "mixed",
-        reason: "Taiwan (TSMC) produces 90% of advanced chips. Conflict = global chip shortage. US chip companies with domestic fabs benefit; fabless companies suffer.",
+        reason: "Taiwan (TSMC) = 90% advanced chips. US fabs benefit from reshoring (CHIPS Act), but fabless companies (NVDA, AMD) face supply risk.",
         tickers: [
-          { symbol: "INTC", name: "Intel", why: "US-based fabs — strategic alternative to TSMC" },
-          { symbol: "GFS", name: "GlobalFoundries", why: "US/EU fabs — supply diversification beneficiary" },
-          { symbol: "NVDA", name: "NVIDIA", why: "RISK: TSMC-dependent for GPU manufacturing" },
-          { symbol: "AMD", name: "AMD", why: "RISK: Relies on TSMC for CPU/GPU production" },
-          { symbol: "AMAT", name: "Applied Materials", why: "Chip equipment — US reshoring drives demand" },
-          { symbol: "LRCX", name: "Lam Research", why: "Chip equipment — benefits from fab diversification" },
+          { symbol: "INTC", name: "Intel", index: "BOTH", why: "BULLISH: US-based fabs — strategic TSMC alternative" },
+          { symbol: "NVDA", name: "NVIDIA", index: "BOTH", why: "RISK: TSMC-dependent for GPU manufacturing" },
+          { symbol: "AMD", name: "AMD", index: "BOTH", why: "RISK: Relies on TSMC for CPU/GPU production" },
+          { symbol: "AMAT", name: "Applied Materials", index: "NASDAQ", why: "BULLISH: US reshoring drives chip equipment demand" },
+          { symbol: "LRCX", name: "Lam Research", index: "NASDAQ", why: "BULLISH: Fab diversification = more equipment orders" },
         ]
       },
       {
-        sector: "Defense & Aerospace",
-        subsector: "Naval Defense",
+        sector: "Industrials",
         impact: "bullish",
-        reason: "Indo-Pacific military buildup. US, Japan, Australia increase defense budgets.",
+        reason: "Indo-Pacific military buildup. US Navy expansion, missile defense orders.",
         tickers: [
-          { symbol: "HII", name: "Huntington Ingalls", why: "US Navy shipbuilder — fleet expansion" },
-          { symbol: "LMT", name: "Lockheed Martin", why: "F-35 for Pacific allies, missile defense" },
-          { symbol: "NOC", name: "Northrop Grumman", why: "B-21, submarines, surveillance drones" },
+          { symbol: "LMT", name: "Lockheed Martin", index: "S&P500", why: "F-35 for Pacific allies, missile defense" },
+          { symbol: "HII", name: "Huntington Ingalls", index: "S&P500", why: "US Navy shipbuilder — fleet expansion" },
+          { symbol: "NOC", name: "Northrop Grumman", index: "S&P500", why: "B-21, drones, submarine tech" },
         ]
       },
       {
-        sector: "Consumer Electronics",
-        subsector: "Hardware",
+        sector: "Consumer Discretionary",
         impact: "bearish",
-        reason: "Most electronics assembled in China/Taiwan. Supply chain disruption = product shortages and higher prices.",
+        reason: "Most electronics assembled in China/Taiwan. iPhones, PCs, servers — supply disruption risk.",
         tickers: [
-          { symbol: "AAPL", name: "Apple", why: "Heavy China/Taiwan supply chain — iPhone production risk" },
-          { symbol: "DELL", name: "Dell Technologies", why: "PC/server assembly in Asia — supply disruption" },
-          { symbol: "HPQ", name: "HP Inc.", why: "Printing & PC — Asian supply chain dependent" },
+          { symbol: "AAPL", name: "Apple", index: "BOTH", why: "Heavy China/Taiwan supply chain — iPhone at risk" },
+          { symbol: "AMZN", name: "Amazon", index: "BOTH", why: "Device manufacturing + seller supply chains" },
+          { symbol: "TSLA", name: "Tesla", index: "BOTH", why: "China factory (Shanghai Gigafactory) exposure" },
         ]
       }
     ]
   },
 
-  // ═══════════════════════════════════════════════════
-  // UKRAINE-RUSSIA CONFLICT
-  // ═══════════════════════════════════════════════════
+  // ═══ UKRAINE-RUSSIA ═══
   {
     id: "ukraine_russia",
     name: "Ukraine-Russia Conflict",
     keywordGroups: [
       ["ukraine", "russia", "moscow", "kyiv", "kremlin", "putin", "zelensk"],
-      ["war", "attack", "offensive", "missile", "drone", "sanctions", "conflict", "invasion", "escalat", "nuclear"]
+      ["war", "attack", "offensive", "missile", "drone", "sanctions", "invasion", "escalat"]
     ],
     effects: [
       {
         sector: "Energy",
-        subsector: "Natural Gas (Europe)",
         impact: "bullish",
-        reason: "Russia was Europe's main gas supplier. Conflict = EU diversification to US LNG. American LNG exporters benefit.",
+        reason: "Russia was Europe's #1 gas supplier. EU diversifies to US LNG. American LNG exporters are replacement supply.",
         tickers: [
-          { symbol: "LNG", name: "Cheniere Energy", why: "US LNG #1 exporter — replacement for Russian pipeline gas" },
-          { symbol: "TELL", name: "Tellurian", why: "LNG development — European demand pull" },
-          { symbol: "EQT", name: "EQT Corporation", why: "Largest US natgas producer — feeds LNG terminals" },
-        ]
-      },
-      {
-        sector: "Agriculture",
-        subsector: "Grains & Wheat",
-        impact: "bullish",
-        reason: "Ukraine & Russia = 30% of global wheat exports. Conflict = wheat supply disruption. US/Canadian grain producers benefit.",
-        tickers: [
-          { symbol: "ADM", name: "Archer-Daniels-Midland", why: "Global grain trader — higher commodity prices" },
-          { symbol: "BG", name: "Bunge", why: "Agribusiness — grain trading margins expand" },
-          { symbol: "WEAT", name: "Teucrium Wheat ETF", why: "Direct wheat price exposure" },
-          { symbol: "NTR", name: "Nutrien", why: "Fertilizer — Russia was major potash/fertilizer exporter" },
-        ]
-      },
-      {
-        sector: "Cybersecurity",
-        subsector: "Enterprise Security",
-        impact: "bullish",
-        reason: "State-sponsored cyberattacks increase during conflict. Companies and governments increase cybersecurity spending.",
-        tickers: [
-          { symbol: "CRWD", name: "CrowdStrike", why: "Endpoint protection — government and enterprise demand" },
-          { symbol: "PANW", name: "Palo Alto Networks", why: "Network security leader — critical infrastructure protection" },
-          { symbol: "ZS", name: "Zscaler", why: "Zero-trust security — remote work defense" },
-          { symbol: "FTNT", name: "Fortinet", why: "Firewall/UTM — infrastructure protection" },
-        ]
-      },
-      {
-        sector: "Metals & Mining",
-        subsector: "Rare Metals",
-        impact: "bullish",
-        reason: "Russia is major producer of palladium (40%), nickel, titanium. Sanctions = supply disruption.",
-        tickers: [
-          { symbol: "SBSW", name: "Sibanye Stillwater", why: "PGM producer — palladium alternative supply" },
-          { symbol: "VALE", name: "Vale", why: "Nickel producer — Russia nickel sanctions benefit" },
-          { symbol: "PALL", name: "Aberdeen Palladium ETF", why: "Direct palladium exposure" },
-        ]
-      },
-      {
-        sector: "Nuclear Energy",
-        subsector: "Uranium",
-        impact: "bullish",
-        reason: "Russia enriches 35% of global uranium. Sanctions on Russian nuclear fuel = Western uranium demand spike.",
-        tickers: [
-          { symbol: "CCJ", name: "Cameco", why: "World's largest uranium producer — replacement supply" },
-          { symbol: "URA", name: "Global X Uranium ETF", why: "Broad uranium sector exposure" },
-          { symbol: "LEU", name: "Centrus Energy", why: "US uranium enrichment — strategic domestic supply" },
-        ]
-      }
-    ]
-  },
-
-  // ═══════════════════════════════════════════════════
-  // TRADE WAR / TARIFFS
-  // ═══════════════════════════════════════════════════
-  {
-    id: "trade_war_china",
-    name: "US-China Trade War / Tariffs",
-    keywordGroups: [
-      ["tariff", "trade war", "trade barrier", "import duty", "trade restriction", "decoupling"],
-      ["china", "chinese", "beijing"]
-    ],
-    effects: [
-      {
-        sector: "Manufacturing",
-        subsector: "US Domestic Manufacturing",
-        impact: "bullish",
-        reason: "Tariffs on Chinese imports protect US manufacturers. Reshoring accelerates.",
-        tickers: [
-          { symbol: "CAT", name: "Caterpillar", why: "US heavy equipment — domestic infrastructure push" },
-          { symbol: "DE", name: "Deere & Company", why: "US manufacturing — less Chinese competition" },
-          { symbol: "GE", name: "GE Aerospace", why: "US industrial conglomerate — reshoring beneficiary" },
-        ]
-      },
-      {
-        sector: "Retail",
-        subsector: "Consumer Goods",
-        impact: "bearish",
-        reason: "Tariffs raise prices on Chinese imports. Retailers face margin pressure or must raise prices.",
-        tickers: [
-          { symbol: "WMT", name: "Walmart", why: "Heavy Chinese sourcing — cost increase pressure" },
-          { symbol: "TGT", name: "Target", why: "Consumer goods sourcing from China — margin compression" },
-          { symbol: "NKE", name: "Nike", why: "China manufacturing & China consumer market risk" },
-        ]
-      },
-      {
-        sector: "Semiconductors",
-        subsector: "Chip Equipment",
-        impact: "mixed",
-        reason: "Export controls limit sales to China (revenue loss) but drive domestic chip investment (CHIPS Act).",
-        tickers: [
-          { symbol: "AMAT", name: "Applied Materials", why: "China revenue at risk from export controls" },
-          { symbol: "KLAC", name: "KLA Corporation", why: "Wafer inspection — China market restriction" },
-          { symbol: "INTC", name: "Intel", why: "CHIPS Act beneficiary — US fab investment" },
-        ]
-      },
-      {
-        sector: "Agriculture",
-        subsector: "US Farmers",
-        impact: "bearish",
-        reason: "China retaliatory tariffs on US soybeans, pork. US agricultural exports decline.",
-        tickers: [
-          { symbol: "ADM", name: "Archer-Daniels-Midland", why: "Soybean exports to China at risk" },
-          { symbol: "TSN", name: "Tyson Foods", why: "Pork exports — retaliatory tariffs" },
-        ]
-      }
-    ]
-  },
-
-  // ═══════════════════════════════════════════════════
-  // FED / INTEREST RATES
-  // ═══════════════════════════════════════════════════
-  {
-    id: "fed_rate_hike",
-    name: "Federal Reserve Rate Hike",
-    keywordGroups: [
-      ["federal reserve", "fed", "fomc", "powell", "central bank"],
-      ["rate hike", "rate increase", "raises rates", "tightening", "hawkish", "higher rates", "rate rise"]
-    ],
-    effects: [
-      {
-        sector: "Banking",
-        subsector: "Commercial Banks",
-        impact: "bullish",
-        reason: "Higher rates = wider net interest margins (NIM). Banks earn more on loans vs deposits.",
-        tickers: [
-          { symbol: "JPM", name: "JPMorgan Chase", why: "Largest US bank — NIM expansion from higher rates" },
-          { symbol: "BAC", name: "Bank of America", why: "Rate-sensitive loan portfolio — margin improvement" },
-          { symbol: "WFC", name: "Wells Fargo", why: "Consumer lending — higher rate spread" },
-        ]
-      },
-      {
-        sector: "Real Estate",
-        subsector: "REITs",
-        impact: "bearish",
-        reason: "Higher rates = higher mortgage costs = lower property demand. REIT valuations decline.",
-        tickers: [
-          { symbol: "O", name: "Realty Income", why: "REIT — higher discount rate lowers valuation" },
-          { symbol: "SPG", name: "Simon Property Group", why: "Mall REIT — financing costs increase" },
-          { symbol: "VNQ", name: "Vanguard Real Estate ETF", why: "Broad REIT exposure — rate-sensitive" },
-        ]
-      },
-      {
-        sector: "Technology",
-        subsector: "Growth Tech",
-        impact: "bearish",
-        reason: "Higher rates reduce present value of future earnings. Growth stocks with distant profits are repriced lower.",
-        tickers: [
-          { symbol: "ARKK", name: "ARK Innovation ETF", why: "High-growth tech — most rate-sensitive" },
-          { symbol: "SNOW", name: "Snowflake", why: "High growth, not yet profitable — valuation pressure" },
-          { symbol: "PLTR", name: "Palantir", why: "Growth premium compresses with higher rates" },
-        ]
-      },
-      {
-        sector: "Utilities",
-        subsector: "Electric Utilities",
-        impact: "bearish",
-        reason: "Bond-proxy sector. Higher rates make bonds more attractive vs utility dividends.",
-        tickers: [
-          { symbol: "NEE", name: "NextEra Energy", why: "Largest US utility — dividend yield less competitive" },
-          { symbol: "DUK", name: "Duke Energy", why: "Utility — capital-intensive, higher borrowing costs" },
-        ]
-      }
-    ]
-  },
-  {
-    id: "fed_rate_cut",
-    name: "Federal Reserve Rate Cut",
-    keywordGroups: [
-      ["federal reserve", "fed", "fomc", "powell", "central bank"],
-      ["rate cut", "rate reduction", "lowers rates", "easing", "dovish", "lower rates", "rate decrease", "pivot"]
-    ],
-    effects: [
-      {
-        sector: "Real Estate",
-        subsector: "Homebuilders",
-        impact: "bullish",
-        reason: "Lower rates = cheaper mortgages = more home buying activity.",
-        tickers: [
-          { symbol: "LEN", name: "Lennar", why: "Homebuilder — lower mortgage rates drive demand" },
-          { symbol: "DHI", name: "D.R. Horton", why: "Largest US homebuilder — volume increase" },
-          { symbol: "ITB", name: "iShares Home Construction ETF", why: "Broad homebuilder exposure" },
-        ]
-      },
-      {
-        sector: "Technology",
-        subsector: "Growth Tech",
-        impact: "bullish",
-        reason: "Lower discount rates increase present value of future cash flows. Growth stocks rerate higher.",
-        tickers: [
-          { symbol: "MSFT", name: "Microsoft", why: "Tech leader — lower rates support premium valuations" },
-          { symbol: "GOOGL", name: "Alphabet", why: "Growth at scale — benefits from rate environment" },
-          { symbol: "META", name: "Meta Platforms", why: "Ad spending recovery in easier monetary conditions" },
-        ]
-      },
-      {
-        sector: "Precious Metals",
-        subsector: "Gold",
-        impact: "bullish",
-        reason: "Lower rates reduce opportunity cost of holding gold. Dollar weakens = gold rises.",
-        tickers: [
-          { symbol: "GLD", name: "SPDR Gold ETF", why: "Direct gold exposure — inverse correlation with rates" },
-          { symbol: "NEM", name: "Newmont Mining", why: "Gold miner — leverage to gold price" },
-        ]
-      },
-      {
-        sector: "Banking",
-        subsector: "Commercial Banks",
-        impact: "bearish",
-        reason: "Lower rates compress net interest margins. Banks earn less on loans.",
-        tickers: [
-          { symbol: "JPM", name: "JPMorgan Chase", why: "NIM compression from lower lending rates" },
-          { symbol: "BAC", name: "Bank of America", why: "Rate-sensitive — margin pressure" },
-        ]
-      }
-    ]
-  },
-
-  // ═══════════════════════════════════════════════════
-  // INFLATION
-  // ═══════════════════════════════════════════════════
-  {
-    id: "inflation_spike",
-    name: "Inflation Surge",
-    keywordGroups: [
-      ["inflation", "cpi", "consumer price", "price index", "cost of living"],
-      ["surge", "rise", "spike", "high", "record", "accelerat", "increas", "soar", "jump"]
-    ],
-    effects: [
-      {
-        sector: "Commodities",
-        subsector: "Hard Assets",
-        impact: "bullish",
-        reason: "Inflation hedge — real assets appreciate when currency purchasing power declines.",
-        tickers: [
-          { symbol: "GLD", name: "SPDR Gold ETF", why: "Classic inflation hedge" },
-          { symbol: "DBC", name: "Invesco DB Commodity ETF", why: "Broad commodity exposure" },
-          { symbol: "BTC-USD", name: "Bitcoin", why: "Digital inflation hedge narrative" },
+          { symbol: "LNG", name: "Cheniere Energy", index: "S&P500", why: "US LNG #1 exporter — replacement for Russian gas" },
+          { symbol: "EQT", name: "EQT Corporation", index: "S&P500", why: "US natgas producer — feeds LNG export terminals" },
+          { symbol: "XOM", name: "ExxonMobil", index: "S&P500", why: "Integrated energy — higher oil+gas prices" },
         ]
       },
       {
         sector: "Consumer Staples",
-        subsector: "Food & Beverage",
-        impact: "mixed",
-        reason: "Can pass costs to consumers (pricing power) but volume may decline. Companies with strong brands benefit.",
+        impact: "bullish",
+        reason: "Ukraine+Russia = 30% global wheat. Supply disruption = higher grain prices. US agribusiness benefits.",
         tickers: [
-          { symbol: "PG", name: "Procter & Gamble", why: "Pricing power — essential products" },
-          { symbol: "KO", name: "Coca-Cola", why: "Brand strength allows price increases" },
-          { symbol: "PEP", name: "PepsiCo", why: "Diversified food & beverage — pricing power" },
+          { symbol: "ADM", name: "Archer-Daniels-Midland", index: "S&P500", why: "Global grain trader — higher commodity margins" },
+          { symbol: "BG", name: "Bunge Global", index: "S&P500", why: "Agribusiness — grain trading profits" },
         ]
       },
       {
-        sector: "Retail",
-        subsector: "Discount Retail",
+        sector: "Materials",
         impact: "bullish",
-        reason: "Consumers trade down to cheaper options during inflation. Discount stores gain market share.",
+        reason: "Russia = 40% global palladium, major nickel & titanium. Sanctions = supply disruption, non-Russian miners benefit.",
         tickers: [
-          { symbol: "COST", name: "Costco", why: "Bulk buying — value proposition during inflation" },
-          { symbol: "DG", name: "Dollar General", why: "Dollar stores gain as consumers seek bargains" },
-          { symbol: "WMT", name: "Walmart", why: "Everyday low prices — inflation beneficiary" },
-        ]
-      }
-    ]
-  },
-
-  // ═══════════════════════════════════════════════════
-  // OIL PRICE SHOCK
-  // ═══════════════════════════════════════════════════
-  {
-    id: "oil_price_spike",
-    name: "Oil Price Spike / OPEC Cuts",
-    keywordGroups: [
-      ["oil", "crude", "brent", "wti", "opec", "petroleum"],
-      ["surge", "spike", "soar", "jump", "record", "high", "cut", "reduce", "restrict"]
-    ],
-    effects: [
-      {
-        sector: "Energy",
-        subsector: "Oil Producers",
-        impact: "bullish",
-        reason: "Higher oil prices directly increase revenue and margins for producers.",
-        tickers: [
-          { symbol: "XOM", name: "ExxonMobil", why: "Integrated oil major — direct price beneficiary" },
-          { symbol: "CVX", name: "Chevron", why: "Major producer — higher realizations" },
-          { symbol: "PXD", name: "Pioneer Natural", why: "Permian Basin pure-play — high leverage to oil" },
+          { symbol: "NEM", name: "Newmont Mining", index: "S&P500", why: "Gold demand (safe-haven) + mining premium" },
+          { symbol: "FCX", name: "Freeport-McMoRan", index: "S&P500", why: "Copper/gold — critical mineral supply" },
+          { symbol: "NTR", name: "Nutrien", index: "S&P500", why: "Fertilizer — Russia was major potash exporter" },
         ]
       },
       {
-        sector: "Renewable Energy",
-        subsector: "Solar & Wind",
+        sector: "Information Technology",
         impact: "bullish",
-        reason: "High oil prices accelerate transition to renewables. Economic case for solar/wind strengthens.",
+        reason: "State-sponsored cyberattacks increase. Enterprise cybersecurity spending surge.",
         tickers: [
-          { symbol: "ENPH", name: "Enphase Energy", why: "Solar microinverters — residential solar economics improve" },
-          { symbol: "FSLR", name: "First Solar", why: "US solar panels — energy independence narrative" },
-          { symbol: "NEE", name: "NextEra Energy", why: "Largest wind/solar developer — policy tailwind" },
-        ]
-      },
-      {
-        sector: "Electric Vehicles",
-        subsector: "EV Manufacturers",
-        impact: "bullish",
-        reason: "High gas prices drive EV adoption. Fuel cost savings argument strengthens.",
-        tickers: [
-          { symbol: "TSLA", name: "Tesla", why: "EV leader — gas price shock drives EV demand" },
-          { symbol: "RIVN", name: "Rivian", why: "EV trucks — fleet economics vs diesel" },
-          { symbol: "LI", name: "Li Auto", why: "EREV/EV — Chinese market shift from ICE" },
-        ]
-      },
-      {
-        sector: "Chemicals",
-        subsector: "Petrochemicals",
-        impact: "bearish",
-        reason: "Oil is feedstock for plastics, chemicals. Higher oil = higher input costs.",
-        tickers: [
-          { symbol: "DOW", name: "Dow Inc.", why: "Petrochemical giant — feedstock cost increase" },
-          { symbol: "LYB", name: "LyondellBasell", why: "Plastics/chemicals — margin compression" },
-        ]
-      }
-    ]
-  },
-
-  // ═══════════════════════════════════════════════════
-  // NATURAL DISASTER
-  // ══════════════════════════════���════════════════════
-  {
-    id: "natural_disaster",
-    name: "Major Natural Disaster",
-    keywordGroups: [
-      ["earthquake", "hurricane", "typhoon", "tsunami", "flood", "wildfire", "tornado", "cyclone", "volcano"]
-    ],
-    effects: [
-      {
-        sector: "Insurance",
-        subsector: "Property Insurance",
-        impact: "bearish",
-        reason: "Catastrophic claims. Short-term losses from payouts, but long-term premium increases.",
-        tickers: [
-          { symbol: "ALL", name: "Allstate", why: "Property insurance — claims exposure" },
-          { symbol: "TRV", name: "Travelers", why: "P&C insurer — catastrophe losses" },
-          { symbol: "PGR", name: "Progressive", why: "Auto/property — storm-related claims" },
-        ]
-      },
-      {
-        sector: "Construction",
-        subsector: "Building Materials",
-        impact: "bullish",
-        reason: "Rebuilding effort drives demand for construction materials. Government reconstruction spending.",
-        tickers: [
-          { symbol: "VMC", name: "Vulcan Materials", why: "Aggregates — infrastructure reconstruction" },
-          { symbol: "MLM", name: "Martin Marietta", why: "Building materials — reconstruction demand" },
-          { symbol: "HD", name: "Home Depot", why: "Building supplies — disaster recovery sales spike" },
-          { symbol: "LOW", name: "Lowe's", why: "Home improvement — reconstruction demand" },
+          { symbol: "CRWD", name: "CrowdStrike", index: "BOTH", why: "Endpoint protection — government demand" },
+          { symbol: "PANW", name: "Palo Alto Networks", index: "BOTH", why: "Network security — critical infrastructure" },
+          { symbol: "ZS", name: "Zscaler", index: "NASDAQ", why: "Zero-trust security — enterprise adoption" },
+          { symbol: "FTNT", name: "Fortinet", index: "BOTH", why: "Firewall/UTM — infrastructure defense" },
         ]
       },
       {
         sector: "Utilities",
-        subsector: "Power Generation",
-        impact: "mixed",
-        reason: "Infrastructure damage requires costly repairs. But government funding for grid resilience increases.",
+        impact: "bullish",
+        reason: "Russia enriches 35% global uranium. Sanctions = Western uranium demand spike for nuclear power.",
         tickers: [
-          { symbol: "PWR", name: "Quanta Services", why: "Power grid infrastructure — rebuild/upgrade" },
-          { symbol: "GNRC", name: "Generac", why: "Backup generators — demand surge after outages" },
+          { symbol: "CEG", name: "Constellation Energy", index: "S&P500", why: "Largest US nuclear fleet — uranium price support" },
+          { symbol: "VST", name: "Vistra", index: "S&P500", why: "Power generation — energy security premium" },
         ]
       }
     ]
   },
 
-  // ═══════════════════════════════════════════════════
-  // AI / TECHNOLOGY BREAKTHROUGH
-  // ═══════════════════════════════════════════════════
+  // ═══ US-CHINA TRADE WAR / TARIFFS ═══
   {
-    id: "ai_breakthrough",
-    name: "AI / Technology Breakthrough",
+    id: "trade_war",
+    name: "US-China Trade War / Tariffs",
     keywordGroups: [
-      ["artificial intelligence", "ai ", "chatgpt", "openai", "deepmind", "machine learning", "generative ai", "llm", "large language model"],
-      ["breakthrough", "launch", "release", "record", "milestone", "revolutio", "transform", "advance", "dominat"]
+      ["tariff", "trade war", "trade barrier", "import duty", "decoupling", "trade restrict"],
+      ["china", "chinese", "beijing"]
     ],
     effects: [
       {
-        sector: "Technology",
-        subsector: "AI Infrastructure",
+        sector: "Industrials",
         impact: "bullish",
-        reason: "AI demand drives massive data center build-out. GPU, networking, and cloud providers benefit.",
+        reason: "Tariffs protect US manufacturers. Reshoring accelerates domestic production.",
         tickers: [
-          { symbol: "NVDA", name: "NVIDIA", why: "AI GPU monopoly — training & inference chips" },
-          { symbol: "AVGO", name: "Broadcom", why: "AI networking chips, custom AI accelerators" },
-          { symbol: "MSFT", name: "Microsoft", why: "Azure AI, OpenAI partnership, Copilot" },
-          { symbol: "GOOGL", name: "Alphabet", why: "Google Cloud AI, DeepMind, Gemini" },
-          { symbol: "AMD", name: "AMD", why: "MI300X AI accelerators — NVIDIA alternative" },
+          { symbol: "CAT", name: "Caterpillar", index: "S&P500", why: "US heavy equipment — domestic infra push" },
+          { symbol: "DE", name: "Deere & Company", index: "S&P500", why: "US manufacturing — less Chinese competition" },
+          { symbol: "GE", name: "GE Aerospace", index: "S&P500", why: "US industrial — reshoring beneficiary" },
+        ]
+      },
+      {
+        sector: "Consumer Discretionary",
+        impact: "bearish",
+        reason: "Tariffs raise prices on Chinese imports. Retailers face margin pressure.",
+        tickers: [
+          { symbol: "AMZN", name: "Amazon", index: "BOTH", why: "Third-party sellers source from China — price increase" },
+          { symbol: "NKE", name: "Nike", index: "S&P500", why: "China manufacturing + China consumer market risk" },
+          { symbol: "TSLA", name: "Tesla", index: "BOTH", why: "Shanghai factory retaliatory risk" },
+        ]
+      },
+      {
+        sector: "Consumer Staples",
+        impact: "bearish",
+        reason: "China retaliatory tariffs on US agriculture. Soybean, pork exports decline.",
+        tickers: [
+          { symbol: "ADM", name: "Archer-Daniels-Midland", index: "S&P500", why: "Soybean/grain exports to China at risk" },
+          { symbol: "TSN", name: "Tyson Foods", index: "S&P500", why: "Pork exports — retaliatory tariffs hit" },
+        ]
+      },
+      {
+        sector: "Information Technology",
+        impact: "mixed",
+        reason: "Export controls limit China sales (revenue loss) but CHIPS Act drives domestic investment (benefit).",
+        tickers: [
+          { symbol: "NVDA", name: "NVIDIA", index: "BOTH", why: "China AI chip ban — revenue loss vs domestic demand" },
+          { symbol: "INTC", name: "Intel", index: "BOTH", why: "CHIPS Act beneficiary — US fab investment" },
+          { symbol: "AMAT", name: "Applied Materials", index: "NASDAQ", why: "China equipment sales restricted" },
+        ]
+      }
+    ]
+  },
+
+  // ═══ FED RATE HIKE ═══
+  {
+    id: "fed_hike",
+    name: "Fed Rate Hike / Hawkish",
+    keywordGroups: [
+      ["federal reserve", "fed ", "fomc", "powell", "central bank"],
+      ["rate hike", "rate increase", "raises rate", "tightening", "hawkish", "higher rate"]
+    ],
+    effects: [
+      {
+        sector: "Financials",
+        impact: "bullish",
+        reason: "Higher rates = wider net interest margins. Banks earn more on loans vs deposits.",
+        tickers: [
+          { symbol: "JPM", name: "JPMorgan Chase", index: "S&P500", why: "Largest US bank — NIM expansion" },
+          { symbol: "BAC", name: "Bank of America", index: "S&P500", why: "Rate-sensitive loan book — margin growth" },
+          { symbol: "WFC", name: "Wells Fargo", index: "S&P500", why: "Consumer lending — higher spreads" },
+          { symbol: "GS", name: "Goldman Sachs", index: "S&P500", why: "Trading revenue + higher rates" },
+        ]
+      },
+      {
+        sector: "Information Technology",
+        impact: "bearish",
+        reason: "Higher rates reduce present value of future earnings. Growth stocks repriced lower.",
+        tickers: [
+          { symbol: "NVDA", name: "NVIDIA", index: "BOTH", why: "Growth premium compresses with higher rates" },
+          { symbol: "META", name: "Meta Platforms", index: "BOTH", why: "Ad spending softens in tight money" },
+          { symbol: "CRM", name: "Salesforce", index: "BOTH", why: "SaaS multiples compress" },
+        ]
+      },
+      {
+        sector: "Real Estate",
+        impact: "bearish",
+        reason: "Higher mortgage costs = lower demand. REIT valuations decline with higher discount rates.",
+        tickers: [
+          { symbol: "PLD", name: "Prologis", index: "S&P500", why: "Warehouse REIT — higher cap rates" },
+          { symbol: "AMT", name: "American Tower", index: "S&P500", why: "Tower REIT — rate-sensitive" },
+          { symbol: "SPG", name: "Simon Property", index: "S&P500", why: "Mall REIT — financing costs rise" },
+        ]
+      },
+      {
+        sector: "Utilities",
+        impact: "bearish",
+        reason: "Bond-proxy sector. Higher yields make bonds more attractive vs utility dividends.",
+        tickers: [
+          { symbol: "NEE", name: "NextEra Energy", index: "S&P500", why: "Largest US utility — dividend yield less competitive" },
+          { symbol: "DUK", name: "Duke Energy", index: "S&P500", why: "Higher borrowing costs for capex" },
+        ]
+      }
+    ]
+  },
+
+  // ═══ FED RATE CUT ═══
+  {
+    id: "fed_cut",
+    name: "Fed Rate Cut / Dovish",
+    keywordGroups: [
+      ["federal reserve", "fed ", "fomc", "powell", "central bank"],
+      ["rate cut", "lowers rate", "easing", "dovish", "lower rate", "pivot", "rate reduction"]
+    ],
+    effects: [
+      {
+        sector: "Information Technology",
+        impact: "bullish",
+        reason: "Lower discount rate = higher present value of future cash flows. Growth stocks rerate up.",
+        tickers: [
+          { symbol: "MSFT", name: "Microsoft", index: "BOTH", why: "Tech leader — lower rates support valuations" },
+          { symbol: "GOOGL", name: "Alphabet", index: "BOTH", why: "Growth at scale — benefits from easy money" },
+          { symbol: "NVDA", name: "NVIDIA", index: "BOTH", why: "AI capex continues in easier money" },
+          { symbol: "META", name: "Meta Platforms", index: "BOTH", why: "Ad spend recovers in loose policy" },
+        ]
+      },
+      {
+        sector: "Real Estate",
+        impact: "bullish",
+        reason: "Lower mortgage costs = more home buying. REITs benefit from lower cap rates.",
+        tickers: [
+          { symbol: "PLD", name: "Prologis", index: "S&P500", why: "Warehouse REIT — lower discount rate" },
+          { symbol: "AMT", name: "American Tower", index: "S&P500", why: "Tower REIT — rate-sensitive upside" },
+        ]
+      },
+      {
+        sector: "Consumer Discretionary",
+        impact: "bullish",
+        reason: "Cheaper credit boosts consumer spending on cars, homes, retail.",
+        tickers: [
+          { symbol: "AMZN", name: "Amazon", index: "BOTH", why: "Consumer spending uptick — AWS + retail" },
+          { symbol: "TSLA", name: "Tesla", index: "BOTH", why: "Auto financing cheaper — EV demand rises" },
+          { symbol: "HD", name: "Home Depot", index: "S&P500", why: "Home improvement — housing activity boost" },
+        ]
+      },
+      {
+        sector: "Financials",
+        impact: "bearish",
+        reason: "Lower rates compress net interest margins. Banks earn less on loans.",
+        tickers: [
+          { symbol: "JPM", name: "JPMorgan Chase", index: "S&P500", why: "NIM compression from lower rates" },
+          { symbol: "BAC", name: "Bank of America", index: "S&P500", why: "Lending margins narrow" },
+        ]
+      },
+      {
+        sector: "Materials",
+        impact: "bullish",
+        reason: "Lower rates weaken dollar → gold rises. Precious metals = inverse rate correlation.",
+        tickers: [
+          { symbol: "NEM", name: "Newmont Mining", index: "S&P500", why: "Gold miner — gold rises on rate cuts" },
+          { symbol: "FCX", name: "Freeport-McMoRan", index: "S&P500", why: "Copper demand + weaker dollar" },
+        ]
+      }
+    ]
+  },
+
+  // ═══ INFLATION ═══
+  {
+    id: "inflation",
+    name: "Inflation Surge",
+    keywordGroups: [
+      ["inflation", "cpi", "consumer price", "price index", "cost of living"],
+      ["surge", "rise", "spike", "high", "record", "accelerat", "soar", "jump"]
+    ],
+    effects: [
+      {
+        sector: "Consumer Staples",
+        impact: "bullish",
+        reason: "Pricing power — essential products. Consumers still buy food/hygiene. Brands pass costs through.",
+        tickers: [
+          { symbol: "PG", name: "Procter & Gamble", index: "S&P500", why: "Essential products — pricing power" },
+          { symbol: "KO", name: "Coca-Cola", index: "S&P500", why: "Brand strength — price increases stick" },
+          { symbol: "COST", name: "Costco", index: "BOTH", why: "Bulk buying — value proposition strengthens" },
+          { symbol: "WMT", name: "Walmart", index: "S&P500", why: "Everyday low prices — trade-down beneficiary" },
         ]
       },
       {
         sector: "Energy",
-        subsector: "Power Generation",
         impact: "bullish",
-        reason: "AI data centers consume massive electricity. Power demand growth drives utility/energy investment.",
+        reason: "Energy commodities are inflation drivers AND hedges. Real asset appreciation.",
         tickers: [
-          { symbol: "VST", name: "Vistra", why: "Power generation — data center power contracts" },
-          { symbol: "CEG", name: "Constellation Energy", why: "Nuclear power for AI data centers" },
-          { symbol: "FSLR", name: "First Solar", why: "Solar for data center campuses" },
+          { symbol: "XOM", name: "ExxonMobil", index: "S&P500", why: "Real asset — oil is inflation hedge" },
+          { symbol: "CVX", name: "Chevron", index: "S&P500", why: "Energy = inflation pass-through" },
         ]
       },
       {
-        sector: "Employment",
-        subsector: "Traditional Services",
+        sector: "Consumer Discretionary",
         impact: "bearish",
-        reason: "AI automation threatens white-collar jobs. Customer service, content creation, coding — displacement risk.",
+        reason: "Consumers cut discretionary spending first. Restaurants, luxury, travel decline.",
         tickers: [
-          { symbol: "CHWY", name: "Chewy", why: "Customer service automation — staff reduction" },
-          { symbol: "WIT", name: "Wipro", why: "IT outsourcing — AI replacing service contracts" },
-          { symbol: "ACN", name: "Accenture", why: "Consulting disruption — AI replaces entry-level" },
+          { symbol: "SBUX", name: "Starbucks", index: "BOTH", why: "Premium coffee — budget pressure" },
+          { symbol: "MCD", name: "McDonald's", index: "S&P500", why: "Even fast food faces traffic decline" },
+          { symbol: "NKE", name: "Nike", index: "S&P500", why: "Discretionary sportswear — spending cut" },
+        ]
+      },
+      {
+        sector: "Materials",
+        impact: "bullish",
+        reason: "Gold = classic inflation hedge. Real assets appreciate as currency purchasing power declines.",
+        tickers: [
+          { symbol: "NEM", name: "Newmont Mining", index: "S&P500", why: "Gold miner — inflation hedge demand" },
         ]
       }
     ]
   },
 
-  // ═══════════════════════════════════════════════════
-  // PANDEMIC / HEALTH CRISIS
-  // ═══════════════════════════════════════════════════
+  // ═══ OIL PRICE SPIKE ═══
+  {
+    id: "oil_spike",
+    name: "Oil Price Spike / OPEC Cuts",
+    keywordGroups: [
+      ["oil", "crude", "brent", "wti", "opec", "petroleum"],
+      ["surge", "spike", "soar", "jump", "record", "high", "cut", "restrict", "reduce output"]
+    ],
+    effects: [
+      {
+        sector: "Energy",
+        impact: "bullish",
+        reason: "Higher oil = higher revenue and margins for US producers.",
+        tickers: [
+          { symbol: "XOM", name: "ExxonMobil", index: "S&P500", why: "Integrated — direct price beneficiary" },
+          { symbol: "CVX", name: "Chevron", index: "S&P500", why: "Higher crude realizations" },
+          { symbol: "COP", name: "ConocoPhillips", index: "S&P500", why: "Pure E&P — max leverage to oil" },
+        ]
+      },
+      {
+        sector: "Consumer Discretionary",
+        impact: "bearish",
+        reason: "Higher gas prices hurt consumer wallets. Auto, travel, retail discretionary decline.",
+        tickers: [
+          { symbol: "DAL", name: "Delta Air Lines", index: "S&P500", why: "Fuel = ~25% of costs" },
+          { symbol: "F", name: "Ford", index: "S&P500", why: "ICE vehicle demand softens, but EV push" },
+          { symbol: "TSLA", name: "Tesla", index: "BOTH", why: "BULLISH reversal: high gas drives EV adoption" },
+        ]
+      },
+      {
+        sector: "Utilities",
+        impact: "bullish",
+        reason: "High oil accelerates renewable transition. Solar/wind economics strengthen.",
+        tickers: [
+          { symbol: "NEE", name: "NextEra Energy", index: "S&P500", why: "Largest wind/solar developer" },
+          { symbol: "CEG", name: "Constellation Energy", index: "S&P500", why: "Nuclear = oil-independent power" },
+        ]
+      }
+    ]
+  },
+
+  // ═══ AI BREAKTHROUGH ═══
+  {
+    id: "ai_boom",
+    name: "AI / Technology Breakthrough",
+    keywordGroups: [
+      ["artificial intelligence", "ai ", "chatgpt", "openai", "deepmind", "machine learning", "generative ai", "llm", "large language"],
+      ["breakthrough", "launch", "record", "milestone", "revolutio", "transform", "advance", "dominat", "trillion"]
+    ],
+    effects: [
+      {
+        sector: "Information Technology",
+        impact: "bullish",
+        reason: "AI demand drives GPU, cloud, and software investment. Massive data center buildout.",
+        tickers: [
+          { symbol: "NVDA", name: "NVIDIA", index: "BOTH", why: "AI GPU monopoly — training & inference" },
+          { symbol: "MSFT", name: "Microsoft", index: "BOTH", why: "Azure AI + OpenAI partnership + Copilot" },
+          { symbol: "GOOGL", name: "Alphabet", index: "BOTH", why: "Google Cloud AI + DeepMind + Gemini" },
+          { symbol: "AMD", name: "AMD", index: "BOTH", why: "MI300X AI accelerators — NVDA alternative" },
+          { symbol: "AVGO", name: "Broadcom", index: "BOTH", why: "AI networking + custom accelerators" },
+          { symbol: "CRM", name: "Salesforce", index: "BOTH", why: "AI-powered CRM — enterprise adoption" },
+        ]
+      },
+      {
+        sector: "Utilities",
+        impact: "bullish",
+        reason: "AI data centers consume massive electricity. Power demand growth unprecedented.",
+        tickers: [
+          { symbol: "VST", name: "Vistra", index: "S&P500", why: "Power generation — data center contracts" },
+          { symbol: "CEG", name: "Constellation Energy", index: "S&P500", why: "Nuclear power for AI data centers" },
+          { symbol: "NEE", name: "NextEra Energy", index: "S&P500", why: "Renewables for tech campus power" },
+        ]
+      },
+      {
+        sector: "Communication Services",
+        impact: "bullish",
+        reason: "AI enhances content platforms, advertising targeting, and user engagement.",
+        tickers: [
+          { symbol: "META", name: "Meta Platforms", index: "BOTH", why: "AI-driven ad targeting + content recommendations" },
+          { symbol: "GOOGL", name: "Alphabet", index: "BOTH", why: "Search AI + YouTube AI + ad optimization" },
+          { symbol: "NFLX", name: "Netflix", index: "BOTH", why: "AI recommendations + content optimization" },
+        ]
+      },
+      {
+        sector: "Real Estate",
+        impact: "bullish",
+        reason: "Data center REITs benefit from massive AI infrastructure buildout.",
+        tickers: [
+          { symbol: "EQIX", name: "Equinix", index: "BOTH", why: "Data center REIT — AI demand boom" },
+          { symbol: "DLR", name: "Digital Realty", index: "S&P500", why: "Data center REIT — AI capacity expansion" },
+        ]
+      }
+    ]
+  },
+
+  // ═══ PANDEMIC ═══
   {
     id: "pandemic",
     name: "Pandemic / Disease Outbreak",
     keywordGroups: [
-      ["pandemic", "virus", "outbreak", "epidemic", "covid", "bird flu", "avian", "mpox", "disease", "who declares", "pathogen"],
-      ["spread", "surge", "cases", "deaths", "lockdown", "quarantine", "emergency", "variant", "mutation", "wave"]
+      ["pandemic", "virus", "outbreak", "epidemic", "bird flu", "avian", "mpox", "disease", "pathogen"],
+      ["spread", "surge", "cases", "deaths", "lockdown", "quarantine", "emergency", "variant", "wave"]
     ],
     effects: [
       {
         sector: "Healthcare",
-        subsector: "Vaccines & Therapeutics",
         impact: "bullish",
-        reason: "Vaccine and antiviral demand surges. Government contracts for pandemic preparedness.",
+        reason: "Vaccine and antiviral demand surges. Government pandemic preparedness contracts.",
         tickers: [
-          { symbol: "PFE", name: "Pfizer", why: "mRNA vaccine platform — rapid pandemic response" },
-          { symbol: "MRNA", name: "Moderna", why: "mRNA technology — pandemic vaccine leader" },
-          { symbol: "GILD", name: "Gilead Sciences", why: "Antiviral drugs (Remdesivir precedent)" },
-          { symbol: "BNTX", name: "BioNTech", why: "mRNA platform — pandemic preparedness" },
+          { symbol: "PFE", name: "Pfizer", index: "S&P500", why: "mRNA vaccine platform" },
+          { symbol: "MRNA", name: "Moderna", index: "BOTH", why: "mRNA technology leader" },
+          { symbol: "GILD", name: "Gilead Sciences", index: "BOTH", why: "Antiviral drugs" },
+          { symbol: "ABT", name: "Abbott Labs", index: "S&P500", why: "Diagnostic tests — rapid testing demand" },
+          { symbol: "TMO", name: "Thermo Fisher", index: "S&P500", why: "Lab equipment + diagnostics" },
         ]
       },
       {
-        sector: "E-Commerce",
-        subsector: "Online Retail",
+        sector: "Information Technology",
         impact: "bullish",
-        reason: "Lockdowns drive online shopping. Digital transformation accelerates.",
+        reason: "Remote work drives cloud, collaboration, and e-commerce tech adoption.",
         tickers: [
-          { symbol: "AMZN", name: "Amazon", why: "E-commerce + AWS — pandemic winner" },
-          { symbol: "SHOP", name: "Shopify", why: "Enables small business e-commerce" },
+          { symbol: "MSFT", name: "Microsoft", index: "BOTH", why: "Teams + Azure — WFH infrastructure" },
+          { symbol: "ZM", name: "Zoom", index: "NASDAQ", why: "Video conferencing — WFH standard" },
+          { symbol: "CRM", name: "Salesforce", index: "BOTH", why: "Cloud CRM — digital transformation" },
         ]
       },
       {
-        sector: "Travel & Hospitality",
-        subsector: "Airlines & Hotels",
+        sector: "Consumer Discretionary",
         impact: "bearish",
-        reason: "Travel restrictions, quarantines, consumer fear = massive demand collapse.",
+        reason: "Travel restrictions, lockdowns = massive demand collapse for travel/leisure.",
         tickers: [
-          { symbol: "MAR", name: "Marriott", why: "Hotel chain — occupancy collapse" },
-          { symbol: "DAL", name: "Delta Air Lines", why: "Air travel demand destruction" },
-          { symbol: "RCL", name: "Royal Caribbean", why: "Cruise industry — complete shutdown risk" },
-        ]
-      },
-      {
-        sector: "Remote Work",
-        subsector: "Collaboration Tools",
-        impact: "bullish",
-        reason: "Work-from-home mandate drives adoption of video, cloud, and collaboration tools.",
-        tickers: [
-          { symbol: "ZM", name: "Zoom", why: "Video conferencing — WFH standard" },
-          { symbol: "CRM", name: "Salesforce", why: "Cloud CRM — digital transformation" },
-          { symbol: "TEAM", name: "Atlassian", why: "Project management — distributed teams" },
+          { symbol: "DAL", name: "Delta Air Lines", index: "S&P500", why: "Air travel demand destruction" },
+          { symbol: "MAR", name: "Marriott", index: "S&P500", why: "Hotel occupancy collapse" },
+          { symbol: "DIS", name: "Walt Disney", index: "S&P500", why: "Parks closed, movie theaters shut" },
         ]
       }
     ]
   },
 
-  // ═══════════════════════════════════════════════════
-  // SANCTIONS
-  // ═══════════════════════════════════════════════════
+  // ═══ NATURAL DISASTER ═══
   {
-    id: "sanctions",
-    name: "International Sanctions",
+    id: "disaster",
+    name: "Natural Disaster",
     keywordGroups: [
-      ["sanction", "embargo", "blacklist", "ban", "restrict", "freeze assets", "trade ban"],
-      ["russia", "china", "iran", "north korea", "venezuela"]
+      ["earthquake", "hurricane", "typhoon", "tsunami", "flood", "wildfire", "tornado", "cyclone"]
     ],
     effects: [
       {
-        sector: "Commodities",
-        subsector: "Critical Minerals",
-        impact: "bullish",
-        reason: "Sanctions on commodity-producing nations restrict supply. Non-sanctioned producers gain pricing power.",
-        tickers: [
-          { symbol: "MP", name: "MP Materials", why: "US rare earth producer — supply chain security" },
-          { symbol: "ALB", name: "Albemarle", why: "Lithium — if China-sanctioned, US supply critical" },
-          { symbol: "FCX", name: "Freeport-McMoRan", why: "Copper — green transition mineral" },
-        ]
-      },
-      {
-        sector: "Finance",
-        subsector: "Payment Systems",
-        impact: "bullish",
-        reason: "Sanctions compliance creates demand for monitoring, screening, and alternative payment systems.",
-        tickers: [
-          { symbol: "V", name: "Visa", why: "Payment networks benefit from trade redirection" },
-          { symbol: "MA", name: "Mastercard", why: "Global payment infrastructure" },
-          { symbol: "NICE", name: "NICE Ltd.", why: "Financial compliance & surveillance software" },
-        ]
-      }
-    ]
-  },
-
-  // ═══════════════════════════════════════════════════
-  // ENERGY TRANSITION / CLIMATE POLICY
-  // ═══════════════════════════════════════════════════
-  {
-    id: "climate_policy",
-    name: "Climate Policy / Green Energy Push",
-    keywordGroups: [
-      ["climate", "paris agreement", "green deal", "carbon", "emission", "net zero", "renewable", "clean energy", "esg"],
-      ["policy", "law", "regulation", "mandate", "target", "goal", "invest", "fund", "subsid", "incentive", "tax credit"]
-    ],
-    effects: [
-      {
-        sector: "Renewable Energy",
-        subsector: "Solar & Wind",
-        impact: "bullish",
-        reason: "Government subsidies, tax credits, and mandates accelerate renewable energy deployment.",
-        tickers: [
-          { symbol: "FSLR", name: "First Solar", why: "US solar — IRA tax credits beneficiary" },
-          { symbol: "ENPH", name: "Enphase Energy", why: "Solar microinverters — residential deployment" },
-          { symbol: "RUN", name: "Sunrun", why: "Residential solar installer — policy tailwind" },
-        ]
-      },
-      {
-        sector: "Electric Vehicles",
-        subsector: "EV & Batteries",
-        impact: "bullish",
-        reason: "EV mandates, purchase subsidies, charging infrastructure investment.",
-        tickers: [
-          { symbol: "TSLA", name: "Tesla", why: "EV market leader — regulatory credit seller" },
-          { symbol: "QS", name: "QuantumScape", why: "Solid-state batteries — next-gen EV tech" },
-          { symbol: "CHPT", name: "ChargePoint", why: "EV charging infrastructure" },
-        ]
-      },
-      {
-        sector: "Fossil Fuels",
-        subsector: "Coal & Oil",
+        sector: "Financials",
         impact: "bearish",
-        reason: "Regulatory pressure, carbon taxes, phase-out mandates reduce fossil fuel demand.",
+        reason: "Catastrophic insurance claims. Short-term losses from payouts.",
         tickers: [
-          { symbol: "BTU", name: "Peabody Energy", why: "Coal — phase-out pressure" },
-          { symbol: "XOM", name: "ExxonMobil", why: "Transition risk — stranded assets concern" },
+          { symbol: "ALL", name: "Allstate", index: "S&P500", why: "Property insurance — claims surge" },
+          { symbol: "TRV", name: "Travelers", index: "S&P500", why: "P&C — catastrophe losses" },
+          { symbol: "PGR", name: "Progressive", index: "S&P500", why: "Auto/property — storm claims" },
+        ]
+      },
+      {
+        sector: "Industrials",
+        impact: "bullish",
+        reason: "Reconstruction drives demand for construction, infrastructure, equipment.",
+        tickers: [
+          { symbol: "CAT", name: "Caterpillar", index: "S&P500", why: "Heavy equipment — reconstruction" },
+          { symbol: "PWR", name: "Quanta Services", index: "S&P500", why: "Power grid rebuild" },
+          { symbol: "GNRC", name: "Generac", index: "S&P500", why: "Backup generators — demand surge" },
+        ]
+      },
+      {
+        sector: "Consumer Discretionary",
+        impact: "bullish",
+        reason: "Home rebuilding drives hardware/materials demand.",
+        tickers: [
+          { symbol: "HD", name: "Home Depot", index: "S&P500", why: "Building supplies — disaster recovery" },
+          { symbol: "LOW", name: "Lowe's", index: "S&P500", why: "Home improvement — reconstruction" },
         ]
       }
     ]
   },
 
-  // ═══════════════════════════════════════════════════
-  // RECESSION FEARS
-  // ═══════════════════════════════════════════════════
+  // ═══ RECESSION ═══
   {
     id: "recession",
     name: "Recession / Economic Downturn",
@@ -859,175 +690,203 @@ const EVENT_PATTERNS: EventPattern[] = [
     effects: [
       {
         sector: "Consumer Staples",
-        subsector: "Defensive",
         impact: "bullish",
-        reason: "People still buy food, hygiene products, utilities in recessions. Defensive stocks outperform.",
+        reason: "Defensive sector — people still buy food, hygiene, essentials in recessions.",
         tickers: [
-          { symbol: "PG", name: "Procter & Gamble", why: "Essential products — recession-resistant demand" },
-          { symbol: "JNJ", name: "Johnson & Johnson", why: "Healthcare staple — defensive quality" },
-          { symbol: "KO", name: "Coca-Cola", why: "Consumer staple — stable cash flows" },
-        ]
-      },
-      {
-        sector: "Luxury & Discretionary",
-        subsector: "Premium Brands",
-        impact: "bearish",
-        reason: "Consumers cut discretionary spending first. Luxury goods demand collapses.",
-        tickers: [
-          { symbol: "LULU", name: "Lululemon", why: "Premium athleisure — discretionary spending cut" },
-          { symbol: "RH", name: "RH (Restoration Hardware)", why: "Luxury furniture — housing-linked" },
-          { symbol: "PTON", name: "Peloton", why: "Discretionary fitness — budget pressure" },
+          { symbol: "PG", name: "Procter & Gamble", index: "S&P500", why: "Essential products — recession-resistant" },
+          { symbol: "KO", name: "Coca-Cola", index: "S&P500", why: "Consumer staple — stable cash flows" },
+          { symbol: "PEP", name: "PepsiCo", index: "BOTH", why: "Food + beverage — defensive" },
+          { symbol: "WMT", name: "Walmart", index: "S&P500", why: "Trade-down destination — value retail" },
         ]
       },
       {
         sector: "Healthcare",
-        subsector: "Health Services",
         impact: "bullish",
-        reason: "Healthcare spending is non-discretionary. Aging population drives demand regardless of economy.",
+        reason: "Non-cyclical demand. Healthcare spending is non-discretionary.",
         tickers: [
-          { symbol: "UNH", name: "UnitedHealth Group", why: "Health insurance — non-cyclical demand" },
-          { symbol: "LLY", name: "Eli Lilly", why: "Pharma — pipeline value independent of economy" },
-          { symbol: "ABBV", name: "AbbVie", why: "Pharma — recurring revenue drugs" },
+          { symbol: "UNH", name: "UnitedHealth", index: "S&P500", why: "Health insurance — recession-proof" },
+          { symbol: "JNJ", name: "Johnson & Johnson", index: "S&P500", why: "Pharma + consumer health — defensive" },
+          { symbol: "LLY", name: "Eli Lilly", index: "S&P500", why: "Pharma pipeline — economy-independent" },
+        ]
+      },
+      {
+        sector: "Consumer Discretionary",
+        impact: "bearish",
+        reason: "Consumers cut discretionary spending first. Luxury, travel, dining out decline.",
+        tickers: [
+          { symbol: "AMZN", name: "Amazon", index: "BOTH", why: "Retail volume softens, but AWS holds" },
+          { symbol: "SBUX", name: "Starbucks", index: "BOTH", why: "Premium coffee — budget pressure" },
+          { symbol: "NKE", name: "Nike", index: "S&P500", why: "Discretionary sportswear cut" },
+        ]
+      },
+      {
+        sector: "Financials",
+        impact: "bearish",
+        reason: "Loan defaults rise, credit quality deteriorates, investment banking slows.",
+        tickers: [
+          { symbol: "JPM", name: "JPMorgan Chase", index: "S&P500", why: "Credit losses increase" },
+          { symbol: "BAC", name: "Bank of America", index: "S&P500", why: "Consumer loan defaults rise" },
         ]
       }
     ]
   },
 
-  // ═══════════════════════════════════════════════════
-  // SUPPLY CHAIN CRISIS
-  // ═══════════════════════════════════════════════════
+  // ═══ SUPPLY CHAIN CRISIS ═══
   {
     id: "supply_chain",
-    name: "Global Supply Chain Disruption",
+    name: "Supply Chain Disruption",
     keywordGroups: [
-      ["supply chain", "shipping", "container", "port", "logistics", "freight", "backlog", "shortage", "bottleneck"]
+      ["supply chain", "shipping", "container", "port", "logistics", "freight", "shortage", "bottleneck", "backlog"]
     ],
     effects: [
       {
-        sector: "Shipping",
-        subsector: "Container Lines",
+        sector: "Industrials",
         impact: "bullish",
-        reason: "Supply chain disruption = higher freight rates. Shipping companies profit from scarcity.",
+        reason: "Shipping rates spike. Logistics companies profit from scarcity. Automation investment rises.",
         tickers: [
-          { symbol: "ZIM", name: "ZIM Shipping", why: "Container shipping — rate spikes = massive profits" },
-          { symbol: "MATX", name: "Matson", why: "Pacific shipping — premium rates during disruption" },
+          { symbol: "FDX", name: "FedEx", index: "S&P500", why: "Air freight demand — alternative to sea" },
+          { symbol: "UPS", name: "United Parcel Service", index: "S&P500", why: "Package delivery — premium pricing" },
+          { symbol: "GWW", name: "W.W. Grainger", index: "S&P500", why: "Industrial supplies — inventory security" },
         ]
       },
       {
-        sector: "Inventory Management",
-        subsector: "Warehousing & Automation",
+        sector: "Real Estate",
         impact: "bullish",
-        reason: "Companies build buffer inventory. Warehouse demand and automation investment increase.",
+        reason: "Companies build buffer inventory. Warehouse demand surges.",
         tickers: [
-          { symbol: "PLD", name: "Prologis", why: "Warehouse REIT — inventory build = space demand" },
-          { symbol: "GWW", name: "W.W. Grainger", why: "Industrial distribution — supply security premium" },
+          { symbol: "PLD", name: "Prologis", index: "S&P500", why: "Warehouse REIT — inventory buildup" },
+        ]
+      },
+      {
+        sector: "Information Technology",
+        impact: "bearish",
+        reason: "Component shortages delay product launches. Hardware companies can't ship.",
+        tickers: [
+          { symbol: "AAPL", name: "Apple", index: "BOTH", why: "iPhone production delays" },
+          { symbol: "DELL", name: "Dell Technologies", index: "S&P500", why: "PC/server supply constraints" },
         ]
       }
     ]
   },
 
-  // ═══════════════════════════════════════════════════
-  // DOLLAR STRENGTH / WEAKNESS
-  // ═══════════════════════════════════════════════════
+  // ═══ SANCTIONS ═══
   {
-    id: "dollar_strength",
-    name: "US Dollar Surge",
+    id: "sanctions",
+    name: "International Sanctions",
     keywordGroups: [
-      ["dollar", "usd", "dxy", "greenback", "dollar index"],
-      ["surge", "strong", "rally", "rise", "high", "soar", "strength", "appreciate"]
+      ["sanction", "embargo", "blacklist", "ban export", "freeze assets", "trade ban"],
+      ["russia", "china", "iran", "north korea", "venezuela"]
     ],
     effects: [
       {
-        sector: "Multinationals",
-        subsector: "US Exporters",
-        impact: "bearish",
-        reason: "Strong dollar makes US exports more expensive abroad. Foreign revenue translates to fewer dollars.",
+        sector: "Materials",
+        impact: "bullish",
+        reason: "Sanctions on commodity-producing nations restrict supply. US miners gain pricing power.",
         tickers: [
-          { symbol: "AAPL", name: "Apple", why: "60% international revenue — FX headwind" },
-          { symbol: "MSFT", name: "Microsoft", why: "Global software — currency translation loss" },
-          { symbol: "PG", name: "Procter & Gamble", why: "Global consumer — dollar hurts overseas earnings" },
+          { symbol: "MP", name: "MP Materials", index: "S&P500", why: "US rare earth — supply chain security" },
+          { symbol: "ALB", name: "Albemarle", index: "S&P500", why: "Lithium — domestic supply premium" },
+          { symbol: "FCX", name: "Freeport-McMoRan", index: "S&P500", why: "Copper — green transition mineral" },
         ]
       },
       {
-        sector: "Emerging Markets",
-        subsector: "EM Equities",
-        impact: "bearish",
-        reason: "Strong dollar = capital outflow from EM. Dollar-denominated debt becomes harder to service.",
+        sector: "Financials",
+        impact: "bullish",
+        reason: "Compliance demand. Sanctions monitoring software and payment rerouting creates business.",
         tickers: [
-          { symbol: "EEM", name: "iShares MSCI EM ETF", why: "Broad EM exposure — capital flight risk" },
-          { symbol: "BABA", name: "Alibaba", why: "Chinese tech — yuan depreciation" },
+          { symbol: "V", name: "Visa", index: "S&P500", why: "Payment networks — trade redirection" },
+          { symbol: "MA", name: "Mastercard", index: "S&P500", why: "Global payments infrastructure" },
         ]
       }
     ]
   },
 
-  // ═══════════════════════════════════════════════════
-  // PEACE / DE-ESCALATION
-  // ═══════════════════════════════════════════════════
+  // ═══ CLIMATE / GREEN ENERGY ═══
   {
-    id: "peace_deal",
-    name: "Peace Deal / De-escalation",
+    id: "climate_policy",
+    name: "Climate Policy / Green Push",
     keywordGroups: [
-      ["peace", "ceasefire", "truce", "agreement", "deal", "negotiat", "de-escalat", "withdraw", "diplomatic"]
+      ["climate", "paris agreement", "green deal", "carbon", "emission", "net zero", "renewable", "clean energy"],
+      ["policy", "law", "regulation", "mandate", "invest", "subsid", "incentive", "tax credit", "fund"]
     ],
     effects: [
       {
-        sector: "Travel & Tourism",
-        subsector: "Airlines & Hotels",
+        sector: "Utilities",
         impact: "bullish",
-        reason: "Peace restores travel confidence. Tourism rebounds, business travel resumes.",
+        reason: "Subsidies + mandates accelerate solar/wind deployment. Tax credits boost returns.",
         tickers: [
-          { symbol: "DAL", name: "Delta Air Lines", why: "International routes reopen" },
-          { symbol: "MAR", name: "Marriott", why: "Hotel demand recovery" },
-          { symbol: "BKNG", name: "Booking Holdings", why: "Travel bookings surge" },
+          { symbol: "NEE", name: "NextEra Energy", index: "S&P500", why: "Largest US wind/solar developer" },
+          { symbol: "CEG", name: "Constellation Energy", index: "S&P500", why: "Nuclear + renewables — clean energy" },
         ]
       },
       {
-        sector: "Defense",
-        subsector: "Defense Contractors",
-        impact: "bearish",
-        reason: "Peace reduces urgency for military spending. Defense budgets may be cut.",
+        sector: "Consumer Discretionary",
+        impact: "bullish",
+        reason: "EV mandates + purchase subsidies drive electric vehicle adoption.",
         tickers: [
-          { symbol: "LMT", name: "Lockheed Martin", why: "Lower weapons orders" },
-          { symbol: "RTX", name: "RTX (Raytheon)", why: "Missile demand may decline" },
+          { symbol: "TSLA", name: "Tesla", index: "BOTH", why: "EV market leader — regulatory credit seller" },
+          { symbol: "GM", name: "General Motors", index: "S&P500", why: "EV transition — Ultium platform" },
+          { symbol: "F", name: "Ford", index: "S&P500", why: "F-150 Lightning — EV truck segment" },
         ]
       },
       {
         sector: "Energy",
-        subsector: "Oil & Gas",
         impact: "bearish",
-        reason: "Peace removes geopolitical risk premium from oil prices. Prices decline.",
+        reason: "Carbon taxes and phase-out mandates reduce fossil fuel demand long-term.",
         tickers: [
-          { symbol: "XOM", name: "ExxonMobil", why: "Lower oil prices = lower revenue" },
-          { symbol: "CVX", name: "Chevron", why: "Risk premium removal" },
+          { symbol: "XOM", name: "ExxonMobil", index: "S&P500", why: "Transition risk — stranded assets" },
+          { symbol: "CVX", name: "Chevron", index: "S&P500", why: "Long-term demand decline" },
+        ]
+      },
+      {
+        sector: "Information Technology",
+        impact: "bullish",
+        reason: "Clean energy tech, smart grids, EV software, carbon tracking platforms.",
+        tickers: [
+          { symbol: "ENPH", name: "Enphase Energy", index: "NASDAQ", why: "Solar microinverters — IRA beneficiary" },
+          { symbol: "FSLR", name: "First Solar", index: "NASDAQ", why: "US solar panels — policy tailwind" },
         ]
       }
     ]
   },
 
-  // ═══════════════════════════════════════════════════
-  // ELECTION / POLITICAL CHANGE
-  // ═══════════════════════════════════════════════════
+  // ═══ PEACE / DE-ESCALATION ═══
   {
-    id: "election_uncertainty",
-    name: "Election / Political Uncertainty",
+    id: "peace",
+    name: "Peace / De-escalation",
     keywordGroups: [
-      ["election", "vote", "ballot", "inaugurat", "president", "government", "coalition", "parliament"],
-      ["uncertain", "contested", "shock", "surprise", "populist", "radical", "sweep", "landslide", "result"]
+      ["peace", "ceasefire", "truce", "agreement", "de-escalat", "withdraw", "diplomatic solution", "peace deal", "negotiat"]
     ],
     effects: [
       {
-        sector: "Markets",
-        subsector: "Volatility",
+        sector: "Consumer Discretionary",
         impact: "bullish",
-        reason: "Political uncertainty increases market volatility. VIX rises, options premiums increase.",
+        reason: "Travel confidence restored. Tourism, airlines, hotels rebound.",
         tickers: [
-          { symbol: "VXX", name: "iPath VIX ETN", why: "Volatility exposure — uncertainty = VIX spike" },
-          { symbol: "CBOE", name: "Cboe Global Markets", why: "Options exchange — higher volume from volatility" },
+          { symbol: "DAL", name: "Delta Air Lines", index: "S&P500", why: "International routes reopen" },
+          { symbol: "MAR", name: "Marriott", index: "S&P500", why: "Hotel demand recovery" },
+          { symbol: "BKNG", name: "Booking Holdings", index: "NASDAQ", why: "Travel bookings surge" },
+        ]
+      },
+      {
+        sector: "Industrials",
+        impact: "bearish",
+        reason: "Peace reduces urgency for military spending. Defense budget pressure.",
+        tickers: [
+          { symbol: "LMT", name: "Lockheed Martin", index: "S&P500", why: "Lower weapons demand" },
+          { symbol: "RTX", name: "RTX (Raytheon)", index: "S&P500", why: "Missile orders may decline" },
+        ]
+      },
+      {
+        sector: "Energy",
+        impact: "bearish",
+        reason: "Geopolitical risk premium removed from oil. Prices normalize lower.",
+        tickers: [
+          { symbol: "XOM", name: "ExxonMobil", index: "S&P500", why: "Lower oil = lower revenue" },
+          { symbol: "CVX", name: "Chevron", index: "S&P500", why: "Risk premium removal hits margins" },
         ]
       }
     ]
-  }
+  },
 ]
 
 // ── Analysis Engine ───────────────────────────────────────────
@@ -1045,145 +904,90 @@ function matchesPattern(title: string, description: string | undefined, pattern:
   return pattern.keywordGroups.every(group => matchesKeywordGroup(text, group))
 }
 
-export interface WorldNewsItemInput {
-  id: string
-  title: string
-  description?: string
-  sentiment: "positive" | "negative" | "neutral"
-  category: string
-  region: string
-  date: string
-  impact: string
-}
-
 export function analyzeNewsImpacts(newsItems: WorldNewsItemInput[]): ImpactAnalysis {
-  const allResults: NewsImpactResult[] = []
+  const allMatches: { news: WorldNewsItemInput; eventId: string; eventName: string; effects: SectorEffect[] }[] = []
   let eventsDetected = 0
 
   for (const news of newsItems) {
-    const matchedEvents: NewsImpactResult["matchedEvents"] = []
-
     for (const pattern of EVENT_PATTERNS) {
       if (matchesPattern(news.title, news.description, pattern)) {
-        // Check region filter if set
-        if (pattern.regionFilter && !pattern.regionFilter.includes(news.region)) continue
-
-        const confidence: "high" | "medium" | "low" =
-          news.impact === "high" ? "high" :
-          news.impact === "medium" ? "medium" : "low"
-
-        matchedEvents.push({
-          eventId: pattern.id,
-          eventName: pattern.name,
-          effects: pattern.effects.map(e => ({ ...e, confidence }))
-        })
+        allMatches.push({ news, eventId: pattern.id, eventName: pattern.name, effects: pattern.effects })
         eventsDetected++
       }
     }
-
-    if (matchedEvents.length > 0) {
-      allResults.push({
-        newsId: news.id,
-        newsTitle: news.title,
-        newsSentiment: news.sentiment,
-        newsCategory: news.category,
-        newsRegion: news.region,
-        newsDate: news.date,
-        matchedEvents
-      })
-    }
   }
 
-  // Aggregate into sector summaries
-  const sectorMap = new Map<string, {
-    impact: "bullish" | "bearish" | "mixed"
+  // Aggregate by sector
+  const sectorMap = new Map<GICSSector, {
+    impacts: Set<string>
     reasons: Set<string>
     tickers: Map<string, CompanyTicker>
     newsItems: Map<string, { id: string; title: string; sentiment: string }>
     confidence: "high" | "medium" | "low"
-    count: number
+    eventNames: Set<string>
   }>()
 
-  for (const result of allResults) {
-    for (const event of result.matchedEvents) {
-      for (const effect of event.effects) {
-        const key = effect.subsector ? `${effect.sector} → ${effect.subsector}` : effect.sector
-
-        if (!sectorMap.has(key)) {
-          sectorMap.set(key, {
-            impact: effect.impact,
-            reasons: new Set(),
-            tickers: new Map(),
-            newsItems: new Map(),
-            confidence: effect.confidence,
-            count: 0
-          })
-        }
-
-        const entry = sectorMap.get(key)!
-        entry.reasons.add(effect.reason)
-        entry.count++
-        entry.newsItems.set(result.newsId, {
-          id: result.newsId,
-          title: result.newsTitle,
-          sentiment: result.newsSentiment
+  for (const match of allMatches) {
+    for (const effect of match.effects) {
+      if (!sectorMap.has(effect.sector)) {
+        sectorMap.set(effect.sector, {
+          impacts: new Set(),
+          reasons: new Set(),
+          tickers: new Map(),
+          newsItems: new Map(),
+          confidence: "low",
+          eventNames: new Set()
         })
+      }
+      const entry = sectorMap.get(effect.sector)!
+      entry.impacts.add(effect.impact)
+      entry.reasons.add(effect.reason)
+      entry.eventNames.add(match.eventName)
+      entry.newsItems.set(match.news.id, { id: match.news.id, title: match.news.title, sentiment: match.news.sentiment })
 
-        // Upgrade confidence if any effect is higher
-        if (effect.confidence === "high") entry.confidence = "high"
-        else if (effect.confidence === "medium" && entry.confidence === "low") entry.confidence = "medium"
+      if (match.news.impact === "high") entry.confidence = "high"
+      else if (match.news.impact === "medium" && entry.confidence === "low") entry.confidence = "medium"
 
-        // Merge impact — if conflicting, becomes "mixed"
-        if (entry.impact !== effect.impact && entry.count > 1) {
-          entry.impact = "mixed"
-        }
-
-        for (const t of effect.tickers) {
-          if (!entry.tickers.has(t.symbol)) {
-            entry.tickers.set(t.symbol, t)
-          }
-        }
+      for (const t of effect.tickers) {
+        if (!entry.tickers.has(t.symbol)) entry.tickers.set(t.symbol, t)
       }
     }
   }
 
-  // Convert to sorted arrays
-  const positive: SectorSummary[] = []
-  const negative: SectorSummary[] = []
+  const bullish: SectorSummary[] = []
+  const bearish: SectorSummary[] = []
   const mixed: SectorSummary[] = []
 
-  for (const [key, data] of sectorMap) {
-    const parts = key.split(" → ")
+  for (const [sector, data] of sectorMap) {
+    const impactArr = Array.from(data.impacts)
+    const finalImpact: "bullish" | "bearish" | "mixed" =
+      impactArr.length > 1 ? "mixed" :
+      impactArr[0] === "bullish" ? "bullish" :
+      impactArr[0] === "bearish" ? "bearish" : "mixed"
+
     const summary: SectorSummary = {
-      sector: parts[0],
-      subsector: parts[1],
-      impact: data.impact,
+      sector,
+      impact: finalImpact,
       newsCount: data.newsItems.size,
       reasons: Array.from(data.reasons),
       tickers: Array.from(data.tickers.values()),
       newsItems: Array.from(data.newsItems.values()),
-      confidence: data.confidence
+      confidence: data.confidence,
+      eventNames: Array.from(data.eventNames)
     }
 
-    if (data.impact === "bullish") positive.push(summary)
-    else if (data.impact === "bearish") negative.push(summary)
+    if (finalImpact === "bullish") bullish.push(summary)
+    else if (finalImpact === "bearish") bearish.push(summary)
     else mixed.push(summary)
   }
 
-  // Sort by newsCount (most relevant first), then confidence
   const confOrder = { high: 0, medium: 1, low: 2 }
   const sorter = (a: SectorSummary, b: SectorSummary) =>
     b.newsCount - a.newsCount || confOrder[a.confidence] - confOrder[b.confidence]
 
-  positive.sort(sorter)
-  negative.sort(sorter)
+  bullish.sort(sorter)
+  bearish.sort(sorter)
   mixed.sort(sorter)
 
-  return {
-    positive,
-    negative,
-    mixed,
-    totalNewsAnalyzed: newsItems.length,
-    eventsDetected
-  }
+  return { bullish, bearish, mixed, totalNewsAnalyzed: newsItems.length, eventsDetected }
 }
