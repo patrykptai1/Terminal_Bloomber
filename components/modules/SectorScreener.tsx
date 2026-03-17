@@ -19,6 +19,7 @@ interface SectorStock {
   market: "US" | "GPW" | "NC"
   sector: string
   industry: string | null
+  source: "S&P500" | "NASDAQ" | "GPW" | "NC"
   peRatio: number | null
   forwardPE: number | null
   priceToSales: number | null
@@ -36,6 +37,8 @@ interface SectorData {
   total: number
   sectorCounts: Record<string, number>
   sectorMedians: Record<string, Record<string, number | null>>
+  indexInfo?: { sp500: number; nasdaq: number; fetchedSP500: number; fetchedNASDAQ: number }
+  errors?: number
   timestamp: string
 }
 
@@ -128,20 +131,25 @@ export default function SectorScreener() {
   // Filters
   const [selectedSector, setSelectedSector] = useState<string>("ALL")
   const [selectedMarket, setSelectedMarket] = useState<string>("US")
+  const [includeNasdaq, setIncludeNasdaq] = useState(false)
   const [sortKey, setSortKey] = useState<MetricKey | "symbol">("marketCap")
   const [sortDir, setSortDir] = useState<SortDir>("desc")
   const [rangeFilters, setRangeFilters] = useState<Record<string, RangeFilter>>({})
   const [showFilters, setShowFilters] = useState(false)
 
   // Fetch
-  const fetchSector = useCallback(async (sector: string, market: string) => {
+  const fetchSector = useCallback(async (sector: string, market: string, withNasdaq?: boolean) => {
     setLoading(true)
     setError(null)
     try {
       const res = await fetch("/api/sector-screener", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ sector: sector === "ALL" ? undefined : sector, market }),
+        body: JSON.stringify({
+          sector: sector === "ALL" ? undefined : sector,
+          market,
+          includeNasdaq: withNasdaq ?? false,
+        }),
       })
       const json = await res.json()
       if (json.error) throw new Error(json.error)
@@ -156,13 +164,19 @@ export default function SectorScreener() {
 
   const handleSectorSelect = useCallback((sectorKey: string) => {
     setSelectedSector(sectorKey)
-    fetchSector(sectorKey, selectedMarket)
-  }, [fetchSector, selectedMarket])
+    fetchSector(sectorKey, selectedMarket, includeNasdaq)
+  }, [fetchSector, selectedMarket, includeNasdaq])
 
   const handleMarketSelect = useCallback((mkt: string) => {
     setSelectedMarket(mkt)
-    fetchSector(selectedSector, mkt)
-  }, [fetchSector, selectedSector])
+    fetchSector(selectedSector, mkt, includeNasdaq)
+  }, [fetchSector, selectedSector, includeNasdaq])
+
+  const handleNasdaqToggle = useCallback(() => {
+    const next = !includeNasdaq
+    setIncludeNasdaq(next)
+    if (data) fetchSector(selectedSector, selectedMarket, next)
+  }, [includeNasdaq, data, fetchSector, selectedSector, selectedMarket])
 
   // Sort toggle
   const handleSort = useCallback((key: MetricKey | "symbol") => {
@@ -251,7 +265,14 @@ export default function SectorScreener() {
     <div className="font-mono space-y-3">
       {/* SECTOR SELECTOR */}
       <div className="bg-bloomberg-card border border-bloomberg-border rounded p-3">
-        <div className="text-[9px] text-bloomberg-amber font-bold tracking-wider mb-2">WYBIERZ SEKTOR GICS</div>
+        <div className="flex items-center gap-2 mb-2">
+          <span className="text-[9px] text-bloomberg-amber font-bold tracking-wider">WYBIERZ SEKTOR GICS</span>
+          {data?.indexInfo && (
+            <span className="text-[8px] text-muted-foreground ml-auto">
+              S&P 500: {data.indexInfo.sp500} | NASDAQ: {data.indexInfo.nasdaq}
+            </span>
+          )}
+        </div>
         <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-6 gap-1.5">
           <button
             onClick={() => handleSectorSelect("ALL")}
@@ -307,6 +328,21 @@ export default function SectorScreener() {
             </button>
           ))}
         </div>
+
+        {/* NASDAQ-only toggle */}
+        {(selectedMarket === "US" || selectedMarket === "ALL") && (
+          <button
+            onClick={handleNasdaqToggle}
+            className={`flex items-center gap-1 px-2 py-1 rounded text-[9px] font-bold border transition-colors ${
+              includeNasdaq
+                ? "bg-blue-500/20 text-blue-400 border-blue-500/50"
+                : "border-bloomberg-border/50 text-muted-foreground hover:border-blue-500/30"
+            }`}
+          >
+            + NASDAQ
+            <span className="text-[7px] font-normal opacity-70">(poza S&P 500)</span>
+          </button>
+        )}
 
         <div className="flex-1" />
 
@@ -465,6 +501,8 @@ export default function SectorScreener() {
             <span className="text-[8px] text-muted-foreground">
               {displayStocks.length} spółek
               {displayStocks.length !== data.stocks.length && ` (z ${data.stocks.length})`}
+              {data.indexInfo && ` | S&P 500: ${data.indexInfo.fetchedSP500}`}
+              {data.indexInfo && data.indexInfo.fetchedNASDAQ > 0 && ` + NASDAQ: ${data.indexInfo.fetchedNASDAQ}`}
             </span>
             <span className="text-[8px] text-muted-foreground ml-auto">
               {new Date(data.timestamp).toLocaleTimeString("pl-PL", { hour: "2-digit", minute: "2-digit" })}
@@ -541,7 +579,7 @@ function StockRow({ stock, medians, sector }: {
 }) {
   const [expanded, setExpanded] = useState(false)
   const changeColor = stock.changePercent > 0 ? "text-bloomberg-green" : stock.changePercent < 0 ? "text-bloomberg-red" : "text-muted-foreground"
-  const mktBadge = stock.market === "US" ? "text-blue-400" : stock.market === "GPW" ? "text-red-400" : "text-purple-400"
+  const srcColor = stock.source === "S&P500" ? "text-bloomberg-green" : stock.source === "NASDAQ" ? "text-blue-400" : stock.source === "GPW" ? "text-red-400" : "text-purple-400"
 
   return (
     <>
@@ -553,7 +591,7 @@ function StockRow({ stock, medians, sector }: {
         <td className="px-2 py-1.5 sticky left-0 bg-bloomberg-card/95 z-10">
           <div className="flex items-center gap-1">
             <span className="font-bold text-foreground">{stock.symbol.replace(".WA", "")}</span>
-            <span className={`text-[7px] ${mktBadge}`}>{stock.market}</span>
+            <span className={`text-[7px] ${srcColor}`}>{stock.source}</span>
           </div>
         </td>
         {/* Name */}
