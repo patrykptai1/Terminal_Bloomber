@@ -360,6 +360,8 @@ export async function fetchEarnings(symbol: string): Promise<EarningsData> {
 
   // Enrich with fundamentalsTimeSeries for EBITDA (quoteSummary doesn't return it since Nov 2024)
   let incomeStatements = basicQuarterly
+  let ftsQuarterlyMap = new Map<string, any>()
+  let ftsAnnualMap = new Map<string, any>()
   try {
     const fts: any[] = await yf.fundamentalsTimeSeries(symbol, {
       period1: "2020-01-01",
@@ -409,6 +411,7 @@ export async function fetchEarnings(symbol: string): Promise<EarningsData> {
         })
       }
       incomeStatements = merged.sort((a, b) => a.date.localeCompare(b.date))
+      ftsQuarterlyMap = ftsMap
     }
   } catch {
     // fundamentalsTimeSeries may fail for some tickers — graceful fallback
@@ -456,6 +459,7 @@ export async function fetchEarnings(symbol: string): Promise<EarningsData> {
         })
       }
       annualStatements = merged.sort((a, b) => a.date.localeCompare(b.date))
+      ftsAnnualMap = ftsMap
     }
   } catch {
     // graceful fallback
@@ -492,6 +496,22 @@ export async function fetchEarnings(symbol: string): Promise<EarningsData> {
       changeInWorkingCapital: num(item.changeInWorkingCapital),
     })).sort((a: CashFlowEntry, b: CashFlowEntry) => a.date.localeCompare(b.date))
   } catch { /* graceful */ }
+
+  // Enrich cash flow with taxProvision/interestExpense from financials as fallback
+  for (const cf of cashFlowQuarterly) {
+    const ftsItem = ftsQuarterlyMap.get(cf.date)
+    if (ftsItem) {
+      if (cf.taxesPaid == null) cf.taxesPaid = num(ftsItem.taxProvision) ?? num(ftsItem.incomeTaxExpense)
+      if (cf.interestPaid == null) cf.interestPaid = num(ftsItem.interestExpense) ?? num(ftsItem.interestExpenseNonOperating)
+    }
+  }
+  for (const cf of cashFlowAnnual) {
+    const ftsItem = ftsAnnualMap.get(cf.date)
+    if (ftsItem) {
+      if (cf.taxesPaid == null) cf.taxesPaid = num(ftsItem.taxProvision) ?? num(ftsItem.incomeTaxExpense)
+      if (cf.interestPaid == null) cf.interestPaid = num(ftsItem.interestExpense) ?? num(ftsItem.interestExpenseNonOperating)
+    }
+  }
 
   // Balance sheet via fundamentalsTimeSeries
   let balanceSheetQuarterly: BalanceSheetEntry[] = []

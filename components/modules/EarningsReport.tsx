@@ -363,7 +363,7 @@ export default function EarningsReport() {
 
           {/* ═══ REVENUE TTM ═══ */}
           {(revenueTTM.length > 0 || annualRevenue.some((a) => a.value != null)) && (<>
-            <div className="border-t border-bloomberg-border pt-4 mt-2"><div className="text-sm font-bold text-bloomberg-green mb-3">REVENUE — PRZYCHODY (TTM)</div></div>
+            <div className="border-t border-bloomberg-border pt-4 mt-2" />
             <TTMBarSection title="REVENUE TTM TREND" ttmData={revenueTTM} annualData={annualRevenue} forwardAnnual={fwdAnnualRev} currency={q.currency} color="bg-bloomberg-blue" />
             <TTMTable title="REVENUE TTM TABLE" ttmData={revenueTTM} annualData={annualRevenue} forwardAnnual={fwdAnnualRev} currency={q.currency} />
 
@@ -421,14 +421,14 @@ export default function EarningsReport() {
 
           {/* ═══ EBITDA TTM (Normalized/Adjusted) ═══ */}
           {(ebitdaTTM.length > 0 || annualEbitdaNorm.some((a) => a.value != null)) && (<>
-            <div className="border-t border-bloomberg-border pt-4 mt-2"><div className="text-sm font-bold text-bloomberg-green mb-3">EBITDA — ADJUSTED (TTM)</div></div>
+            <div className="border-t border-bloomberg-border pt-4 mt-2" />
             <TTMBarSection title="EBITDA TTM TREND (NORMALIZED)" ttmData={ebitdaTTM} annualData={annualEbitdaNorm} currency={q.currency} color="bg-bloomberg-purple" explainer="EBITDA = Operating Income + D&A. Adjusted EBITDA wyklucza koszty jednorazowe (restructuring, SBC)." />
             <TTMTable title="EBITDA TTM TABLE (NORMALIZED)" ttmData={ebitdaTTM} annualData={annualEbitdaNorm} currency={q.currency} />
           </>)}
 
           {/* ═══ FREE CASH FLOW TTM ═══ */}
           {(fcfTTM.length > 0 || annualFCF.some((a) => a.value != null)) && (<>
-            <div className="border-t border-bloomberg-border pt-4 mt-2"><div className="text-sm font-bold text-bloomberg-green mb-3">FREE CASH FLOW (TTM)</div></div>
+            <div className="border-t border-bloomberg-border pt-4 mt-2" />
             <TTMBarSection title="FCF TTM TREND" ttmData={fcfTTM} annualData={annualFCF} currency={q.currency} color="bg-bloomberg-green" explainer="FCF = Operating Cash Flow minus CapEx. Pokazuje ile gotówki spółka generuje po inwestycjach." />
 
             {/* FCF TABLE */}
@@ -479,6 +479,7 @@ export default function EarningsReport() {
               const tp = taxesPaidTTM.find((t) => t.date === f.date)
               const ip = interestPaidTTM.find((i) => i.date === f.date)
               const wc = wcTTM.find((w) => w.date === f.date)
+              const sbc = sbcTTM.find((s) => s.date === f.date)
               const oc = opCfTTM.find((o) => o.date === f.date)
               const cx = capexTTM.find((c) => c.date === f.date)
 
@@ -488,36 +489,42 @@ export default function EarningsReport() {
               const taxVal = tp?.value ?? null
               const intPaidVal = ip?.value ?? null
               const wcVal = wc?.value ?? null
+              const sbcVal = sbc?.value ?? null
               const ocVal = oc?.value ?? null
               const cxVal = cx?.value ?? null
               const fcfVal = f.value
 
-              // Check if FCF table TTM diverges > 5%
-              const fcfTableVal = fcfTTM.length > 0 ? fcfTTM[fcfTTM.length - 1].value : null
-              const hasDivergence = fcfTableVal != null && fcfVal !== 0 && Math.abs((fcfVal - fcfTableVal) / Math.abs(fcfTableVal)) > 0.05
+              // Calculate "Other adjustments" as plug so reconciliation always balances:
+              // OCF = EBITDA - Taxes - Interest + SBC + WC + Other
+              // Other = OCF - EBITDA + Taxes + Interest - SBC - WC
+              let otherVal: number | null = null
+              if (ocVal != null && ebitdaVal != null) {
+                otherVal = ocVal - ebitdaVal
+                  + Math.abs(taxVal ?? 0)
+                  + Math.abs(intPaidVal ?? 0)
+                  - (sbcVal ?? 0)
+                  - (wcVal ?? 0)
+              }
 
               // FCF Conversion
               const convPct = ebitdaVal && ebitdaVal !== 0 ? (fcfVal / ebitdaVal) * 100 : null
               const convLabel = convPct == null ? null : convPct < 0 ? "Negative FCF" : convPct >= 50 ? "Excellent conversion" : convPct >= 25 ? "Moderate conversion" : "Weak conversion"
               const convColor = convPct == null ? "text-muted-foreground" : convPct >= 50 ? "text-bloomberg-green" : convPct >= 25 ? "text-bloomberg-amber" : "text-bloomberg-red"
 
-              const hasAsterisk = taxVal == null || intPaidVal == null
-
               return (
                 <div className="bg-bloomberg-card border border-bloomberg-green/30 rounded p-4">
                   <div className="text-xs text-bloomberg-green font-bold mb-3">JAK LICZYMY FCF? — RECONCILIATION ({f.label})</div>
                   <div className="overflow-x-auto"><table className="w-full text-xs"><tbody>
                     <tr className="border-b border-bloomberg-border/50"><td className={`py-1.5 ${ebitdaVal != null && ebitdaVal < 0 ? "text-bloomberg-red font-bold" : ""}`}>EBITDA <span className="text-[10px] text-muted-foreground">(OpIncome + D&A)</span></td><td className={`py-1.5 text-right font-bold ${ebitdaVal != null && ebitdaVal < 0 ? "text-bloomberg-red" : ""}`}>{ebitdaVal != null ? fmtBigValue(ebitdaVal, q.currency) : "N/A"}</td></tr>
-                    <tr className="border-b border-bloomberg-border/50"><td className="py-1.5">- Taxes Paid (Cash){taxVal == null ? " *" : ""}</td><td className="py-1.5 text-right text-bloomberg-red font-bold">{taxVal != null ? `-${fmtBigValue(Math.abs(taxVal), q.currency)}` : <span className="text-muted-foreground">N/A</span>}</td></tr>
-                    <tr className="border-b border-bloomberg-border/50"><td className="py-1.5">- Interest Paid (Cash){intPaidVal == null ? " *" : ""}</td><td className="py-1.5 text-right text-bloomberg-red font-bold">{intPaidVal != null ? `-${fmtBigValue(Math.abs(intPaidVal), q.currency)}` : <span className="text-muted-foreground">N/A</span>}</td></tr>
-                    <tr className="border-b border-bloomberg-border/50"><td className="py-1.5">+/- Working Capital & Other</td><td className={`py-1.5 text-right font-bold ${wcVal != null && wcVal >= 0 ? "text-bloomberg-green" : "text-bloomberg-red"}`}>{wcVal != null ? `${wcVal >= 0 ? "+" : ""}${fmtBigValue(wcVal, q.currency)}` : <span className="text-muted-foreground">N/A</span>}</td></tr>
+                    <tr className="border-b border-bloomberg-border/50"><td className="py-1.5">- Taxes</td><td className="py-1.5 text-right text-bloomberg-red font-bold">{taxVal != null ? `-${fmtBigValue(Math.abs(taxVal), q.currency)}` : <span className="text-muted-foreground">N/A</span>}</td></tr>
+                    <tr className="border-b border-bloomberg-border/50"><td className="py-1.5">- Interest Expense</td><td className="py-1.5 text-right text-bloomberg-red font-bold">{intPaidVal != null ? `-${fmtBigValue(Math.abs(intPaidVal), q.currency)}` : <span className="text-muted-foreground">N/A</span>}</td></tr>
+                    <tr className="border-b border-bloomberg-border/50"><td className="py-1.5">+ Stock Based Compensation <span className="text-[10px] text-muted-foreground">(non-cash)</span></td><td className="py-1.5 text-right text-bloomberg-green font-bold">{sbcVal != null ? `+${fmtBigValue(Math.abs(sbcVal), q.currency)}` : <span className="text-muted-foreground">N/A</span>}</td></tr>
+                    <tr className="border-b border-bloomberg-border/50"><td className="py-1.5">+/- Working Capital Changes</td><td className={`py-1.5 text-right font-bold ${wcVal != null && wcVal >= 0 ? "text-bloomberg-green" : "text-bloomberg-red"}`}>{wcVal != null ? `${wcVal >= 0 ? "+" : ""}${fmtBigValue(wcVal, q.currency)}` : <span className="text-muted-foreground">N/A</span>}</td></tr>
+                    <tr className="border-b border-bloomberg-border/50"><td className="py-1.5 text-muted-foreground">+/- Other Adjustments <span className="text-[10px]">(deferred tax, other non-cash)</span></td><td className={`py-1.5 text-right font-bold ${otherVal != null && otherVal >= 0 ? "text-bloomberg-green" : "text-bloomberg-red"}`}>{otherVal != null ? `${otherVal >= 0 ? "+" : ""}${fmtBigValue(otherVal, q.currency)}` : <span className="text-muted-foreground">N/A</span>}</td></tr>
                     <tr className="border-b border-bloomberg-border"><td className="py-1.5 font-bold">= Operating Cash Flow</td><td className="py-1.5 text-right font-bold">{ocVal != null ? fmtBigValue(ocVal, q.currency) : "N/A"}</td></tr>
                     <tr className="border-b border-bloomberg-border/50"><td className="py-1.5">- Capital Expenditures (CapEx)</td><td className="py-1.5 text-right text-bloomberg-red font-bold">{cxVal != null ? fmtBigValue(cxVal, q.currency) : "N/A"}</td></tr>
                     <tr><td className="py-1.5 font-bold text-bloomberg-green">= Free Cash Flow</td><td className={`py-1.5 text-right font-bold text-sm ${fcfVal >= 0 ? "text-bloomberg-green" : "text-bloomberg-red"}`}>{fmtBigValue(fcfVal, q.currency)}</td></tr>
                   </tbody></table></div>
-
-                  {hasAsterisk && <div className="text-[10px] text-muted-foreground mt-2 italic">* Pozycja niedostępna bezpośrednio w Yahoo Finance — uwzględniona w Working Capital & Other.</div>}
-                  {hasDivergence && <div className="text-[10px] text-bloomberg-amber mt-2">⚠️ Różnica w obliczeniach vs FCF TTM Table — możliwe pozycje jednorazowe lub różna metodologia TTM w tym okresie.</div>}
 
                   {convPct != null && ebitdaVal != null && (
                     <div className={`mt-2 text-xs font-bold ${convColor}`}>
@@ -525,7 +532,7 @@ export default function EarningsReport() {
                     </div>
                   )}
 
-                  <Explainer text="EBITDA to zysk operacyjny przed odsetkami, podatkami i amortyzacją. Odejmując podatki, odsetki i CapEx — dochodzimy do gotówki którą spółka faktycznie generuje dla akcjonariuszy (FCF)." />
+                  <Explainer text="EBITDA to zysk operacyjny przed odsetkami, podatkami i amortyzacją. Odejmując podatki, odsetki, dodając SBC (non-cash) i zmiany w kapitale obrotowym — dochodzimy do Operating Cash Flow. Po odjęciu CapEx = Free Cash Flow." />
                 </div>
               )
             })()}
@@ -540,7 +547,7 @@ export default function EarningsReport() {
 
           {/* ═══ NET INCOME TTM ═══ */}
           {(netIncomeTTM.length > 0 || annualNetIncome.some((a) => a.value != null)) && (<>
-            <div className="border-t border-bloomberg-border pt-4 mt-2"><div className="text-sm font-bold text-bloomberg-green mb-3">NET INCOME — ZYSK NETTO (TTM)</div></div>
+            <div className="border-t border-bloomberg-border pt-4 mt-2" />
             <TTMBarSection title="NET INCOME TTM TREND" ttmData={netIncomeTTM} annualData={annualNetIncome} currency={q.currency} color="bg-bloomberg-green" />
             <TTMTable title="NET INCOME TTM TABLE" ttmData={netIncomeTTM} annualData={annualNetIncome} currency={q.currency} />
           </>)}
@@ -565,7 +572,7 @@ export default function EarningsReport() {
 
           {/* ═══ DILUTION & SBC ═══ */}
           {((e.balanceSheetAnnual ?? []).some((b) => b.sharesOutstanding != null) || sbcTTM.length > 0 || annualSBC.some((a) => a.value != null)) && (<>
-            <div className="border-t border-bloomberg-border pt-4 mt-2"><div className="text-sm font-bold text-bloomberg-green mb-3">DILUTION & SBC</div></div>
+            <div className="border-t border-bloomberg-border pt-4 mt-2" />
             {(e.balanceSheetAnnual ?? []).some((b) => b.sharesOutstanding != null) && (
               <div className="bg-bloomberg-card border border-bloomberg-border rounded p-4">
                 <div className="text-xs text-bloomberg-amber font-bold mb-3">SHARES OUTSTANDING TREND</div>
@@ -592,7 +599,7 @@ export default function EarningsReport() {
           {/* ═══ AKCJONARIAT & OWNERSHIP ═══ */}
           {ow && (
             <>
-              <div className="border-t border-bloomberg-border pt-4 mt-2"><div className="text-sm font-bold text-bloomberg-green mb-3">AKCJONARIAT & OWNERSHIP STRUCTURE</div></div>
+              <div className="border-t border-bloomberg-border pt-4 mt-2" />
 
               {/* Ownership Breakdown Pie */}
               <div className="bg-bloomberg-card border border-bloomberg-border rounded p-4">
