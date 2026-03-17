@@ -22,6 +22,7 @@ interface AITicker {
 
 interface AITheme {
   themeName: string
+  isAIRadar?: boolean
   primarySector: GICSSector
   affectedSectors: GICSSector[]
   impact: "bullish" | "bearish" | "mixed"
@@ -266,10 +267,133 @@ function ThemeCard({ theme, isExpanded, onToggle }: { theme: AITheme; isExpanded
   )
 }
 
+// ── AI Radar Card (special prominent section) ────────────────
+
+function AIRadarCard({ theme, isExpanded, onToggle }: { theme: AITheme; isExpanded: boolean; onToggle: () => void }) {
+  // Strip emoji prefix from name for cleaner display
+  const radarTitle = theme.themeName.replace(/^🤖\s*AI RADAR:\s*/i, "").trim()
+
+  return (
+    <div className="border-b-2 border-purple-500/30">
+      {/* AI Radar Header */}
+      <button
+        onClick={onToggle}
+        className={`w-full px-3 py-3 text-left transition-colors ${
+          isExpanded ? "bg-purple-500/10" : "bg-purple-500/5 hover:bg-purple-500/8"
+        }`}
+      >
+        <div className="flex items-center gap-2 mb-1">
+          <div className="flex items-center gap-1.5">
+            <span className="text-base">🤖</span>
+            <span className="text-[11px] text-purple-400 font-bold tracking-wider">AI & TECH RADAR</span>
+          </div>
+          <div className="flex-1" />
+          <span className={`text-[8px] font-bold border px-1.5 py-0.5 rounded ${
+            theme.impact === "bullish"
+              ? "text-bloomberg-green border-bloomberg-green/30"
+              : theme.impact === "bearish"
+                ? "text-bloomberg-red border-bloomberg-red/30"
+                : "text-bloomberg-amber border-bloomberg-amber/30"
+          }`}>
+            {theme.impact === "bullish" ? "↑ BULLISH" : theme.impact === "bearish" ? "↓ BEARISH" : "↕ MIXED"}
+          </span>
+          {isExpanded ? <ChevronUp className="w-3.5 h-3.5 text-purple-400" /> : <ChevronDown className="w-3.5 h-3.5 text-purple-400" />}
+        </div>
+        <div className="text-[10px] text-foreground font-medium leading-snug">{radarTitle}</div>
+        <div className="flex items-center gap-1 mt-1 flex-wrap">
+          {theme.affectedSectors.slice(0, 4).map(s => (
+            <span key={s} className="text-[7px] text-purple-300/70 border border-purple-500/20 px-1 py-px rounded bg-purple-500/5">
+              {SECTOR_ICON[s]} {SECTOR_PL[s]}
+            </span>
+          ))}
+          {theme.affectedSectors.length > 4 && (
+            <span className="text-[7px] text-purple-300/50">+{theme.affectedSectors.length - 4}</span>
+          )}
+        </div>
+      </button>
+
+      {isExpanded && (
+        <div className="px-3 pb-3 bg-purple-500/5">
+          {/* Deep Analysis */}
+          <div className="mb-3">
+            <div className="flex items-center gap-1 mb-1.5">
+              <Brain className="w-3 h-3 text-purple-400" />
+              <span className="text-[9px] text-purple-400 font-bold">DEEP ANALYSIS — TRENDY AI</span>
+            </div>
+            <div className="text-[10px] text-foreground/80 leading-relaxed">{theme.deepAnalysis}</div>
+          </div>
+
+          {/* Chain of Effects */}
+          {theme.chainOfEffects?.length > 0 && (
+            <div className="mb-3">
+              <div className="flex items-center gap-1 mb-1.5">
+                <Link2 className="w-3 h-3 text-purple-400" />
+                <span className="text-[9px] text-purple-400 font-bold">ŁAŃCUCH EFEKTÓW</span>
+              </div>
+              <div className="space-y-1">
+                {theme.chainOfEffects.map((step, i) => (
+                  <div key={i} className="flex items-start gap-1.5">
+                    <div className="flex flex-col items-center shrink-0 mt-0.5">
+                      <div className={`w-2 h-2 rounded-full ${
+                        i === 0 ? "bg-purple-400" : i === theme.chainOfEffects.length - 1 ? "bg-bloomberg-green" : "bg-purple-400/40"
+                      }`} />
+                      {i < theme.chainOfEffects.length - 1 && <div className="w-px h-3 bg-purple-400/30" />}
+                    </div>
+                    <div className="text-[9px] text-muted-foreground leading-snug flex-1">{step}</div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Affected Sectors */}
+          <div className="mb-3">
+            <div className="text-[9px] text-muted-foreground font-bold mb-1">DOTKNIĘTE SEKTORY:</div>
+            <div className="flex flex-wrap gap-1">
+              {theme.affectedSectors.map(s => (
+                <span key={s} className="text-[8px] px-1.5 py-0.5 bg-purple-500/10 text-purple-300 rounded border border-purple-500/20">
+                  {SECTOR_ICON[s]} {SECTOR_PL[s]}
+                </span>
+              ))}
+            </div>
+          </div>
+
+          {/* TOP Bullish */}
+          {theme.topBullish?.length > 0 && (
+            <div className="mb-3">
+              <div className="flex items-center gap-1.5 mb-1.5">
+                <Star className="w-3 h-3 text-bloomberg-green" />
+                <span className="text-[9px] text-bloomberg-green font-bold">BENEFICJENCI AI ({theme.topBullish.length})</span>
+              </div>
+              {theme.topBullish.map((t, i) => (
+                <DeepTickerRow key={t.symbol} t={t} rank={i + 1} color="green" />
+              ))}
+            </div>
+          )}
+
+          {/* TOP Bearish */}
+          {theme.topBearish?.length > 0 && (
+            <div>
+              <div className="flex items-center gap-1.5 mb-1.5">
+                <Shield className="w-3 h-3 text-bloomberg-red" />
+                <span className="text-[9px] text-bloomberg-red font-bold">ZAGROŻONE ({theme.topBearish.length})</span>
+              </div>
+              {theme.topBearish.map((t, i) => (
+                <DeepTickerRow key={t.symbol} t={t} rank={i + 1} color="red" />
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  )
+}
+
 // ── Main Component ────────────────────────────────────────────
 
 export default function SectorImpactWidget({ newsItems }: SectorImpactWidgetProps) {
   const [expandedTheme, setExpandedTheme] = useState<number | null>(null)
+  const [aiRadarExpanded, setAiRadarExpanded] = useState(false)
 
   // AI state
   const [aiResponse, setAiResponse] = useState<AIResponse | null>(null)
@@ -302,9 +426,13 @@ export default function SectorImpactWidget({ newsItems }: SectorImpactWidgetProp
     }))
   }, [aiResponse])
 
-  // Stats
-  const bullishThemes = themes.filter(t => t.impact === "bullish" || t.impact === "mixed").length
-  const bearishThemes = themes.filter(t => t.impact === "bearish" || t.impact === "mixed").length
+  // Separate AI Radar from other themes
+  const aiRadarTheme = useMemo(() => themes.find(t => t.isAIRadar || t.themeName.includes("AI RADAR")), [themes])
+  const otherThemes = useMemo(() => themes.filter(t => !t.isAIRadar && !t.themeName.includes("AI RADAR")), [themes])
+
+  // Stats (exclude AI Radar from counts)
+  const bullishThemes = otherThemes.filter(t => t.impact === "bullish" || t.impact === "mixed").length
+  const bearishThemes = otherThemes.filter(t => t.impact === "bearish" || t.impact === "mixed").length
   const allAffectedSectors = useMemo(() => {
     const set = new Set<string>()
     themes.forEach(t => t.affectedSectors.forEach(s => set.add(s)))
@@ -416,9 +544,18 @@ export default function SectorImpactWidget({ newsItems }: SectorImpactWidgetProp
               </span>
             </div>
 
-            {/* Theme list */}
+            {/* ═══ AI RADAR — always first ═══ */}
+            {aiRadarTheme && (
+              <AIRadarCard
+                theme={aiRadarTheme}
+                isExpanded={aiRadarExpanded}
+                onToggle={() => setAiRadarExpanded(!aiRadarExpanded)}
+              />
+            )}
+
+            {/* ═══ Other themes ═══ */}
             <div>
-              {themes.map((theme, idx) => (
+              {otherThemes.map((theme, idx) => (
                 <ThemeCard
                   key={idx}
                   theme={theme}

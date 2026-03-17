@@ -56,50 +56,80 @@ Twoim zadaniem jest przeanalizowanie listy newsów ze świata i zidentyfikowanie
 
 6. Odpowiadaj PO POLSKU (powody, analiza, łańcuch efektów).
 
+## ⚡ OBOWIĄZKOWA SEKCJA: AI & TECHNOLOGY RADAR
+
+ZAWSZE — niezależnie od newsów — musisz wygenerować OSOBNY, DEDYKOWANY temat o nazwie zaczynającej się od "🤖 AI RADAR:" w polu "themeName".
+Ten temat MUSI być pierwszy w tablicy "themes" i musi mieć flagę "isAIRadar": true.
+
+W tym temacie przeanalizuj WSZYSTKIE newsy pod kątem AI i technologii. Szukaj:
+
+a) **TRENDY AI** — w jakim kierunku zmierza rozwój AI? Jakie modele/architektury dominują? (np. multimodal, agentic AI, physical AI, on-device AI, reasoning models)
+b) **DANE** — na jakie rodzaje danych jest teraz zapotrzebowanie? (syntetyczne, video, 3D, medyczne, robotyczne, finansowe) Kto je dostarcza?
+c) **HARDWARE** — jakie chipy/GPU/TPU/akceleratory są w centrum uwagi? Kto ma przewagę? Jakie nowe architektury się pojawiają? (np. custom ASICs, photonic chips, neuromorphic)
+d) **INFRASTRUKTURA** — data centers, cooling, energy for AI, networking (InfiniBand, ethernet AI fabrics)
+e) **KONTRAKTY I PARTNERSTWA** — kto z kim podpisuje umowy? Kto staje się liderem w danej niszy AI? Jakie przejęcia/inwestycje się pojawiły?
+f) **NOWE ZASTOSOWANIA** — robotyka, autonomiczne pojazdy, AI w medycynie, AI w finansach, AI coding, AI agents — co się zmienia?
+g) **RYZYKA** — regulacje AI, ban na eksport chipów, obawy o AGI safety, pozwy o prawa autorskie
+
+Dla AI RADAR:
+- Podaj 5-8 beneficjentów (szukaj NISZOWYCH spółek, nie tylko NVDA/MSFT/GOOGL — np. producenci cooling systemów, dostawcy danych treningowych, firmy od edge AI)
+- Podaj 3-5 zagrożonych spółek (kto traci w wyścigu AI? Czyj model biznesowy jest zagrożony?)
+- chainOfEffects powinien pokazywać: trend → zapotrzebowanie → kto dostarcza → kto zyskuje
+- deepAnalysis: 5-8 zdań, głęboka analiza DOKĄD zmierza AI i jakie to ma implikacje inwestycyjne
+
 ## FORMAT ODPOWIEDZI
 
 Odpowiedz WYŁĄCZNIE w formacie JSON (bez markdown, bez komentarzy):
 {
   "themes": [
     {
-      "themeName": "Kryzys dostaw helu — konsekwencje wojny w Iranie",
-      "primarySector": "Materials",
-      "affectedSectors": ["Materials", "Healthcare", "Information Technology"],
-      "impact": "mixed",
-      "deepAnalysis": "Szczegółowa analiza po polsku (3-5 zdań) wyjaśniająca DLACZEGO ten temat jest istotny inwestycyjnie, jakie są ryzyka i szanse",
+      "themeName": "🤖 AI RADAR: [tytuł opisujący główny trend AI z dzisiejszych newsów]",
+      "isAIRadar": true,
+      "primarySector": "Information Technology",
+      "affectedSectors": ["Information Technology", "Healthcare", "Industrials"],
+      "impact": "bullish",
+      "deepAnalysis": "Szczegółowa analiza trendów AI po polsku (5-8 zdań)",
       "chainOfEffects": [
-        "Wojna w Iranie destabilizuje region Zatoki Perskiej",
-        "Katar (25% światowej produkcji helu) narażony na zakłócenia logistyczne",
-        "Ceny helu rosną — krytyczny surowiec dla MRI i produkcji półprzewodników",
-        "US producenci helu (Air Products, Linde) zyskują przewagę cenową",
-        "Szpitale i producenci chipów narażeni na wzrost kosztów"
+        "Trend w AI → zapotrzebowanie na X → dostawcy Y zyskują",
+        "..."
       ],
       "topBullish": [
         {
-          "symbol": "APD",
-          "name": "Air Products & Chemicals",
-          "index": "S&P500",
-          "why": "Największy US producent helu — bezpośredni beneficjent wzrostu cen i przerwanych dostaw z Kataru",
+          "symbol": "SMCI",
+          "name": "Super Micro Computer",
+          "index": "NASDAQ",
+          "why": "Główny dostawca serwerów GPU-optimized dla data centers AI — wzrost popytu na inference infrastructure",
           "relevance": "direct"
         }
       ],
       "topBearish": [
         {
-          "symbol": "KLAC",
-          "name": "KLA Corporation",
-          "index": "BOTH",
-          "why": "Producent sprzętu do inspekcji waferów — wyższe koszty helu zwiększają koszty produkcji chipów",
-          "relevance": "indirect"
+          "symbol": "...",
+          "name": "...",
+          "index": "...",
+          "why": "...",
+          "relevance": "..."
         }
       ]
+    },
+    {
+      "themeName": "Kryzys dostaw helu — konsekwencje wojny w Iranie",
+      "primarySector": "Materials",
+      "affectedSectors": ["Materials", "Healthcare", "Information Technology"],
+      "impact": "mixed",
+      "deepAnalysis": "Szczegółowa analiza po polsku (3-5 zdań)",
+      "chainOfEffects": ["..."],
+      "topBullish": [{"symbol": "APD", "name": "Air Products & Chemicals", "index": "S&P500", "why": "...", "relevance": "direct"}],
+      "topBearish": [{"symbol": "KLAC", "name": "KLA Corporation", "index": "BOTH", "why": "...", "relevance": "indirect"}]
     }
   ]
 }
 
 WAŻNE:
+- PIERWSZY temat ZAWSZE musi być AI RADAR z "isAIRadar": true.
+- Pozostałe tematy: 3-7 (tyle ile wynika z newsów, nie więcej).
 - Grupuj newsy TEMATYCZNIE, nie po sektorach GICS. Jeden temat może dotyczyć wielu sektorów.
-- Podaj 3-8 tematów (tyle ile wynika z newsów, nie więcej).
-- Dla każdego tematu: 3-5 beneficjentów i 2-4 zagrożone spółki.
+- Dla każdego tematu: 3-5 beneficjentów i 2-4 zagrożone spółki (AI RADAR: 5-8 beneficjentów, 3-5 zagrożonych).
 - NIGDY nie powtarzaj tej samej spółki jako beneficjent i zagrożona w tym samym temacie.
 - chainOfEffects: 3-6 kroków logicznego rozumowania.
 - Jeśli news dotyczy konkretnej technologii/surowca/niszy — SZUKAJ spółek które są "pure play" w tym obszarze.`
