@@ -1,8 +1,8 @@
 "use client"
 
 import { useState, useMemo } from "react"
-import { TrendingUp, TrendingDown, ChevronDown, ChevronUp, Zap, Target, ExternalLink, Shield, Star } from "lucide-react"
-import { analyzeNewsImpacts, GICS_SECTORS, type WorldNewsItemInput, type SectorSummary, type ImpactAnalysis, type CompanyTicker, type GICSSector, type TopTicker } from "@/lib/sectorImpact"
+import { TrendingUp, TrendingDown, ChevronDown, ChevronUp, Zap, Target, ExternalLink, Shield, Star, X } from "lucide-react"
+import { analyzeNewsImpacts, GICS_SECTORS, type WorldNewsItemInput, type SectorSummary, type ImpactAnalysis, type GICSSector, type ScoredTicker } from "@/lib/sectorImpact"
 
 // ── Props ─────────────────────────────────────────────────────
 
@@ -40,6 +40,20 @@ const SECTOR_PL: Record<string, string> = {
   "Communication Services": "Komunikacja",
 }
 
+const SECTOR_PL_FULL: Record<string, string> = {
+  "Information Technology": "Technologia informatyczna",
+  "Healthcare": "Ochrona zdrowia",
+  "Financials": "Finanse i bankowość",
+  "Consumer Discretionary": "Dobra luksusowe i konsumenckie",
+  "Consumer Staples": "Dobra podstawowe",
+  "Energy": "Energetyka i surowce energetyczne",
+  "Industrials": "Przemysł i obronność",
+  "Materials": "Surowce i materiały",
+  "Utilities": "Media i usługi użytkowe",
+  "Real Estate": "Nieruchomości",
+  "Communication Services": "Usługi komunikacyjne",
+}
+
 const EVENT_PL: Record<string, string> = {
   "Middle East Conflict": "Konflikt na Bliskim Wschodzie",
   "Persian Gulf / Hormuz Disruption": "Zagrożenie Zatoki Perskiej / Hormuz",
@@ -60,10 +74,49 @@ const EVENT_PL: Record<string, string> = {
   "Peace / De-escalation": "Pokój / Deeskalacja",
 }
 
-const IMPACT_PL: Record<string, string> = {
-  "bullish": "WZROSTOWY",
-  "bearish": "SPADKOWY",
-  "mixed": "MIESZANY",
+// ── Scored Ticker Row ─────────────────────────────────────────
+
+function ScoredTickerRow({ t, rank, color }: { t: ScoredTicker; rank: number; color: "green" | "red" }) {
+  const [open, setOpen] = useState(false)
+  const c = color === "green" ? "text-bloomberg-green" : "text-bloomberg-red"
+  return (
+    <div className="mb-1.5 last:mb-0">
+      <button onClick={() => setOpen(!open)} className="w-full flex items-start gap-2 text-left">
+        <span className={`text-[10px] font-bold ${c} w-4 shrink-0`}>{rank}.</span>
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-1.5">
+            <span className={`text-[11px] font-bold ${c}`}>{t.symbol}</span>
+            <span className="text-[9px] text-muted-foreground truncate">{t.name}</span>
+            <span className="text-[7px] text-muted-foreground shrink-0 border border-bloomberg-border/50 px-1 rounded">{t.index}</span>
+            {open ? <ChevronUp className="w-2.5 h-2.5 text-muted-foreground shrink-0" /> : <ChevronDown className="w-2.5 h-2.5 text-muted-foreground shrink-0" />}
+          </div>
+          <div className="text-[9px] text-muted-foreground leading-snug mt-0.5 truncate">
+            {t.why[0]}
+          </div>
+        </div>
+      </button>
+      {open && (
+        <div className="ml-6 mt-1 pl-2 border-l border-bloomberg-border/50">
+          {t.why.slice(0, 3).map((w, i) => (
+            <div key={i} className="text-[9px] text-muted-foreground leading-snug mb-0.5">• {w}</div>
+          ))}
+          <div className="text-[8px] text-bloomberg-amber/70 mt-1">
+            {t.events.map(e => EVENT_PL[e] ?? e).join(", ")}
+          </div>
+          <div className="flex gap-1.5 mt-1">
+            <a href={`https://finance.yahoo.com/quote/${t.symbol}`} target="_blank" rel="noopener noreferrer"
+              className="inline-flex items-center gap-0.5 text-[8px] px-1.5 py-0.5 bg-bloomberg-green/20 text-bloomberg-green border border-bloomberg-green/30 rounded hover:bg-bloomberg-green/30 transition-colors">
+              Yahoo <ExternalLink className="w-2 h-2" />
+            </a>
+            <a href={`https://www.google.com/finance/quote/${t.symbol}:NASDAQ`} target="_blank" rel="noopener noreferrer"
+              className="inline-flex items-center gap-0.5 text-[8px] px-1.5 py-0.5 bg-bloomberg-blue/20 text-bloomberg-blue border border-bloomberg-blue/30 rounded hover:bg-bloomberg-blue/30 transition-colors">
+              Google <ExternalLink className="w-2 h-2" />
+            </a>
+          </div>
+        </div>
+      )}
+    </div>
+  )
 }
 
 // ── Main Component ────────────────────────────────────────────
@@ -72,9 +125,10 @@ export default function SectorImpactWidget({ newsItems }: SectorImpactWidgetProp
   const [activeTab, setActiveTab] = useState<"bearish" | "bullish">("bearish")
   const [expandedSector, setExpandedSector] = useState<GICSSector | null>(null)
   const [expandedTicker, setExpandedTicker] = useState<string | null>(null)
+  const [selectedGICSSector, setSelectedGICSSector] = useState<GICSSector | null>(null)
 
   const analysis: ImpactAnalysis = useMemo(() => {
-    if (newsItems.length === 0) return { bullish: [], bearish: [], mixed: [], totalNewsAnalyzed: 0, eventsDetected: 0, topBeneficiaries: [], topAtRisk: [] }
+    if (newsItems.length === 0) return { bullish: [], bearish: [], mixed: [], totalNewsAnalyzed: 0, eventsDetected: 0 }
     return analyzeNewsImpacts(newsItems)
   }, [newsItems])
 
@@ -87,6 +141,12 @@ export default function SectorImpactWidget({ newsItems }: SectorImpactWidgetProp
     ...analysis.bearish.map(s => s.sector),
     ...analysis.mixed.map(s => s.sector),
   ]).size
+
+  // Find sector summary for selected GICS sector
+  const selectedSectorData: SectorSummary | null = useMemo(() => {
+    if (!selectedGICSSector) return null
+    return [...analysis.bullish, ...analysis.bearish, ...analysis.mixed].find(s => s.sector === selectedGICSSector) ?? null
+  }, [selectedGICSSector, analysis])
 
   if (newsItems.length === 0) return null
 
@@ -168,7 +228,6 @@ export default function SectorImpactWidget({ newsItems }: SectorImpactWidgetProp
 
                   {isExpanded && (
                     <div className={`px-3 pb-3 ${bgColor}`}>
-                      {/* Wyzwalacz */}
                       <div className="mb-2">
                         <div className="text-[9px] text-bloomberg-amber font-bold mb-1">WYZWALACZ</div>
                         {sector.eventNames.map((en, i) => (
@@ -176,16 +235,13 @@ export default function SectorImpactWidget({ newsItems }: SectorImpactWidgetProp
                         ))}
                       </div>
 
-                      {/* Wpływ */}
                       <div className="mb-2">
                         <div className="text-[9px] text-bloomberg-amber font-bold mb-1">WPŁYW NA SEKTOR</div>
-                        <div className={`text-[10px] font-bold mb-1 ${color}`}>{IMPACT_PL[sector.impact]}</div>
                         {sector.reasons.map((r, i) => (
                           <div key={i} className="text-[10px] text-muted-foreground mb-1 leading-snug">{r}</div>
                         ))}
                       </div>
 
-                      {/* Powiązane newsy */}
                       <div className="mb-2">
                         <div className="text-[9px] text-bloomberg-amber font-bold mb-1">POWIĄZANE NEWSY ({sector.newsCount})</div>
                         {sector.newsItems.slice(0, 3).map((ni) => (
@@ -201,7 +257,6 @@ export default function SectorImpactWidget({ newsItems }: SectorImpactWidgetProp
                         )}
                       </div>
 
-                      {/* Spółki */}
                       <div>
                         <div className="text-[9px] text-bloomberg-amber font-bold mb-1 flex items-center gap-1">
                           <Target className="w-3 h-3" />
@@ -251,96 +306,98 @@ export default function SectorImpactWidget({ newsItems }: SectorImpactWidgetProp
         )}
       </div>
 
-      {/* ═══ TOP 3 BENEFICJENCI + TOP 3 ZAGROŻONE ═══ */}
-      {(analysis.topBeneficiaries.length > 0 || analysis.topAtRisk.length > 0) && (
-        <div className="border-t border-bloomberg-border">
-          {/* TOP 3 BENEFICJENCI */}
-          {analysis.topBeneficiaries.length > 0 && (
-            <div className="px-3 py-2 border-b border-bloomberg-border/50">
-              <div className="flex items-center gap-1.5 mb-1.5">
-                <Star className="w-3 h-3 text-bloomberg-green" />
-                <span className="text-[9px] text-bloomberg-green font-bold tracking-wider">TOP 3 — BENEFICJENCI</span>
-              </div>
-              <div className="text-[8px] text-muted-foreground mb-1.5">Spółki, które mogą zyskać na obecnej sytuacji</div>
-              {analysis.topBeneficiaries.map((t, i) => (
-                <div key={t.symbol} className="flex items-start gap-2 mb-1.5 last:mb-0">
-                  <span className="text-[10px] font-bold text-bloomberg-green w-4">{i + 1}.</span>
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-1.5">
-                      <span className="text-[11px] font-bold text-bloomberg-green">{t.symbol}</span>
-                      <span className="text-[9px] text-muted-foreground truncate">{t.name}</span>
-                      <span className="text-[7px] text-muted-foreground shrink-0 border border-bloomberg-border/50 px-1 rounded">{t.index}</span>
-                    </div>
-                    <div className="text-[9px] text-muted-foreground leading-snug mt-0.5">
-                      {t.reasons.filter(r => r.startsWith("↑")).slice(0, 2).map(r => r.replace("↑ ", "")).join("; ")}
-                    </div>
-                    <div className="text-[8px] text-bloomberg-amber/70 mt-0.5">
-                      {t.events.map(e => EVENT_PL[e] ?? e).slice(0, 2).join(", ")}
-                    </div>
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-
-          {/* TOP 3 ZAGROŻONE */}
-          {analysis.topAtRisk.length > 0 && (
-            <div className="px-3 py-2 border-b border-bloomberg-border/50">
-              <div className="flex items-center gap-1.5 mb-1.5">
-                <Shield className="w-3 h-3 text-bloomberg-red" />
-                <span className="text-[9px] text-bloomberg-red font-bold tracking-wider">TOP 3 — UWAGA NA TE SPÓŁKI</span>
-              </div>
-              <div className="text-[8px] text-muted-foreground mb-1.5">Spółki zagrożone obecną sytuacją — ostrożność w portfelu</div>
-              {analysis.topAtRisk.map((t, i) => (
-                <div key={t.symbol} className="flex items-start gap-2 mb-1.5 last:mb-0">
-                  <span className="text-[10px] font-bold text-bloomberg-red w-4">{i + 1}.</span>
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-1.5">
-                      <span className="text-[11px] font-bold text-bloomberg-red">{t.symbol}</span>
-                      <span className="text-[9px] text-muted-foreground truncate">{t.name}</span>
-                      <span className="text-[7px] text-muted-foreground shrink-0 border border-bloomberg-border/50 px-1 rounded">{t.index}</span>
-                    </div>
-                    <div className="text-[9px] text-muted-foreground leading-snug mt-0.5">
-                      {t.reasons.filter(r => r.startsWith("↓")).slice(0, 2).map(r => r.replace("↓ ", "")).join("; ")}
-                    </div>
-                    <div className="text-[8px] text-bloomberg-amber/70 mt-0.5">
-                      {t.events.map(e => EVENT_PL[e] ?? e).slice(0, 2).join(", ")}
-                    </div>
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-      )}
-
-      {/* SEKTORY GICS — STATUS */}
+      {/* ═══ SEKTORY GICS — KLIKALNE ═══ */}
       <div className="border-t border-bloomberg-border px-3 py-2">
-        <div className="text-[9px] text-bloomberg-amber font-bold mb-1.5">SEKTORY GICS — STATUS</div>
+        <div className="text-[9px] text-bloomberg-amber font-bold mb-1.5">SEKTORY GICS — KLIKNIJ SEKTOR PO SZCZEGÓŁY</div>
         <div className="grid grid-cols-3 gap-1">
           {GICS_SECTORS.map((s) => {
             const bull = analysis.bullish.find(x => x.sector === s)
             const bear = analysis.bearish.find(x => x.sector === s)
             const mix = analysis.mixed.find(x => x.sector === s)
             const hasImpact = bull || bear || mix
+            const isSelected = selectedGICSSector === s
             const label = hasImpact
               ? bull && bear ? "↕" : bull ? "↑" : bear ? "↓" : mix ? "↕" : "—"
               : "—"
             const labelColor = hasImpact
               ? bull && bear ? "text-bloomberg-amber" : bull ? "text-bloomberg-green" : bear ? "text-bloomberg-red" : mix ? "text-bloomberg-amber" : "text-muted-foreground"
               : "text-muted-foreground/50"
-            const bgClass = hasImpact ? "bg-bloomberg-card" : "bg-bloomberg-bg/50 opacity-50"
 
             return (
-              <div key={s} className={`flex items-center gap-1 px-1 py-0.5 rounded border border-bloomberg-border/30 ${bgClass}`}>
+              <button
+                key={s}
+                onClick={() => hasImpact && setSelectedGICSSector(isSelected ? null : s)}
+                disabled={!hasImpact}
+                className={`flex items-center gap-1 px-1 py-0.5 rounded border text-left transition-colors ${
+                  isSelected
+                    ? "border-bloomberg-amber bg-bloomberg-amber/10"
+                    : hasImpact
+                      ? "border-bloomberg-border/30 bg-bloomberg-card hover:border-bloomberg-amber/50 cursor-pointer"
+                      : "border-bloomberg-border/30 bg-bloomberg-bg/50 opacity-40 cursor-default"
+                }`}
+              >
                 <span className="text-[10px]">{SECTOR_ICON[s]}</span>
                 <span className="text-[8px] text-muted-foreground flex-1 truncate">{SECTOR_PL[s]}</span>
                 <span className={`text-[10px] font-bold ${labelColor}`}>{label}</span>
-              </div>
+              </button>
             )
           })}
         </div>
       </div>
+
+      {/* ═══ PANEL TOP 3 — WYŚWIETLA SIĘ PO KLIKNIĘCIU SEKTORA GICS ═══ */}
+      {selectedGICSSector && selectedSectorData && (
+        <div className="border-t-2 border-bloomberg-amber/50 px-3 py-2 bg-bloomberg-amber/5">
+          {/* Header */}
+          <div className="flex items-center gap-2 mb-2">
+            <span className="text-sm">{SECTOR_ICON[selectedGICSSector]}</span>
+            <div className="flex-1">
+              <div className="text-[11px] font-bold text-bloomberg-amber">{SECTOR_PL_FULL[selectedGICSSector]}</div>
+              <div className="text-[8px] text-muted-foreground">
+                {selectedSectorData.newsCount} newsów | {selectedSectorData.eventNames.map(e => EVENT_PL[e] ?? e).join(", ")}
+              </div>
+            </div>
+            <button onClick={() => setSelectedGICSSector(null)} className="text-muted-foreground hover:text-foreground">
+              <X className="w-3.5 h-3.5" />
+            </button>
+          </div>
+
+          {/* TOP 3 BENEFICJENCI */}
+          {selectedSectorData.topBullish.length > 0 && (
+            <div className="mb-3">
+              <div className="flex items-center gap-1.5 mb-1.5">
+                <Star className="w-3 h-3 text-bloomberg-green" />
+                <span className="text-[9px] text-bloomberg-green font-bold tracking-wider">TOP {selectedSectorData.topBullish.length} — BENEFICJENCI</span>
+              </div>
+              <div className="text-[8px] text-muted-foreground mb-1">Spółki z sektora, które mogą zyskać na obecnych wydarzeniach</div>
+              {selectedSectorData.topBullish.map((t, i) => (
+                <ScoredTickerRow key={t.symbol} t={t} rank={i + 1} color="green" />
+              ))}
+            </div>
+          )}
+
+          {/* TOP 3 ZAGROŻONE */}
+          {selectedSectorData.topBearish.length > 0 && (
+            <div>
+              <div className="flex items-center gap-1.5 mb-1.5">
+                <Shield className="w-3 h-3 text-bloomberg-red" />
+                <span className="text-[9px] text-bloomberg-red font-bold tracking-wider">TOP {selectedSectorData.topBearish.length} — UWAGA</span>
+              </div>
+              <div className="text-[8px] text-muted-foreground mb-1">Spółki zagrożone — ostrożność jeśli masz je w portfelu</div>
+              {selectedSectorData.topBearish.map((t, i) => (
+                <ScoredTickerRow key={t.symbol} t={t} rank={i + 1} color="red" />
+              ))}
+            </div>
+          )}
+
+          {/* Jeśli brak danych */}
+          {selectedSectorData.topBullish.length === 0 && selectedSectorData.topBearish.length === 0 && (
+            <div className="text-[10px] text-muted-foreground text-center py-2">
+              Brak wystarczających danych do rankingu spółek w tym sektorze.
+            </div>
+          )}
+        </div>
+      )}
     </div>
   )
 }
