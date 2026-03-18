@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server"
 import { fetchRevenueSegments, fetchIncomeStatements, fmpAvailable, type FMPSegmentYear, type FMPIncomeStatement } from "@/lib/fmp"
-import { fetchQuote } from "@/lib/yahoo"
+import { fetchQuote, fetchEarnings } from "@/lib/yahoo"
 
 // ── Types ────────────────────────────────────────────────────
 
@@ -57,8 +57,93 @@ export async function POST(req: NextRequest) {
       fetchQuote(ticker).catch(() => null),
     ])
 
+    // Fallback to Yahoo Finance if FMP has no data (smaller companies)
     if (!incomeStmts.length) {
-      return NextResponse.json({ error: "Brak danych finansowych" }, { status: 404 })
+      try {
+        const earnings = await fetchEarnings(ticker)
+        const stmts = earnings?.incomeStatements ?? []
+        if (stmts.length < 2) {
+          return NextResponse.json({ error: "Brak danych finansowych" }, { status: 404 })
+        }
+
+        // Build year data from Yahoo (no segments, but full cost breakdown)
+        const sorted = [...stmts].sort((a, b) => a.date.localeCompare(b.date))
+        // Group by calendar year (sum quarters)
+        const byYear = new Map<number, typeof stmts>()
+        for (const q of sorted) {
+          const yr = parseInt(q.date.split("-")[0])
+          if (!byYear.has(yr)) byYear.set(yr, [])
+          byYear.get(yr)!.push(q)
+        }
+
+        const years: SankeyYearData[] = []
+        for (const [yr, qs] of byYear) {
+          const sum = (key: keyof typeof qs[0]) => {
+            const vals = qs.map(q => q[key]).filter((v): v is number => v != null && typeof v === "number")
+            return vals.length > 0 ? vals.reduce((a, b) => a + b, 0) : null
+          }
+          const revenue = sum("revenue")
+          if (!revenue || revenue <= 0) continue
+          const cogs = sum("costOfRevenue")
+          const gp = sum("grossProfit") ?? (cogs != null ? revenue - cogs : null)
+          const sga = sum("sellingGeneralAndAdministration")
+          const rd = sum("researchAndDevelopment")
+          const da = sum("depreciation")
+          const opInc = sum("operatingIncome")
+          const tax = sum("taxProvision")
+          const interest = sum("interestExpense")
+          const other = sum("otherIncomeExpense")
+          const ni = sum("netIncome")
+          const totalOpex = gp != null && opInc != null ? gp - opInc : null
+          const knownOpex = (sga ?? 0) + (rd ?? 0) + (da ?? 0)
+          const otherOpex = totalOpex != null && knownOpex > 0 ? Math.max(0, totalOpex - knownOpex) : null
+
+          years.push({
+            year: yr,
+            date: qs[qs.length - 1].date,
+            revenue,
+            segments: [], // No segments from Yahoo
+            costs: {
+              costOfRevenue: cogs,
+              grossProfit: gp,
+              researchAndDevelopment: rd,
+              sellingAndMarketing: sga, // Yahoo combines S&M + G&A as SGA
+              generalAndAdmin: null,
+              depreciationAmortization: da,
+              otherOpex: otherOpex && otherOpex > revenue * 0.01 ? otherOpex : null,
+              operatingIncome: opInc,
+              interestExpense: interest != null ? Math.abs(interest) : null,
+              interestIncome: null,
+              otherNonOperating: other != null && Math.abs(other) > revenue * 0.01 ? other : null,
+              incomeTax: tax != null ? Math.abs(tax) : null,
+              netIncome: ni,
+            },
+            margins: {
+              gross: gp != null ? (gp / revenue) * 100 : null,
+              operating: opInc != null ? (opInc / revenue) * 100 : null,
+              net: ni != null ? (ni / revenue) * 100 : null,
+            },
+          })
+        }
+
+        years.sort((a, b) => b.year - a.year)
+
+        if (!years.length) {
+          return NextResponse.json({ error: "Brak danych finansowych" }, { status: 404 })
+        }
+
+        return NextResponse.json({
+          ticker,
+          companyName: quote?.name ?? ticker,
+          years,
+          availableYears: years.map(y => y.year),
+          hasSegments: false,
+          source: "yahoo",
+          timestamp: new Date().toISOString(),
+        })
+      } catch {
+        return NextResponse.json({ error: "Brak danych finansowych" }, { status: 404 })
+      }
     }
 
     // Build segment lookup by fiscal year
