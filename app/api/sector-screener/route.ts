@@ -123,7 +123,7 @@ async function fetchStock(
     peRatio: quote.peRatio,
     forwardPE: stats?.forwardPE ?? quote.forwardPE,
     evToEbitda,
-    dividendYield: quote.dividendYield != null ? quote.dividendYield * 100 : null,
+    dividendYield: quote.dividendYield, // Yahoo returns as % already (e.g., 3.6 = 3.6%)
     pegRatio: stats?.pegRatio ?? null,
     ebitda,
     netIncome,

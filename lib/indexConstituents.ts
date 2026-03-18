@@ -57,28 +57,42 @@ async function fetchSP500(): Promise<ConstituentEntry[]> {
     })
     const html = await res.text()
 
-    // Parse the first wikitable
-    const tableMatch = html.match(/<table[^>]*id="constituents"[^>]*>([\s\S]*?)<\/table>/i)
-      ?? html.match(/<table[^>]*class="wikitable sortable"[^>]*>([\s\S]*?)<\/table>/i)
+    // Parse the first wikitable — it's the main constituents list (500+ rows)
+    // The second wikitable is "Selected changes" (fewer rows)
+    // Headers contain HTML links so match on "Sector" or "Security" in <th> tags
+    const allTables = html.match(/<table[^>]*class="wikitable[^"]*"[^>]*>[\s\S]*?<\/table>/gi) ?? []
 
-    if (!tableMatch) {
-      console.error("[indexConstituents] Could not find S&P 500 table")
+    // Pick the largest table (the constituents one has 500+ rows)
+    let tableHtml = ""
+    let maxRows = 0
+    for (const t of allTables) {
+      const rowCount = (t.match(/<tr>/gi) ?? []).length
+      if (rowCount > maxRows) {
+        maxRows = rowCount
+        const inner = t.match(/<table[^>]*>([\s\S]*)<\/table>/i)
+        if (inner) tableHtml = inner[1]
+      }
+    }
+
+    if (!tableHtml || maxRows < 100) {
+      console.error("[indexConstituents] Could not find S&P 500 constituents table (maxRows:", maxRows, ")")
       return []
     }
 
-    const rows = tableMatch[1].match(/<tr>([\s\S]*?)<\/tr>/gi) ?? []
+    const rows = tableHtml.match(/<tr>([\s\S]*?)<\/tr>/gi) ?? []
     const entries: ConstituentEntry[] = []
 
     const extractText = (html: string): string =>
       html.replace(/<[^>]+>/g, "").replace(/&amp;/g, "&").replace(/&#160;/g, " ").trim()
 
-    for (const row of rows.slice(1)) {
-      const cells = row.match(/<td[^>]*>([\s\S]*?)<\/td>/gi) ?? []
-      if (cells.length < 4) continue
+    for (const row of rows.slice(1)) { // skip header row
+      const cells = row.match(/<t[dh][^>]*>([\s\S]*?)<\/t[dh]>/gi) ?? []
+      if (cells.length < 3) continue
 
+      // Columns: [0]=Symbol, [1]=Security, [2]=GICS Sector, [3]=Sub-Industry, ...
       const symbol = extractText(cells[0] ?? "").replace(/\./g, "-")
       const name = extractText(cells[1] ?? "")
-      const sector = extractText(cells[3] ?? "")
+      const sector = extractText(cells[2] ?? "") // GICS Sector is column 2!
 
       if (symbol && name && sector && symbol.length <= 6) {
         entries.push({ symbol, name, sector: normSector(sector), source: "sp500" })
