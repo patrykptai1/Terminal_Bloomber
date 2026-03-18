@@ -1,50 +1,28 @@
 "use client"
 
 import { useState, useEffect, useMemo, useCallback, useRef } from "react"
-import { Loader2, Search } from "lucide-react"
+import { Loader2 } from "lucide-react"
 import TerminalInput from "@/components/TerminalInput"
-import { getTabCache, setTabCache, CACHE_KEYS } from "@/lib/tabCache"
+import { getTabCache, setTabCache } from "@/lib/tabCache"
 
 // ── Types ────────────────────────────────────────────────────
 
-interface SankeySegment {
-  name: string
-  revenue: number
-  pctOfTotal: number
-  yoyChange: number | null
-}
-
+interface SankeySegment { name: string; revenue: number; pctOfTotal: number; yoyChange: number | null }
 interface SankeyCosts {
-  costOfRevenue: number | null
-  grossProfit: number | null
-  researchAndDevelopment: number | null
-  sellingAndMarketing: number | null
-  generalAndAdmin: number | null
-  depreciationAmortization: number | null
-  otherOpex: number | null
-  operatingIncome: number | null
-  interestExpense: number | null
-  interestIncome: number | null
-  otherNonOperating: number | null
-  incomeTax: number | null
-  netIncome: number | null
+  costOfRevenue: number | null; grossProfit: number | null
+  researchAndDevelopment: number | null; sellingAndMarketing: number | null
+  generalAndAdmin: number | null; depreciationAmortization: number | null
+  otherOpex: number | null; operatingIncome: number | null
+  interestExpense: number | null; interestIncome: number | null
+  otherNonOperating: number | null; incomeTax: number | null; netIncome: number | null
 }
-
 interface SankeyYearData {
-  year: number
-  date: string
-  revenue: number
-  segments: SankeySegment[]
-  costs: SankeyCosts
-  margins: { gross: number | null; operating: number | null; net: number | null }
+  year: number; date: string; revenue: number; segments: SankeySegment[]
+  costs: SankeyCosts; margins: { gross: number | null; operating: number | null; net: number | null }
 }
-
 interface SankeyResponse {
-  ticker: string
-  companyName: string
-  years: SankeyYearData[]
-  availableYears: number[]
-  hasSegments: boolean
+  ticker: string; companyName: string; years: SankeyYearData[]
+  availableYears: number[]; hasSegments: boolean
 }
 
 const LS_KEY = "bloomberg_last_ticker_sankey"
@@ -53,122 +31,104 @@ const LS_KEY = "bloomberg_last_ticker_sankey"
 
 function fmt(v: number, c = "$"): string {
   const abs = Math.abs(v)
-  const sign = v < 0 ? "-" : ""
-  if (abs >= 1e12) return `${sign}${c}${(abs / 1e12).toFixed(1)}T`
-  if (abs >= 1e9) return `${sign}${c}${(abs / 1e9).toFixed(1)}B`
-  if (abs >= 1e6) return `${sign}${c}${(abs / 1e6).toFixed(0)}M`
-  return `${sign}${c}${(abs / 1e3).toFixed(0)}K`
+  const s = v < 0 ? "-" : ""
+  if (abs >= 1e12) return `${s}${c}${(abs / 1e12).toFixed(1)}T`
+  if (abs >= 1e9) return `${s}${c}${(abs / 1e9).toFixed(1)}B`
+  if (abs >= 1e6) return `${s}${c}${(abs / 1e6).toFixed(0)}M`
+  return `${s}${c}${(abs / 1e3).toFixed(0)}K`
 }
 
-function yoy(v: number | null): string {
+function yoyStr(v: number | null): string {
   if (v == null || !isFinite(v)) return ""
   return `${v >= 0 ? "+" : ""}${v.toFixed(0)}% Y/Y`
 }
 
-const G = "#22c55e"
-const GD = "rgba(34,197,94,0.15)"
-const R = "#ef4444"
-const RD = "rgba(239,68,68,0.12)"
-const GRAY = "#6b7280"
+// Colors matching the reference image
+const C_GREEN = "#3dba6b"
+const C_GREEN_FLOW = "rgba(61,186,107,0.25)"
+const C_RED = "#d94452"
+const C_RED_FLOW = "rgba(217,68,82,0.20)"
+const C_GRAY = "#8b8b8b"
+const C_GRAY_FLOW = "rgba(139,139,139,0.15)"
+const C_AMBER = "#d4920a"
 
-// ── SVG Components ───────────────────────────────────────────
+// ── SVG: Bezier flow link ────────────────────────────────────
 
-function SLink({ x1, y1, h1, x2, y2, h2, color }: {
+function Flow({ x1, y1, h1, x2, y2, h2, color }: {
   x1: number; y1: number; h1: number; x2: number; y2: number; h2: number; color: string
 }) {
-  const cx1 = x1 + (x2 - x1) * 0.35
-  const cx2 = x1 + (x2 - x1) * 0.65
-  return <path d={`M${x1},${y1} C${cx1},${y1} ${cx2},${y2} ${x2},${y2} L${x2},${y2 + h2} C${cx2},${y2 + h2} ${cx1},${y1 + h1} ${x1},${y1 + h1} Z`} fill={color} opacity={0.55} />
-}
-
-function NBlock({ x, y, w, h: nodeH, label, value, color, yoyVal, sub, align = "right", c = "$", fontSize = 12 }: {
-  x: number; y: number; w: number; h: number; label: string; value: number | null
-  color: string; yoyVal?: number | null; sub?: string; align?: "left" | "right"; c?: string; fontSize?: number
-}) {
-  if (value == null) return null
-  const tx = align === "right" ? x + w + 8 : x - 8
-  const anchor = align === "right" ? "start" : "end"
-  const hh = Math.max(nodeH, 4)
-  const fs = fontSize
-  const lineH = fs + 2
-
+  const midX = (x1 + x2) / 2
   return (
-    <g>
-      <rect x={x} y={y} width={w} height={hh} rx={2} fill={color} />
-      <text x={tx} y={y + Math.min(hh / 2, 20) - 1} textAnchor={anchor}
-        fill="#f3f4f6" fontSize={fs} fontWeight="bold" fontFamily="monospace">
-        {label}
-      </text>
-      <text x={tx} y={y + Math.min(hh / 2, 20) + lineH - 1} textAnchor={anchor}
-        fill="#9ca3af" fontSize={fs - 1} fontFamily="monospace">
-        {fmt(value, c)}
-      </text>
-      {yoyVal != null && (
-        <text x={tx} y={y + Math.min(hh / 2, 20) + lineH * 2 - 1} textAnchor={anchor}
-          fill={yoyVal >= 0 ? G : R} fontSize={fs - 2} fontFamily="monospace">
-          {yoy(yoyVal)}
-        </text>
-      )}
-      {sub && (
-        <text x={tx} y={y + Math.min(hh / 2, 20) + lineH * (yoyVal != null ? 3 : 2) - 1} textAnchor={anchor}
-          fill="#6b7280" fontSize={fs - 3} fontFamily="monospace">
-          {sub}
-        </text>
-      )}
-    </g>
+    <path
+      d={`M${x1},${y1} C${midX},${y1} ${midX},${y2} ${x2},${y2} L${x2},${y2 + h2} C${midX},${y2 + h2} ${midX},${y1 + h1} ${x1},${y1 + h1} Z`}
+      fill={color}
+    />
   )
 }
 
-// ── Full Sankey Chart ────────────────────────────────────────
+// ── SVG: Node rectangle ─────────────────────────────────────
 
-function FullSankeyChart({ data, currency }: { data: SankeyYearData; currency: string }) {
+function Node({ x, y, w, h, color }: { x: number; y: number; w: number; h: number; color: string }) {
+  return <rect x={x} y={y} width={w} height={Math.max(h, 3)} rx={2} fill={color} />
+}
+
+// ── Full Sankey Chart (reference-style) ──────────────────────
+
+function SankeyChart({ data, currency }: { data: SankeyYearData; currency: string }) {
   const hasSeg = data.segments.length > 0
   const segN = data.segments.length
-
-  // Dynamic sizing — large and clear
-  const W = hasSeg ? 1400 : 1000
-  const rowH = 55
-  const H = Math.max(600, hasSeg ? segN * rowH + 80 : 600)
-  const NW = 16
-
-  // Columns with more spacing
-  const cols = hasSeg
-    ? [160, 420, 680, 940, 1200]
-    : [140, 380, 620, 860]
-
-  const ci = hasSeg ? { rev: 1, gp: 2, op: 3, ni: 4 } : { rev: 0, gp: 1, op: 2, ni: 3 }
-
-  const pad = 30
-  const totalH = H - pad * 2
-  const rev = data.revenue
-  const pct = (v: number | null) => v != null && rev > 0 ? Math.max(v / rev, 0) : 0
-  const h = (v: number | null, min = 8) => Math.max(pct(v) * totalH, v != null && v > 0 ? min : 0)
   const c = data.costs
+  const rev = data.revenue
 
-  // Revenue bar
-  const revY = pad
+  // Dynamic height based on segments — generous spacing
+  const segRowH = 70
+  const H = Math.max(700, hasSeg ? segN * segRowH + 100 : 700)
+  const W = 1500
+  const NW = 18 // node bar width
+  const pad = 40
+
+  // Column X positions — generous spacing for labels
+  const segLabelW = 220 // space for segment labels on left
+  const colSegNode = segLabelW
+  const colRev = hasSeg ? 440 : 200
+  const colGP = hasSeg ? 700 : 460
+  const colOP = hasSeg ? 960 : 720
+  const colNI = hasSeg ? 1220 : 980
+
+  const totalH = H - pad * 2
+  const pct = (v: number | null) => (v != null && rev > 0) ? v / rev : 0
+  const nodeH = (v: number | null, minH = 10) => {
+    const raw = pct(v) * totalH
+    return v != null && v > 0 ? Math.max(raw, minH) : 0
+  }
+
+  // ── Y layout ──────────────────────────────────
+
+  const topY = pad
+
+  // Segments — evenly distributed with min height
+  const segHeights = data.segments.map(s => Math.max(pct(s.revenue) * totalH, 32))
+  const segTotalH = segHeights.reduce((a, b) => a + b, 0)
+  const segGap = segN > 1 ? Math.max(3, (totalH - segTotalH) / (segN - 1)) : 0
+
+  // Revenue bar (full height)
+  const revY = topY
   const revH = totalH
 
-  // Segments
-  const segHeights = data.segments.map(s => Math.max((s.revenue / rev) * totalH, 28))
-  const segTotalH = segHeights.reduce((a, b) => a + b, 0)
-  const segGap = segHeights.length > 1 ? Math.min(5, (totalH - segTotalH) / Math.max(segHeights.length - 1, 1)) : 0
-  const segStartY = pad + Math.max(0, (totalH - segTotalH - segGap * Math.max(segHeights.length - 1, 0)) / 2)
-
-  // GP column
-  const cogsH = h(c.costOfRevenue)
+  // GP column: COGS top, Gross Profit bottom
+  const cogsH = nodeH(c.costOfRevenue)
   const gpH = c.grossProfit != null ? totalH - cogsH : 0
-  const cogsY = revY
+  const cogsY = topY
   const gpY = cogsY + cogsH
 
-  // OP column
-  const smH = h(c.sellingAndMarketing)
-  const rdH = h(c.researchAndDevelopment)
-  const gaH = h(c.generalAndAdmin)
-  const daH = h(c.depreciationAmortization)
-  const otherOpH = h(c.otherOpex)
-  const opExH = smH + rdH + gaH + daH + otherOpH
-  const opIncH = c.operatingIncome != null && c.operatingIncome > 0 ? Math.max(gpH - opExH, 12) : 0
+  // OP column: expenses top, operating income bottom
+  const smH = nodeH(c.sellingAndMarketing)
+  const rdH = nodeH(c.researchAndDevelopment)
+  const gaH = nodeH(c.generalAndAdmin)
+  const daH = nodeH(c.depreciationAmortization)
+  const otherOpH = nodeH(c.otherOpex)
+  const expH = smH + rdH + gaH + daH + otherOpH
+  const opH = c.operatingIncome != null && c.operatingIncome > 0 ? Math.max(gpH - expH, 14) : 0
 
   let ey = gpY
   const smY = ey; ey += smH
@@ -176,119 +136,189 @@ function FullSankeyChart({ data, currency }: { data: SankeyYearData; currency: s
   const gaY = ey; ey += gaH
   const daY = ey; ey += daH
   const otherOpY = ey; ey += otherOpH
-  const opIncY = ey
+  const opY = ey
 
-  // NI column
-  const taxH = h(c.incomeTax)
-  const intH = h(c.interestExpense)
-  const otherNonH = h(c.otherNonOperating != null ? Math.abs(c.otherNonOperating) : null)
-  const deductH = taxH + intH + otherNonH
-  const niH = c.netIncome != null && c.netIncome > 0 ? Math.max(opIncH - deductH, 12) : 0
-  const taxY = opIncY
+  // NI column: tax+interest top, net income bottom
+  const taxH = nodeH(c.incomeTax)
+  const intH = nodeH(c.interestExpense)
+  const othNonH = nodeH(c.otherNonOperating != null ? Math.abs(c.otherNonOperating) : null)
+  const deductH = taxH + intH + othNonH
+  const niH = c.netIncome != null && c.netIncome > 0 ? Math.max(opH - deductH, 14) : 0
+
+  const taxY = opY
   const intY = taxY + taxH
-  const otherNonY = intY + intH
-  const niY = otherNonY + otherNonH
+  const othNonY = intY + intH
+  const niY = othNonY + othNonH
 
-  const fs = 13
+  // Label helper
+  const Label = ({ x, y: ly, align, lines, bold }: {
+    x: number; y: number; align: "left" | "right"; lines: (string | null)[]; bold?: boolean
+  }) => {
+    const anchor = align === "left" ? "end" : "start"
+    const dx = align === "left" ? -10 : 10
+    const filtered = lines.filter(Boolean) as string[]
+    return (
+      <g>
+        {filtered.map((line, i) => (
+          <text key={i} x={x + dx} y={ly + i * 16} textAnchor={anchor}
+            fill={i === 0 ? "#e5e7eb" : i === 1 ? "#9ca3af" : (line.includes("+") ? C_GREEN : line.includes("-") ? C_RED : "#6b7280")}
+            fontSize={i === 0 ? (bold ? 15 : 13) : 12}
+            fontWeight={i === 0 ? "bold" : "normal"}
+            fontFamily="'Segoe UI', system-ui, sans-serif">
+            {line}
+          </text>
+        ))}
+      </g>
+    )
+  }
 
   return (
-    <svg width={W} height={H} viewBox={`0 0 ${W} ${H}`} className="w-full h-auto" style={{ maxHeight: "85vh" }}>
-      {/* ═══ SEGMENT → REVENUE links ═══ */}
+    <svg width={W} height={H} viewBox={`0 0 ${W} ${H}`} className="w-full h-auto" style={{ maxHeight: "calc(100vh - 200px)" }}>
+      {/* ═══ SEGMENT FLOWS → Revenue ═══ */}
       {hasSeg && (() => {
-        let sy = segStartY
+        let sy = topY
         let cumRev = 0
         return data.segments.map((seg, i) => {
           const sH = segHeights[i]
           const sY = sy
           sy += sH + segGap
           const revTargetY = revY + (cumRev / rev) * totalH
-          const revSliceH = (seg.revenue / rev) * totalH
+          const revSliceH = pct(seg.revenue) * totalH
           cumRev += seg.revenue
+
           return (
             <g key={i}>
-              <SLink x1={cols[0] + NW} y1={sY} h1={sH} x2={cols[ci.rev]} y2={revTargetY} h2={revSliceH} color="rgba(156,163,175,0.12)" />
-              <NBlock x={cols[0]} y={sY} w={NW} h={sH}
-                label={seg.name} value={seg.revenue} color={GRAY}
-                yoyVal={seg.yoyChange} sub={`${seg.pctOfTotal.toFixed(0)}% of rev`}
-                align="left" c={currency} fontSize={fs} />
+              <Flow x1={colSegNode + NW} y1={sY} h1={sH} x2={colRev} y2={revTargetY} h2={revSliceH} color={C_GRAY_FLOW} />
+              <Node x={colSegNode} y={sY} w={NW} h={sH} color={C_GRAY} />
+              <Label x={colSegNode} y={sY + sH / 2 - 8} align="left" lines={[
+                seg.name,
+                fmt(seg.revenue, currency),
+                seg.yoyChange != null ? yoyStr(seg.yoyChange) : `${seg.pctOfTotal.toFixed(0)}% of rev`,
+              ]} />
             </g>
           )
         })
       })()}
 
-      {/* Revenue → COGS + GP */}
+      {/* ═══ Revenue → COGS + Gross Profit ═══ */}
       {c.costOfRevenue != null && c.costOfRevenue > 0 && (
-        <SLink x1={cols[ci.rev] + NW} y1={revY} h1={cogsH} x2={cols[ci.gp]} y2={cogsY} h2={cogsH} color={RD} />
+        <Flow x1={colRev + NW} y1={revY} h1={cogsH} x2={colGP} y2={cogsY} h2={cogsH} color={C_RED_FLOW} />
       )}
       {c.grossProfit != null && c.grossProfit > 0 && (
-        <SLink x1={cols[ci.rev] + NW} y1={revY + cogsH} h1={gpH} x2={cols[ci.gp]} y2={gpY} h2={gpH} color={GD} />
+        <Flow x1={colRev + NW} y1={revY + cogsH} h1={gpH} x2={colGP} y2={gpY} h2={gpH} color={C_GREEN_FLOW} />
       )}
 
-      {/* GP → OpEx + OP */}
+      {/* ═══ Gross Profit → OpEx + Operating Profit ═══ */}
       {c.sellingAndMarketing != null && c.sellingAndMarketing > 0 && (
-        <SLink x1={cols[ci.gp] + NW} y1={gpY} h1={smH} x2={cols[ci.op]} y2={smY} h2={smH} color={RD} />
+        <Flow x1={colGP + NW} y1={gpY} h1={smH} x2={colOP} y2={smY} h2={smH} color={C_RED_FLOW} />
       )}
       {c.researchAndDevelopment != null && c.researchAndDevelopment > 0 && (
-        <SLink x1={cols[ci.gp] + NW} y1={gpY + smH} h1={rdH} x2={cols[ci.op]} y2={rdY} h2={rdH} color={RD} />
+        <Flow x1={colGP + NW} y1={gpY + smH} h1={rdH} x2={colOP} y2={rdY} h2={rdH} color={C_RED_FLOW} />
       )}
       {c.generalAndAdmin != null && c.generalAndAdmin > 0 && (
-        <SLink x1={cols[ci.gp] + NW} y1={gpY + smH + rdH} h1={gaH} x2={cols[ci.op]} y2={gaY} h2={gaH} color={RD} />
+        <Flow x1={colGP + NW} y1={gpY + smH + rdH} h1={gaH} x2={colOP} y2={gaY} h2={gaH} color={C_RED_FLOW} />
       )}
       {c.depreciationAmortization != null && c.depreciationAmortization > 0 && (
-        <SLink x1={cols[ci.gp] + NW} y1={gpY + smH + rdH + gaH} h1={daH} x2={cols[ci.op]} y2={daY} h2={daH} color={RD} />
+        <Flow x1={colGP + NW} y1={gpY + smH + rdH + gaH} h1={daH} x2={colOP} y2={daY} h2={daH} color={C_RED_FLOW} />
       )}
       {c.otherOpex != null && c.otherOpex > 0 && (
-        <SLink x1={cols[ci.gp] + NW} y1={gpY + smH + rdH + gaH + daH} h1={otherOpH} x2={cols[ci.op]} y2={otherOpY} h2={otherOpH} color={RD} />
+        <Flow x1={colGP + NW} y1={gpY + smH + rdH + gaH + daH} h1={otherOpH} x2={colOP} y2={otherOpY} h2={otherOpH} color={C_RED_FLOW} />
       )}
       {c.operatingIncome != null && c.operatingIncome > 0 && (
-        <SLink x1={cols[ci.gp] + NW} y1={gpY + opExH} h1={opIncH} x2={cols[ci.op]} y2={opIncY} h2={opIncH} color={GD} />
+        <Flow x1={colGP + NW} y1={gpY + expH} h1={opH} x2={colOP} y2={opY} h2={opH} color={C_GREEN_FLOW} />
       )}
 
-      {/* OP → Tax + Interest + NI */}
+      {/* ═══ Operating Profit → Tax/Interest + Net Income ═══ */}
       {c.incomeTax != null && c.incomeTax > 0 && (
-        <SLink x1={cols[ci.op] + NW} y1={opIncY} h1={taxH} x2={cols[ci.ni]} y2={taxY} h2={taxH} color={RD} />
+        <Flow x1={colOP + NW} y1={opY} h1={taxH} x2={colNI} y2={taxY} h2={taxH} color={C_RED_FLOW} />
       )}
       {c.interestExpense != null && c.interestExpense > 0 && (
-        <SLink x1={cols[ci.op] + NW} y1={opIncY + taxH} h1={intH} x2={cols[ci.ni]} y2={intY} h2={intH} color={RD} />
+        <Flow x1={colOP + NW} y1={opY + taxH} h1={intH} x2={colNI} y2={intY} h2={intH} color={C_RED_FLOW} />
       )}
       {c.otherNonOperating != null && Math.abs(c.otherNonOperating) > 0 && (
-        <SLink x1={cols[ci.op] + NW} y1={opIncY + taxH + intH} h1={otherNonH} x2={cols[ci.ni]} y2={otherNonY} h2={otherNonH}
-          color={c.otherNonOperating > 0 ? GD : RD} />
+        <Flow x1={colOP + NW} y1={opY + taxH + intH} h1={othNonH} x2={colNI} y2={othNonY} h2={othNonH}
+          color={c.otherNonOperating > 0 ? C_GREEN_FLOW : C_RED_FLOW} />
       )}
       {c.netIncome != null && c.netIncome > 0 && (
-        <SLink x1={cols[ci.op] + NW} y1={opIncY + deductH} h1={niH} x2={cols[ci.ni]} y2={niY} h2={niH} color={GD} />
+        <Flow x1={colOP + NW} y1={opY + deductH} h1={niH} x2={colNI} y2={niY} h2={niH} color={C_GREEN_FLOW} />
       )}
 
-      {/* ═══ NODES ═══ */}
-      <NBlock x={cols[ci.rev]} y={revY} w={NW} h={revH} label="Revenue" value={rev} color={GRAY}
-        align={hasSeg ? "right" : "left"} c={currency} fontSize={fs + 1} />
+      {/* ═══ NODE BARS + LABELS ═══ */}
 
-      <NBlock x={cols[ci.gp]} y={cogsY} w={NW} h={cogsH} label="Cost of Revenue" value={c.costOfRevenue} color={R}
-        align="right" c={currency} fontSize={fs} />
-      <NBlock x={cols[ci.gp]} y={gpY} w={NW} h={gpH} label="Gross Profit" value={c.grossProfit} color={G}
-        sub={data.margins.gross != null ? `${data.margins.gross.toFixed(1)}% margin` : undefined}
-        align="right" c={currency} fontSize={fs} />
+      {/* Revenue */}
+      <Node x={colRev} y={revY} w={NW} h={revH} color={C_GRAY} />
+      <Label x={colRev + NW} y={revY + revH / 2 - 8} align="right" bold lines={["Revenue", fmt(rev, currency)]} />
 
-      <NBlock x={cols[ci.op]} y={smY} w={NW} h={smH} label="S&M" value={c.sellingAndMarketing} color={R} align="right" c={currency} fontSize={fs} />
-      <NBlock x={cols[ci.op]} y={rdY} w={NW} h={rdH} label="R&D" value={c.researchAndDevelopment} color={R} align="right" c={currency} fontSize={fs} />
-      <NBlock x={cols[ci.op]} y={gaY} w={NW} h={gaH} label="G&A" value={c.generalAndAdmin} color={R} align="right" c={currency} fontSize={fs} />
-      <NBlock x={cols[ci.op]} y={daY} w={NW} h={daH} label="D&A" value={c.depreciationAmortization} color="#b45309" align="right" c={currency} fontSize={fs} />
-      <NBlock x={cols[ci.op]} y={otherOpY} w={NW} h={otherOpH} label="Other OpEx" value={c.otherOpex} color="#991b1b" align="right" c={currency} fontSize={fs} />
-      <NBlock x={cols[ci.op]} y={opIncY} w={NW} h={opIncH} label="Operating Profit" value={c.operatingIncome} color={G}
-        sub={data.margins.operating != null ? `${data.margins.operating.toFixed(1)}% margin` : undefined}
-        align="right" c={currency} fontSize={fs} />
+      {/* Cost of Revenue */}
+      <Node x={colGP} y={cogsY} w={NW} h={cogsH} color={C_RED} />
+      {cogsH > 30 && <Label x={colGP + NW} y={cogsY + Math.min(cogsH / 2, 30) - 8} align="right" lines={["Cost of Revenue", fmt(c.costOfRevenue!, currency)]} />}
 
-      <NBlock x={cols[ci.ni]} y={taxY} w={NW} h={taxH} label="Tax" value={c.incomeTax} color={R} align="right" c={currency} fontSize={fs} />
-      <NBlock x={cols[ci.ni]} y={intY} w={NW} h={intH} label="Interest" value={c.interestExpense} color="#dc2626" align="right" c={currency} fontSize={fs} />
+      {/* Gross Profit */}
+      <Node x={colGP} y={gpY} w={NW} h={gpH} color={C_GREEN} />
+      {gpH > 30 && <Label x={colGP + NW} y={gpY + Math.min(gpH / 2, 60) - 8} align="right" bold lines={[
+        "Gross Profit", fmt(c.grossProfit!, currency), `${data.margins.gross?.toFixed(0)}% margin`
+      ]} />}
+
+      {/* S&M */}
+      <Node x={colOP} y={smY} w={NW} h={smH} color={C_RED} />
+      {smH > 20 && <Label x={colOP + NW} y={smY + Math.min(smH / 2, 20) - 8} align="right" lines={["S&M", fmt(c.sellingAndMarketing!, currency)]} />}
+
+      {/* R&D */}
+      <Node x={colOP} y={rdY} w={NW} h={rdH} color={C_RED} />
+      {rdH > 20 && <Label x={colOP + NW} y={rdY + Math.min(rdH / 2, 20) - 8} align="right" lines={["R&D", fmt(c.researchAndDevelopment!, currency)]} />}
+
+      {/* G&A */}
+      <Node x={colOP} y={gaY} w={NW} h={gaH} color={C_RED} />
+      {gaH > 15 && <Label x={colOP + NW} y={gaY + Math.min(gaH / 2, 20) - 8} align="right" lines={["G&A", fmt(c.generalAndAdmin!, currency)]} />}
+
+      {/* D&A */}
+      {c.depreciationAmortization != null && c.depreciationAmortization > 0 && (
+        <>
+          <Node x={colOP} y={daY} w={NW} h={daH} color={C_AMBER} />
+          {daH > 15 && <Label x={colOP + NW} y={daY + Math.min(daH / 2, 20) - 8} align="right" lines={["D&A", fmt(c.depreciationAmortization, currency)]} />}
+        </>
+      )}
+
+      {/* Other OpEx */}
+      {c.otherOpex != null && c.otherOpex > 0 && (
+        <>
+          <Node x={colOP} y={otherOpY} w={NW} h={otherOpH} color="#991b1b" />
+          {otherOpH > 15 && <Label x={colOP + NW} y={otherOpY + Math.min(otherOpH / 2, 20) - 8} align="right" lines={["Other OpEx", fmt(c.otherOpex, currency)]} />}
+        </>
+      )}
+
+      {/* Operating Profit */}
+      <Node x={colOP} y={opY} w={NW} h={opH} color={C_GREEN} />
+      {opH > 30 && <Label x={colOP + NW} y={opY + Math.min(opH / 2, 40) - 8} align="right" bold lines={[
+        "Operating Profit", fmt(c.operatingIncome!, currency), `${data.margins.operating?.toFixed(0)}% margin`
+      ]} />}
+
+      {/* Tax */}
+      <Node x={colNI} y={taxY} w={NW} h={taxH} color={C_RED} />
+      {taxH > 15 && <Label x={colNI + NW} y={taxY + Math.min(taxH / 2, 20) - 8} align="right" lines={["Tax", fmt(c.incomeTax!, currency)]} />}
+
+      {/* Interest */}
+      {c.interestExpense != null && c.interestExpense > 0 && (
+        <>
+          <Node x={colNI} y={intY} w={NW} h={intH} color={C_RED} />
+          {intH > 10 && <Label x={colNI + NW} y={intY + Math.min(intH / 2, 15) - 4} align="right" lines={["Interest", fmt(c.interestExpense, currency)]} />}
+        </>
+      )}
+
+      {/* Other non-operating */}
       {c.otherNonOperating != null && Math.abs(c.otherNonOperating) > 0 && (
-        <NBlock x={cols[ci.ni]} y={otherNonY} w={NW} h={otherNonH}
-          label={c.otherNonOperating > 0 ? "Other Income" : "Other Expense"}
-          value={Math.abs(c.otherNonOperating)} color={c.otherNonOperating > 0 ? G : "#7c2d12"}
-          align="right" c={currency} fontSize={fs} />
+        <>
+          <Node x={colNI} y={othNonY} w={NW} h={othNonH} color={c.otherNonOperating > 0 ? C_GREEN : C_RED} />
+          {othNonH > 10 && <Label x={colNI + NW} y={othNonY + Math.min(othNonH / 2, 15) - 4} align="right"
+            lines={[c.otherNonOperating > 0 ? "Other Income" : "Other Expense", fmt(Math.abs(c.otherNonOperating), currency)]} />}
+        </>
       )}
-      <NBlock x={cols[ci.ni]} y={niY} w={NW} h={niH} label="Net Profit" value={c.netIncome} color={G}
-        sub={data.margins.net != null ? `${data.margins.net.toFixed(1)}% margin` : undefined}
-        align="right" c={currency} fontSize={fs + 1} />
+
+      {/* Net Profit */}
+      <Node x={colNI} y={niY} w={NW} h={niH} color={C_GREEN} />
+      {niH > 30 && <Label x={colNI + NW} y={niY + Math.min(niH / 2, 40) - 8} align="right" bold lines={[
+        "Net Profit", fmt(c.netIncome!, currency), `${data.margins.net?.toFixed(0)}% margin`
+      ]} />}
     </svg>
   )
 }
@@ -326,14 +356,10 @@ export default function SankeyModule() {
     }
   }, [])
 
-  // Auto-load
   useEffect(() => {
     if (didAutoLoad.current) return
     didAutoLoad.current = true
-    if (data?.availableYears?.length) {
-      setSelectedYear(data.availableYears[0])
-      return
-    }
+    if (data?.availableYears?.length) { setSelectedYear(data.availableYears[0]); return }
     const saved = localStorage.getItem(LS_KEY)
     if (saved) handleFetch(saved)
   }, [handleFetch, data])
@@ -345,87 +371,68 @@ export default function SankeyModule() {
 
   return (
     <div className="font-mono space-y-3">
-      {/* Input */}
       <div className="bg-bloomberg-card border border-bloomberg-border rounded p-3">
         <TerminalInput
           label="SANKEY CHART"
-          placeholder="Wpisz ticker (np. MSFT, AAPL, NVDA)"
+          placeholder="Wpisz ticker (np. MSFT, AAPL, NVDA, GOOGL)"
           onSubmit={handleFetch}
-          defaultValue={localStorage.getItem(LS_KEY) ?? ""}
+          defaultValue={typeof window !== "undefined" ? localStorage.getItem(LS_KEY) ?? "" : ""}
         />
       </div>
 
       {loading && (
-        <div className="flex items-center justify-center py-16 gap-3">
+        <div className="flex items-center justify-center py-20 gap-3">
           <Loader2 className="w-5 h-5 animate-spin text-bloomberg-amber" />
-          <span className="text-muted-foreground text-sm">Pobieranie danych segmentowych...</span>
+          <span className="text-muted-foreground text-sm">Pobieranie danych segmentowych z FMP...</span>
         </div>
       )}
 
-      {error && (
-        <div className="bg-bloomberg-card border border-bloomberg-red/30 rounded p-4 text-center text-bloomberg-red text-sm">{error}</div>
-      )}
+      {error && <div className="bg-bloomberg-card border border-bloomberg-red/30 rounded p-4 text-center text-bloomberg-red text-sm">{error}</div>}
 
       {!loading && data && (
         <div className="bg-bloomberg-card border border-bloomberg-border rounded">
-          {/* Header with year selector */}
-          <div className="flex items-center gap-3 px-4 py-3 border-b border-bloomberg-border flex-wrap">
+          {/* Header */}
+          <div className="flex items-center gap-3 px-5 py-3 border-b border-bloomberg-border flex-wrap">
             <div>
-              <div className="text-bloomberg-amber font-bold text-base tracking-wider">SANKEY FLOW CHART</div>
-              <div className="text-muted-foreground text-xs">{data.companyName} ({data.ticker})</div>
+              <div className="text-bloomberg-amber font-bold text-lg tracking-wider">{data.companyName}</div>
+              <div className="text-muted-foreground text-xs">{data.ticker} • Income Statement Flow</div>
             </div>
-
             <div className="flex items-center gap-1.5 ml-auto">
               {data.availableYears.map(yr => (
-                <button
-                  key={yr}
-                  onClick={() => setSelectedYear(yr)}
+                <button key={yr} onClick={() => setSelectedYear(yr)}
                   className={`px-3 py-1.5 rounded text-xs font-bold border transition-colors ${
                     selectedYear === yr
                       ? "bg-bloomberg-amber/20 text-bloomberg-amber border-bloomberg-amber/50"
-                      : "border-bloomberg-border/50 text-muted-foreground hover:border-bloomberg-amber/30 hover:text-bloomberg-amber/70"
-                  }`}
-                >
+                      : "border-bloomberg-border/50 text-muted-foreground hover:border-bloomberg-amber/30"
+                  }`}>
                   FY{yr}
                 </button>
               ))}
             </div>
           </div>
 
-          {/* Margins bar */}
+          {/* Margins */}
           {yearData && (
-            <div className="flex items-center gap-6 px-4 py-2 border-b border-bloomberg-border/50 bg-bloomberg-bg/50">
+            <div className="flex items-center gap-8 px-5 py-2.5 border-b border-bloomberg-border/50 bg-bloomberg-bg/30">
               {yearData.margins.gross != null && (
-                <div className="text-xs text-muted-foreground">
-                  Marza brutto: <span className="text-bloomberg-green font-bold text-sm">{yearData.margins.gross.toFixed(1)}%</span>
-                </div>
+                <span className="text-xs text-muted-foreground">Marza brutto: <span className="text-green-400 font-bold text-sm">{yearData.margins.gross.toFixed(1)}%</span></span>
               )}
               {yearData.margins.operating != null && (
-                <div className="text-xs text-muted-foreground">
-                  Marza operacyjna: <span className={`font-bold text-sm ${yearData.margins.operating >= 0 ? "text-bloomberg-green" : "text-bloomberg-red"}`}>
-                    {yearData.margins.operating.toFixed(1)}%
-                  </span>
-                </div>
+                <span className="text-xs text-muted-foreground">Marza operacyjna: <span className={`font-bold text-sm ${yearData.margins.operating >= 0 ? "text-green-400" : "text-red-400"}`}>{yearData.margins.operating.toFixed(1)}%</span></span>
               )}
               {yearData.margins.net != null && (
-                <div className="text-xs text-muted-foreground">
-                  Marza netto: <span className={`font-bold text-sm ${yearData.margins.net >= 0 ? "text-bloomberg-green" : "text-bloomberg-red"}`}>
-                    {yearData.margins.net.toFixed(1)}%
-                  </span>
-                </div>
+                <span className="text-xs text-muted-foreground">Marza netto: <span className={`font-bold text-sm ${yearData.margins.net >= 0 ? "text-green-400" : "text-red-400"}`}>{yearData.margins.net.toFixed(1)}%</span></span>
               )}
               {yearData.segments.length > 0 && (
-                <div className="text-[10px] text-purple-400 ml-auto font-bold">
-                  {yearData.segments.length} segmentow przychodowych | FMP data
-                </div>
+                <span className="text-[10px] text-purple-400 ml-auto font-bold">{yearData.segments.length} segmentow | FMP data</span>
               )}
             </div>
           )}
 
-          {/* Chart — full width */}
+          {/* Chart */}
           {yearData && (
-            <div className="p-4 overflow-x-auto">
-              <FullSankeyChart data={yearData} currency="$" />
+            <div className="p-2 overflow-x-auto">
+              <SankeyChart data={yearData} currency="$" />
             </div>
           )}
         </div>
