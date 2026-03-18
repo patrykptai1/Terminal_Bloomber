@@ -54,7 +54,7 @@ interface SectorData {
 }
 
 type SortDir = "asc" | "desc" | null
-type MetricKey = "marketCap" | "peRatio" | "forwardPE" | "evToEbitda" | "dividendYield" | "pegRatio" | "profitMargin" | "revenueGrowth" | "changePercent" | "upside"
+type MetricKey = "marketCap" | "peRatio" | "forwardPE" | "evToEbitda" | "dividendYield" | "pegRatio" | "profitMargin" | "revenueGrowth" | "changePercent" | "avgValuation" | "upside"
 
 interface RangeFilter {
   min: string
@@ -93,22 +93,24 @@ const COLUMNS: { key: MetricKey; label: string; short: string; suffix?: string; 
   { key: "pegRatio", label: "PEG", short: "PEG" },
   { key: "profitMargin", label: "Marża zysku", short: "Marża%", suffix: "%", pct: true },
   { key: "revenueGrowth", label: "Wzrost przych.", short: "Rev Gr%", suffix: "%", pct: true },
-  { key: "upside", label: "Wycena mnożn.", short: "Upside", suffix: "%", pct: true },
+  { key: "avgValuation", label: "Wycena mnożn.", short: "Wycena" },
+  { key: "upside", label: "Potencjał %", short: "Upside", suffix: "%", pct: true },
 ]
 
 const CACHE_KEY = "sectors:data"
 
 // ── Helpers ──────────────────────────────────────────────────
 
-/** Get metric value from stock, including computed "upside" */
+/** Get metric value from stock, including computed valuation fields */
 function getMetric(stock: SectorStock, key: MetricKey): number | null {
   if (key === "upside") return stock.valuation?.upside ?? null
+  if (key === "avgValuation") return stock.valuation?.avgValuation ?? null
   return stock[key] as number | null
 }
 
 function fmtMetric(val: number | null, key: MetricKey, currency?: string): string {
   if (val == null || !isFinite(val)) return "—"
-  if (key === "marketCap") return fmtBigValue(val, currency ?? "USD")
+  if (key === "marketCap" || key === "avgValuation") return fmtBigValue(val, currency ?? "USD")
   if (key === "changePercent" || key === "dividendYield" || key === "profitMargin" || key === "revenueGrowth") return `${val.toFixed(2)}%`
   if (key === "upside") {
     const sign = val > 0 ? "+" : ""
@@ -234,6 +236,15 @@ export default function SectorScreener() {
   const displayStocks = useMemo(() => {
     if (!data) return []
     let stocks = [...data.stocks]
+
+    // Filter by selected market (in case cache has mixed data)
+    if (selectedMarket === "US") {
+      stocks = stocks.filter(s => s.market === "US")
+    } else if (selectedMarket === "GPW") {
+      stocks = stocks.filter(s => s.market === "GPW")
+    } else if (selectedMarket === "NC") {
+      stocks = stocks.filter(s => s.market === "NC")
+    }
 
     // Apply range filters
     for (const [key, range] of Object.entries(rangeFilters)) {
@@ -629,6 +640,19 @@ function StockRow({ stock, medians, sector }: {
             return (
               <td key={col.key} className={`px-2 py-1.5 text-right font-bold ${changeColor}`}>
                 {val != null ? `${val > 0 ? "+" : ""}${val.toFixed(2)}%` : "—"}
+              </td>
+            )
+          }
+
+          // Avg valuation column — color based on vs marketCap
+          if (col.key === "avgValuation") {
+            const upside = stock.valuation?.upside
+            const valColor = upside != null
+              ? upside > 10 ? "text-bloomberg-green" : upside < -10 ? "text-bloomberg-red" : "text-bloomberg-amber"
+              : "text-muted-foreground"
+            return (
+              <td key={col.key} className={`px-2 py-1.5 text-right ${valColor}`}>
+                {fmtMetric(val, col.key, stock.currency)}
               </td>
             )
           }
