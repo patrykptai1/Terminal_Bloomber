@@ -157,14 +157,20 @@ export async function POST(req: NextRequest) {
       `${i + 1}. [${n.sentiment.toUpperCase()}] [${n.impact}] [${n.category}] ${n.title}${n.description ? `\n   ${n.description.slice(0, 300)}` : ""}`
     ).join("\n\n")
 
-    const userPrompt = `Oto ${top.length} najważniejszych newsów ze świata z dnia ${new Date().toISOString().slice(0, 10)}:
+    const now = new Date()
+    const dateStr = now.toISOString().slice(0, 10)
+    const timeStr = now.toISOString().slice(11, 16)
+
+    const userPrompt = `Oto ${top.length} najważniejszych newsów ze świata. Data: ${dateStr}, godzina: ${timeStr} UTC.
 
 ${newsText}
 
-ZADANIE: Przeprowadź DEEP RESEARCH tych newsów. Zidentyfikuj kluczowe tematy inwestycyjne i dla każdego:
+ZADANIE: Przeprowadź DEEP RESEARCH tych KONKRETNYCH newsów powyżej. Zidentyfikuj kluczowe tematy inwestycyjne i dla każdego:
 1. Rozpisz pełny łańcuch przyczynowo-skutkowy (1st → 2nd → 3rd order effects)
 2. Znajdź KONKRETNE spółki z S&P500/NASDAQ które są bezpośrednio powiązane z danym tematem (nie generyczne blue chipy!)
 3. Pomyśl o nieintuicyjnych połączeniach (np. surowce → półprzewodniki → software)
+
+WAŻNE: Bazuj WYŁĄCZNIE na powyższych newsach. Twoja analiza musi bezpośrednio odnosić się do treści tych konkretnych artykułów. Nie generuj ogólnych analiz — każdy temat musi być zakotwiczony w co najmniej jednym z powyższych newsów.
 
 Odpowiedz WYŁĄCZNIE w JSON zgodnie z formatem z instrukcji systemowej.`
 
