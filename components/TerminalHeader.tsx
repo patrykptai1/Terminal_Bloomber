@@ -13,6 +13,7 @@ const TABS: { id: TabId; label: string; shortcut: string }[] = [
   { id: "analyst", label: "ANALYST", shortcut: "F8" },
   { id: "sectors", label: "SECTORS", shortcut: "F9" },
   { id: "worldnews", label: "WORLD NEWS", shortcut: "F10" },
+  { id: "sankey", label: "SANKEY CHART", shortcut: "F11" },
 ]
 
 export default function TerminalHeader({
