@@ -744,9 +744,9 @@ export default function EarningsReport() {
           )}
 
           {/* ═══ SANKEY FLOW CHART ═══ */}
-          {(e.incomeStatements ?? []).length >= 2 && (
+          {q?.symbol && (
             <SankeyFlow
-              incomeStatements={e.incomeStatements ?? []}
+              ticker={q.symbol}
               companyName={q?.name ?? q?.symbol ?? ""}
               currency={q?.currency === "PLN" ? "PLN " : "$"}
             />

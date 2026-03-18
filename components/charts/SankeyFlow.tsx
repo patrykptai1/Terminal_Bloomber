@@ -1,451 +1,461 @@
 "use client"
 
-import { useMemo } from "react"
-import type { IncomeStatementEntry } from "@/lib/yahoo"
+import { useState, useEffect, useMemo, useCallback } from "react"
+import { Loader2 } from "lucide-react"
 
-/**
- * Custom SVG-based Sankey Flow Chart for financial data.
- * Shows: Revenue → COGS → Gross Profit → OpEx breakdown → Operating Profit → Tax/Interest → Net Profit
- */
+// ── Types (mirror API) ───────────────────────────────────────
 
-interface SankeyFlowProps {
-  /** Last 4 quarters (TTM) or latest annual data */
-  incomeStatements: IncomeStatementEntry[]
+interface SankeySegment {
+  name: string
+  revenue: number
+  pctOfTotal: number
+  yoyChange: number | null
+}
+
+interface SankeyCosts {
+  costOfRevenue: number | null
+  grossProfit: number | null
+  researchAndDevelopment: number | null
+  sellingAndMarketing: number | null
+  generalAndAdmin: number | null
+  depreciationAmortization: number | null
+  otherOpex: number | null
+  operatingIncome: number | null
+  interestExpense: number | null
+  interestIncome: number | null
+  otherNonOperating: number | null
+  incomeTax: number | null
+  netIncome: number | null
+}
+
+interface SankeyYearData {
+  year: number
+  date: string
+  revenue: number
+  segments: SankeySegment[]
+  costs: SankeyCosts
+  margins: { gross: number | null; operating: number | null; net: number | null }
+}
+
+interface SankeyResponse {
+  ticker: string
   companyName: string
-  currency?: string
+  years: SankeyYearData[]
+  availableYears: number[]
+  hasSegments: boolean
 }
 
-interface FlowNode {
-  id: string
-  label: string
-  value: number
-  color: string
-  x: number
-  y: number
-  height: number
-  yoyChange?: number | null
-}
+// ── Helpers ──────────────────────────────────────────────────
 
-interface FlowLink {
-  source: string
-  target: string
-  value: number
-  color: string
-}
-
-function formatValue(v: number, currency = "$"): string {
+function fmt(v: number, currency = "$"): string {
   const abs = Math.abs(v)
-  if (abs >= 1e12) return `${currency}${(v / 1e12).toFixed(1)}T`
-  if (abs >= 1e9) return `${currency}${(v / 1e9).toFixed(1)}B`
-  if (abs >= 1e6) return `${currency}${(v / 1e6).toFixed(0)}M`
-  if (abs >= 1e3) return `${currency}${(v / 1e3).toFixed(0)}K`
-  return `${currency}${v.toFixed(0)}`
+  const sign = v < 0 ? "-" : ""
+  if (abs >= 1e12) return `${sign}${currency}${(abs / 1e12).toFixed(1)}T`
+  if (abs >= 1e9) return `${sign}${currency}${(abs / 1e9).toFixed(1)}B`
+  if (abs >= 1e6) return `${sign}${currency}${(abs / 1e6).toFixed(0)}M`
+  return `${sign}${currency}${(abs / 1e3).toFixed(0)}K`
 }
 
-function pctStr(v: number | null | undefined): string {
+function yoyStr(v: number | null): string {
   if (v == null || !isFinite(v)) return ""
   return `${v >= 0 ? "+" : ""}${v.toFixed(0)}% Y/Y`
 }
 
-export default function SankeyFlow({ incomeStatements, companyName, currency = "$" }: SankeyFlowProps) {
-  const data = useMemo(() => {
-    if (!incomeStatements.length) return null
+const GREEN = "#22c55e"
+const GREEN_DIM = "rgba(34,197,94,0.12)"
+const RED = "#ef4444"
+const RED_DIM = "rgba(239,68,68,0.12)"
+const GRAY = "#6b7280"
+const AMBER = "#f59e0b"
 
-    // Calculate TTM (sum last 4 quarters)
-    const sorted = [...incomeStatements].sort((a, b) => a.date.localeCompare(b.date))
-    const recent = sorted.slice(-4)
-    const prev4 = sorted.slice(-8, -4) // Previous 4 for Y/Y
+// ── SVG Sankey Link (bezier curve) ───────────────────────────
 
-    function ttmSum(arr: IncomeStatementEntry[], key: keyof IncomeStatementEntry): number | null {
-      const vals = arr.map(q => q[key]).filter((v): v is number => v != null && typeof v === "number")
-      return vals.length >= 2 ? vals.reduce((a, b) => a + b, 0) : null
-    }
+function SLink({ x1, y1, h1, x2, y2, h2, color }: {
+  x1: number; y1: number; h1: number; x2: number; y2: number; h2: number; color: string
+}) {
+  const cx1 = x1 + (x2 - x1) * 0.4
+  const cx2 = x1 + (x2 - x1) * 0.6
+  const d = `M${x1},${y1} C${cx1},${y1} ${cx2},${y2} ${x2},${y2} L${x2},${y2 + h2} C${cx2},${y2 + h2} ${cx1},${y1 + h1} ${x1},${y1 + h1} Z`
+  return <path d={d} fill={color} opacity={0.6} />
+}
 
-    function yoyPct(current: number | null, previous: number | null): number | null {
-      if (!current || !previous || previous === 0) return null
-      return ((current - previous) / Math.abs(previous)) * 100
-    }
+// ── SVG Node Block ───────────────────────────────────────────
 
-    const revenue = ttmSum(recent, "revenue")
-    const cogs = ttmSum(recent, "costOfRevenue")
-    const grossProfit = ttmSum(recent, "grossProfit")
-    const sga = ttmSum(recent, "sellingGeneralAndAdministration")
-    const rd = ttmSum(recent, "researchAndDevelopment")
-    const depreciation = ttmSum(recent, "depreciation")
-    const operatingIncome = ttmSum(recent, "operatingIncome")
-    const interestExpense = ttmSum(recent, "interestExpense")
-    const taxProvision = ttmSum(recent, "taxProvision")
-    const netIncome = ttmSum(recent, "netIncome")
-    const otherExpense = ttmSum(recent, "otherIncomeExpense")
+function NBlock({ x, y, w, h, label, value, color, yoy, sub, align = "right", currency = "$" }: {
+  x: number; y: number; w: number; h: number; label: string; value: number | null
+  color: string; yoy?: number | null; sub?: string; align?: "left" | "right"; currency?: string
+}) {
+  if (value == null || (value === 0 && !label)) return null
+  const tx = align === "right" ? x + w + 5 : x - 5
+  const anchor = align === "right" ? "start" : "end"
+  const hh = Math.max(h, 3)
 
-    if (!revenue || revenue <= 0) return null
+  return (
+    <g>
+      <rect x={x} y={y} width={w} height={hh} rx={1.5} fill={color} />
+      <text x={tx} y={y + hh / 2 - 7} textAnchor={anchor} fill="#e5e7eb" fontSize={10} fontWeight="bold" fontFamily="monospace">
+        {label}
+      </text>
+      <text x={tx} y={y + hh / 2 + 4} textAnchor={anchor} fill="#9ca3af" fontSize={9} fontFamily="monospace">
+        {fmt(value, currency)}
+      </text>
+      {yoy != null && (
+        <text x={tx} y={y + hh / 2 + 14} textAnchor={anchor} fill={yoy >= 0 ? GREEN : RED} fontSize={8} fontFamily="monospace">
+          {yoyStr(yoy)}
+        </text>
+      )}
+      {sub && (
+        <text x={tx} y={y + hh / 2 + (yoy != null ? 24 : 14)} textAnchor={anchor} fill="#6b7280" fontSize={8} fontFamily="monospace">
+          {sub}
+        </text>
+      )}
+    </g>
+  )
+}
 
-    // Y/Y changes
-    const prevRevenue = ttmSum(prev4, "revenue")
-    const prevGrossProfit = ttmSum(prev4, "grossProfit")
-    const prevOperatingIncome = ttmSum(prev4, "operatingIncome")
-    const prevNetIncome = ttmSum(prev4, "netIncome")
-    const prevCogs = ttmSum(prev4, "costOfRevenue")
-    const prevSga = ttmSum(prev4, "sellingGeneralAndAdministration")
-    const prevRd = ttmSum(prev4, "researchAndDevelopment")
-    const prevTax = ttmSum(prev4, "taxProvision")
+// ── Main Sankey Renderer ─────────────────────────────────────
 
-    // Calculate derived values
-    const actualGrossProfit = grossProfit ?? (cogs != null ? revenue - cogs : null)
-    const actualCogs = cogs ?? (grossProfit != null ? revenue - grossProfit : null)
+function SankeyChart({ data, currency }: { data: SankeyYearData; currency: string }) {
+  const hasSegments = data.segments.length > 0
 
-    // Operating expenses breakdown
-    const totalOpEx = actualGrossProfit != null && operatingIncome != null
-      ? actualGrossProfit - operatingIncome
-      : null
+  // Layout dimensions
+  const W = hasSegments ? 1100 : 900
+  const segCount = Math.max(data.segments.length, 1)
+  const H = Math.max(480, segCount * 42 + 60)
+  const NW = 12 // node width
 
-    // "Other OpEx" = total OpEx - SGA - R&D - D&A
-    const knownOpEx = (sga ?? 0) + (rd ?? 0) + (depreciation ?? 0)
-    const otherOpEx = totalOpEx != null && knownOpEx > 0
-      ? Math.max(0, totalOpEx - knownOpEx)
-      : null
+  // Columns
+  const cols = hasSegments
+    ? [100, 320, 520, 720, 920] // segments, revenue, GP/COGS, OP/OpEx, NI/Tax
+    : [100, 340, 560, 780]       // revenue, GP/COGS, OP/OpEx, NI/Tax
 
-    // Taxes + interest + other = operating income - net income
-    const actualTax = taxProvision != null ? Math.abs(taxProvision) : null
-    const actualInterest = interestExpense != null ? Math.abs(interestExpense) : null
-    const actualOther = otherExpense != null ? otherExpense : null
+  const colRevenue = hasSegments ? 1 : 0
+  const colGP = hasSegments ? 2 : 1
+  const colOP = hasSegments ? 3 : 2
+  const colNI = hasSegments ? 4 : 3
 
-    // "Other non-operating" plug
-    let otherNonOp: number | null = null
-    if (operatingIncome != null && netIncome != null) {
-      const known = (actualTax ?? 0) + (actualInterest ?? 0) - (actualOther ?? 0)
-      otherNonOp = operatingIncome - netIncome - known
-      if (Math.abs(otherNonOp) < revenue * 0.005) otherNonOp = null // ignore tiny residuals
-    }
+  const topPad = 20
+  const totalH = H - topPad * 2
 
-    return {
-      revenue,
-      cogs: actualCogs,
-      grossProfit: actualGrossProfit,
-      sga,
-      rd,
-      depreciation,
-      otherOpEx: otherOpEx && otherOpEx > revenue * 0.01 ? otherOpEx : null,
-      operatingIncome,
-      interest: actualInterest,
-      tax: actualTax,
-      otherNonOp: otherNonOp && Math.abs(otherNonOp) > revenue * 0.01 ? otherNonOp : null,
-      netIncome,
-      // Y/Y
-      yoy: {
-        revenue: yoyPct(revenue, prevRevenue),
-        grossProfit: yoyPct(actualGrossProfit, prevGrossProfit),
-        operatingIncome: yoyPct(operatingIncome, prevOperatingIncome),
-        netIncome: yoyPct(netIncome, prevNetIncome),
-        cogs: yoyPct(actualCogs, prevCogs),
-        sga: yoyPct(sga, prevSga),
-        rd: yoyPct(rd, prevRd),
-        tax: yoyPct(actualTax, prevTax),
-      },
-      // Margins
-      grossMargin: actualGrossProfit != null ? (actualGrossProfit / revenue) * 100 : null,
-      operatingMargin: operatingIncome != null ? (operatingIncome / revenue) * 100 : null,
-      netMargin: netIncome != null ? (netIncome / revenue) * 100 : null,
-    }
-  }, [incomeStatements])
-
-  if (!data) {
-    return (
-      <div className="bg-bloomberg-card border border-bloomberg-border rounded p-4 text-center text-muted-foreground text-xs">
-        Brak danych do wygenerowania Sankey Chart
-      </div>
-    )
-  }
-
-  // ── Build Sankey layout ──────────────────────────────────
-
-  const W = 900
-  const H = 500
-  const PAD = 20
-
-  // Revenue is 100% of the flow
   const rev = data.revenue
-
-  // Column positions (x)
-  const cols = [80, 320, 560, 780] // Revenue, GrossProfit, OperatingProfit, NetProfit
-
-  // Calculate proportions relative to revenue
   const pct = (v: number | null) => v != null && rev > 0 ? Math.max(v / rev, 0) : 0
-  const h = (v: number | null) => Math.max(pct(v) * (H - PAD * 2), 8) // min 8px height
+  const h = (v: number | null, minH = 6) => Math.max(pct(v) * totalH, v != null && v > 0 ? minH : 0)
 
-  // Colors
-  const GREEN = "#22c55e"
-  const GREEN_LIGHT = "rgba(34,197,94,0.15)"
-  const RED = "#ef4444"
-  const RED_LIGHT = "rgba(239,68,68,0.15)"
-  const GRAY = "#6b7280"
+  const c = data.costs
 
-  // ── Render helpers ──────────────────────────────────────
+  // ── Y positions ────────────────────────────────────────
 
-  function SankeyLink({ x1, y1, h1, x2, y2, h2, color }: {
-    x1: number; y1: number; h1: number; x2: number; y2: number; h2: number; color: string
-  }) {
-    const cx1 = x1 + (x2 - x1) * 0.4
-    const cx2 = x1 + (x2 - x1) * 0.6
-
-    const d = `
-      M ${x1} ${y1}
-      C ${cx1} ${y1}, ${cx2} ${y2}, ${x2} ${y2}
-      L ${x2} ${y2 + h2}
-      C ${cx2} ${y2 + h2}, ${cx1} ${y1 + h1}, ${x1} ${y1 + h1}
-      Z
-    `
-    return <path d={d} fill={color} opacity={0.7} />
-  }
-
-  function NodeBlock({ x, y, w, nodeH, label, value, color, yoyChange, subLabel, align = "left" }: {
-    x: number; y: number; w: number; nodeH: number; label: string; value: number | null
-    color: string; yoyChange?: number | null; subLabel?: string; align?: "left" | "right"
-  }) {
-    if (!value && value !== 0) return null
-    const textX = align === "right" ? x + w + 6 : x - 6
-    const anchor = align === "right" ? "start" : "end"
-
-    return (
-      <g>
-        <rect x={x} y={y} width={w} height={Math.max(nodeH, 4)} rx={2} fill={color} />
-        <text x={textX} y={y + Math.max(nodeH, 4) / 2 - 8} textAnchor={anchor} fill="#e5e7eb" fontSize={11} fontWeight="bold" fontFamily="monospace">
-          {label}
-        </text>
-        <text x={textX} y={y + Math.max(nodeH, 4) / 2 + 4} textAnchor={anchor} fill="#9ca3af" fontSize={10} fontFamily="monospace">
-          {formatValue(value, currency)}
-        </text>
-        {yoyChange != null && (
-          <text x={textX} y={y + Math.max(nodeH, 4) / 2 + 16} textAnchor={anchor} fill={yoyChange >= 0 ? GREEN : RED} fontSize={9} fontFamily="monospace">
-            {pctStr(yoyChange)}
-          </text>
-        )}
-        {subLabel && (
-          <text x={textX} y={y + Math.max(nodeH, 4) / 2 + (yoyChange != null ? 28 : 16)} textAnchor={anchor} fill="#6b7280" fontSize={8} fontFamily="monospace">
-            {subLabel}
-          </text>
-        )}
-      </g>
-    )
-  }
-
-  // ── Calculate Y positions ──────────────────────────────
-
-  const topPad = 30
-  const totalH = H - PAD * 2 - topPad
-
-  // Column 0: Revenue (full bar)
+  // Revenue bar
+  const revY = topPad
   const revH = totalH
-  const revY = topPad + PAD
 
-  // Column 1: COGS (top, red) + Gross Profit (bottom, green)
-  const cogsH = h(data.cogs)
-  const gpH = data.grossProfit != null ? totalH - cogsH : 0
+  // Segments (left of revenue)
+  const segHeights = data.segments.map(s => Math.max((s.revenue / rev) * totalH, 20))
+  const segTotalH = segHeights.reduce((a, b) => a + b, 0)
+  const segGap = segHeights.length > 1
+    ? Math.min(4, (totalH - segTotalH) / (segHeights.length - 1))
+    : 0
+  const segStartY = topPad + (totalH - segTotalH - segGap * (segHeights.length - 1)) / 2
+
+  // GP column: COGS (top/red) + Gross Profit (bottom/green)
+  const cogsH = h(c.costOfRevenue)
+  const gpH = c.grossProfit != null ? totalH - cogsH : 0
   const cogsY = revY
   const gpY = cogsY + cogsH
 
-  // Column 2: OpEx items (top, red) + Operating Profit (bottom, green)
-  const sgaH = h(data.sga)
-  const rdH = h(data.rd)
-  const daH = h(data.depreciation)
-  const otherOpExH = h(data.otherOpEx)
-  const opExTotalH = sgaH + rdH + daH + otherOpExH
-  const opIncH = data.operatingIncome != null ? Math.max(gpH - opExTotalH, 8) : 0
-  const sgaY = gpY
-  const rdY = sgaY + sgaH
-  const daY = rdY + rdH
-  const otherOpExY = daY + daH
-  const opIncY = otherOpExY + otherOpExH
+  // OP column: OpEx items (top/red) + Operating Income (bottom/green)
+  const rdH = h(c.researchAndDevelopment)
+  const smH = h(c.sellingAndMarketing)
+  const gaH = h(c.generalAndAdmin)
+  const daH = h(c.depreciationAmortization)
+  const otherOpH = h(c.otherOpex)
+  const opExTotalH = rdH + smH + gaH + daH + otherOpH
+  const opIncH = c.operatingIncome != null && c.operatingIncome > 0
+    ? Math.max(gpH - opExTotalH, 8) : 0
 
-  // Column 3: Tax + Interest + Other (top, red) + Net Profit (bottom, green)
-  const taxH = h(data.tax)
-  const intH = h(data.interest)
-  const otherNonOpH = h(data.otherNonOp != null ? Math.abs(data.otherNonOp) : null)
+  let opExY = gpY
+  const smY = opExY; opExY += smH
+  const rdY = opExY; opExY += rdH
+  const gaY = opExY; opExY += gaH
+  const daY = opExY; opExY += daH
+  const otherOpY = opExY; opExY += otherOpH
+  const opIncY = opExY
+
+  // NI column: Tax + Interest + Other (top/red) + Net Income (bottom/green)
+  const taxH = h(c.incomeTax)
+  const intH = h(c.interestExpense)
+  const otherNonOpH = h(c.otherNonOperating != null ? Math.abs(c.otherNonOperating) : null)
+  const otherIncH = h(c.interestIncome)
   const deductionsH = taxH + intH + otherNonOpH
-  const niH = data.netIncome != null ? Math.max(opIncH - deductionsH, 8) : 0
+  const niH = c.netIncome != null && c.netIncome > 0
+    ? Math.max(opIncH - deductionsH + otherIncH, 8) : 0
+
   const taxY = opIncY
   const intY = taxY + taxH
   const otherNonOpY = intY + intH
   const niY = otherNonOpY + otherNonOpH
 
-  const nodeW = 14
+  return (
+    <svg width={W} height={H} viewBox={`0 0 ${W} ${H}`} className="w-full h-auto">
+      {/* ═══ SEGMENT LINKS (left → revenue) ═══ */}
+      {hasSegments && (() => {
+        let segY = segStartY
+        return data.segments.map((seg, i) => {
+          const sH = segHeights[i]
+          const y = segY
+          segY += sH + segGap
+          // Map to revenue bar proportionally
+          const revSliceStart = revY + (seg.revenue / rev) * totalH * (i > 0 ? data.segments.slice(0, i).reduce((a, s) => a + s.revenue, 0) / rev : 0)
+          const revSliceH = (seg.revenue / rev) * totalH
+
+          // Calculate cumulative Y offset on revenue bar
+          let cumRev = 0
+          for (let j = 0; j < i; j++) cumRev += data.segments[j].revenue
+          const revTargetY = revY + (cumRev / rev) * totalH
+
+          return (
+            <g key={i}>
+              <SLink x1={cols[0] + NW} y1={y} h1={sH} x2={cols[colRevenue]} y2={revTargetY} h2={revSliceH}
+                color="rgba(156,163,175,0.15)" />
+              <NBlock x={cols[0]} y={y} w={NW} h={sH}
+                label={seg.name} value={seg.revenue} color={GRAY}
+                yoy={seg.yoyChange}
+                sub={`${seg.pctOfTotal.toFixed(0)}%`}
+                align="left" currency={currency} />
+            </g>
+          )
+        })
+      })()}
+
+      {/* ═══ REVENUE → COGS + GP ═══ */}
+      {c.costOfRevenue != null && c.costOfRevenue > 0 && (
+        <SLink x1={cols[colRevenue] + NW} y1={revY} h1={cogsH} x2={cols[colGP]} y2={cogsY} h2={cogsH} color={RED_DIM} />
+      )}
+      {c.grossProfit != null && c.grossProfit > 0 && (
+        <SLink x1={cols[colRevenue] + NW} y1={revY + cogsH} h1={gpH} x2={cols[colGP]} y2={gpY} h2={gpH} color={GREEN_DIM} />
+      )}
+
+      {/* ═══ GP → OpEx items + Operating Income ═══ */}
+      {c.sellingAndMarketing != null && c.sellingAndMarketing > 0 && (
+        <SLink x1={cols[colGP] + NW} y1={gpY} h1={smH} x2={cols[colOP]} y2={smY} h2={smH} color={RED_DIM} />
+      )}
+      {c.researchAndDevelopment != null && c.researchAndDevelopment > 0 && (
+        <SLink x1={cols[colGP] + NW} y1={gpY + smH} h1={rdH} x2={cols[colOP]} y2={rdY} h2={rdH} color={RED_DIM} />
+      )}
+      {c.generalAndAdmin != null && c.generalAndAdmin > 0 && (
+        <SLink x1={cols[colGP] + NW} y1={gpY + smH + rdH} h1={gaH} x2={cols[colOP]} y2={gaY} h2={gaH} color={RED_DIM} />
+      )}
+      {c.depreciationAmortization != null && c.depreciationAmortization > 0 && (
+        <SLink x1={cols[colGP] + NW} y1={gpY + smH + rdH + gaH} h1={daH} x2={cols[colOP]} y2={daY} h2={daH} color={RED_DIM} />
+      )}
+      {c.otherOpex != null && c.otherOpex > 0 && (
+        <SLink x1={cols[colGP] + NW} y1={gpY + smH + rdH + gaH + daH} h1={otherOpH} x2={cols[colOP]} y2={otherOpY} h2={otherOpH} color={RED_DIM} />
+      )}
+      {c.operatingIncome != null && c.operatingIncome > 0 && (
+        <SLink x1={cols[colGP] + NW} y1={gpY + opExTotalH} h1={opIncH} x2={cols[colOP]} y2={opIncY} h2={opIncH} color={GREEN_DIM} />
+      )}
+
+      {/* ═══ OP → Tax + Interest + Net Income ═══ */}
+      {c.incomeTax != null && c.incomeTax > 0 && (
+        <SLink x1={cols[colOP] + NW} y1={opIncY} h1={taxH} x2={cols[colNI]} y2={taxY} h2={taxH} color={RED_DIM} />
+      )}
+      {c.interestExpense != null && c.interestExpense > 0 && (
+        <SLink x1={cols[colOP] + NW} y1={opIncY + taxH} h1={intH} x2={cols[colNI]} y2={intY} h2={intH} color={RED_DIM} />
+      )}
+      {c.otherNonOperating != null && Math.abs(c.otherNonOperating) > 0 && (
+        <SLink x1={cols[colOP] + NW} y1={opIncY + taxH + intH} h1={otherNonOpH} x2={cols[colNI]} y2={otherNonOpY} h2={otherNonOpH}
+          color={c.otherNonOperating > 0 ? GREEN_DIM : RED_DIM} />
+      )}
+      {c.netIncome != null && c.netIncome > 0 && (
+        <SLink x1={cols[colOP] + NW} y1={opIncY + deductionsH} h1={niH} x2={cols[colNI]} y2={niY} h2={niH} color={GREEN_DIM} />
+      )}
+
+      {/* ═══ NODES ═══ */}
+
+      {/* Revenue */}
+      <NBlock x={cols[colRevenue]} y={revY} w={NW} h={revH}
+        label="Revenue" value={rev} color={GRAY} align={hasSegments ? "right" : "left"} currency={currency} />
+
+      {/* COGS */}
+      <NBlock x={cols[colGP]} y={cogsY} w={NW} h={cogsH}
+        label="Cost of Revenue" value={c.costOfRevenue} color={RED} align="right" currency={currency} />
+
+      {/* Gross Profit */}
+      <NBlock x={cols[colGP]} y={gpY} w={NW} h={gpH}
+        label="Gross Profit" value={c.grossProfit} color={GREEN}
+        sub={data.margins.gross != null ? `${data.margins.gross.toFixed(0)}% margin` : undefined}
+        align="right" currency={currency} />
+
+      {/* S&M */}
+      <NBlock x={cols[colOP]} y={smY} w={NW} h={smH}
+        label="S&M" value={c.sellingAndMarketing} color={RED} align="right" currency={currency} />
+
+      {/* R&D */}
+      <NBlock x={cols[colOP]} y={rdY} w={NW} h={rdH}
+        label="R&D" value={c.researchAndDevelopment} color={RED} align="right" currency={currency} />
+
+      {/* G&A */}
+      <NBlock x={cols[colOP]} y={gaY} w={NW} h={gaH}
+        label="G&A" value={c.generalAndAdmin} color={RED} align="right" currency={currency} />
+
+      {/* D&A */}
+      <NBlock x={cols[colOP]} y={daY} w={NW} h={daH}
+        label="D&A" value={c.depreciationAmortization} color="#b45309" align="right" currency={currency} />
+
+      {/* Other OpEx */}
+      <NBlock x={cols[colOP]} y={otherOpY} w={NW} h={otherOpH}
+        label="Other OpEx" value={c.otherOpex} color="#991b1b" align="right" currency={currency} />
+
+      {/* Operating Income */}
+      <NBlock x={cols[colOP]} y={opIncY} w={NW} h={opIncH}
+        label="Operating Profit" value={c.operatingIncome} color={GREEN}
+        sub={data.margins.operating != null ? `${data.margins.operating.toFixed(0)}% margin` : undefined}
+        align="right" currency={currency} />
+
+      {/* Tax */}
+      <NBlock x={cols[colNI]} y={taxY} w={NW} h={taxH}
+        label="Tax" value={c.incomeTax} color={RED} align="right" currency={currency} />
+
+      {/* Interest */}
+      <NBlock x={cols[colNI]} y={intY} w={NW} h={intH}
+        label="Interest" value={c.interestExpense} color="#dc2626" align="right" currency={currency} />
+
+      {/* Other non-operating */}
+      {c.otherNonOperating != null && Math.abs(c.otherNonOperating) > 0 && (
+        <NBlock x={cols[colNI]} y={otherNonOpY} w={NW} h={otherNonOpH}
+          label={c.otherNonOperating > 0 ? "Other Income" : "Other Expense"}
+          value={Math.abs(c.otherNonOperating)}
+          color={c.otherNonOperating > 0 ? GREEN : "#7c2d12"} align="right" currency={currency} />
+      )}
+
+      {/* Net Income */}
+      <NBlock x={cols[colNI]} y={niY} w={NW} h={niH}
+        label="Net Profit" value={c.netIncome} color={GREEN}
+        sub={data.margins.net != null ? `${data.margins.net.toFixed(0)}% margin` : undefined}
+        align="right" currency={currency} />
+    </svg>
+  )
+}
+
+// ── Main Component ───────────────────────────────────────────
+
+interface SankeyFlowProps {
+  ticker: string
+  companyName: string
+  currency?: string
+}
+
+export default function SankeyFlow({ ticker, companyName, currency = "$" }: SankeyFlowProps) {
+  const [data, setData] = useState<SankeyResponse | null>(null)
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const [selectedYear, setSelectedYear] = useState<number | null>(null)
+
+  const fetchData = useCallback(async () => {
+    if (!ticker) return
+    setLoading(true)
+    setError(null)
+    try {
+      const res = await fetch("/api/sankey", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ticker }),
+      })
+      const d = await res.json()
+      if (d.error) throw new Error(d.error)
+      setData(d)
+      if (d.availableYears?.length > 0) setSelectedYear(d.availableYears[0])
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : "Error")
+    } finally {
+      setLoading(false)
+    }
+  }, [ticker])
+
+  useEffect(() => { fetchData() }, [fetchData])
+
+  const yearData = useMemo(() => {
+    if (!data || !selectedYear) return null
+    return data.years.find(y => y.year === selectedYear) ?? null
+  }, [data, selectedYear])
 
   return (
     <div className="bg-bloomberg-card border border-bloomberg-border rounded p-4">
-      <div className="flex items-center gap-2 mb-3">
+      {/* Header */}
+      <div className="flex items-center gap-3 mb-3 flex-wrap">
         <span className="text-bloomberg-amber font-bold text-sm tracking-wider font-mono">SANKEY FLOW CHART</span>
-        <span className="text-muted-foreground text-[10px]">TTM | {companyName}</span>
+        <span className="text-muted-foreground text-[10px] font-mono">{companyName}</span>
+
+        {/* Year selector */}
+        {data?.availableYears && data.availableYears.length > 0 && (
+          <div className="flex items-center gap-1 ml-auto">
+            {data.availableYears.map(yr => (
+              <button
+                key={yr}
+                onClick={() => setSelectedYear(yr)}
+                className={`px-2 py-1 rounded text-[10px] font-bold font-mono border transition-colors ${
+                  selectedYear === yr
+                    ? "bg-bloomberg-amber/20 text-bloomberg-amber border-bloomberg-amber/50"
+                    : "border-bloomberg-border/50 text-muted-foreground hover:border-bloomberg-amber/30"
+                }`}
+              >
+                FY{yr}
+              </button>
+            ))}
+          </div>
+        )}
       </div>
 
-      {/* Margin summary */}
-      <div className="flex gap-4 mb-3 text-[10px] font-mono">
-        {data.grossMargin != null && (
-          <span className="text-muted-foreground">
-            Marża brutto: <span className="text-bloomberg-green font-bold">{data.grossMargin.toFixed(1)}%</span>
-          </span>
-        )}
-        {data.operatingMargin != null && (
-          <span className="text-muted-foreground">
-            Marża operacyjna: <span className={data.operatingMargin >= 0 ? "text-bloomberg-green font-bold" : "text-bloomberg-red font-bold"}>
-              {data.operatingMargin.toFixed(1)}%
+      {/* Margins bar */}
+      {yearData && (
+        <div className="flex gap-4 mb-3 text-[10px] font-mono">
+          {yearData.margins.gross != null && (
+            <span className="text-muted-foreground">
+              Marza brutto: <span className="text-bloomberg-green font-bold">{yearData.margins.gross.toFixed(1)}%</span>
             </span>
-          </span>
-        )}
-        {data.netMargin != null && (
-          <span className="text-muted-foreground">
-            Marża netto: <span className={data.netMargin >= 0 ? "text-bloomberg-green font-bold" : "text-bloomberg-red font-bold"}>
-              {data.netMargin.toFixed(1)}%
+          )}
+          {yearData.margins.operating != null && (
+            <span className="text-muted-foreground">
+              Marza operacyjna: <span className={yearData.margins.operating >= 0 ? "text-bloomberg-green font-bold" : "text-bloomberg-red font-bold"}>
+                {yearData.margins.operating.toFixed(1)}%
+              </span>
             </span>
-          </span>
-        )}
-      </div>
-
-      <div className="overflow-x-auto">
-        <svg width={W} height={H} viewBox={`0 0 ${W} ${H}`} className="w-full h-auto">
-          {/* ── LINKS ── */}
-
-          {/* Revenue → COGS */}
-          {data.cogs != null && data.cogs > 0 && (
-            <SankeyLink x1={cols[0] + nodeW} y1={revY} h1={cogsH} x2={cols[1]} y2={cogsY} h2={cogsH} color={RED_LIGHT} />
           )}
-
-          {/* Revenue → Gross Profit */}
-          {data.grossProfit != null && data.grossProfit > 0 && (
-            <SankeyLink x1={cols[0] + nodeW} y1={revY + cogsH} h1={gpH} x2={cols[1]} y2={gpY} h2={gpH} color={GREEN_LIGHT} />
+          {yearData.margins.net != null && (
+            <span className="text-muted-foreground">
+              Marza netto: <span className={yearData.margins.net >= 0 ? "text-bloomberg-green font-bold" : "text-bloomberg-red font-bold"}>
+                {yearData.margins.net.toFixed(1)}%
+              </span>
+            </span>
           )}
-
-          {/* Gross Profit → SGA */}
-          {data.sga != null && data.sga > 0 && (
-            <SankeyLink x1={cols[1] + nodeW} y1={gpY} h1={sgaH} x2={cols[2]} y2={sgaY} h2={sgaH} color={RED_LIGHT} />
+          {yearData.segments.length > 0 && (
+            <span className="text-[8px] text-purple-400 ml-auto">
+              {yearData.segments.length} segmentow przychodowych
+            </span>
           )}
+        </div>
+      )}
 
-          {/* Gross Profit → R&D */}
-          {data.rd != null && data.rd > 0 && (
-            <SankeyLink x1={cols[1] + nodeW} y1={gpY + sgaH} h1={rdH} x2={cols[2]} y2={rdY} h2={rdH} color={RED_LIGHT} />
-          )}
-
-          {/* Gross Profit → D&A */}
-          {data.depreciation != null && data.depreciation > 0 && (
-            <SankeyLink x1={cols[1] + nodeW} y1={gpY + sgaH + rdH} h1={daH} x2={cols[2]} y2={daY} h2={daH} color={RED_LIGHT} />
-          )}
-
-          {/* Gross Profit → Other OpEx */}
-          {data.otherOpEx != null && data.otherOpEx > 0 && (
-            <SankeyLink x1={cols[1] + nodeW} y1={gpY + sgaH + rdH + daH} h1={otherOpExH} x2={cols[2]} y2={otherOpExY} h2={otherOpExH} color={RED_LIGHT} />
-          )}
-
-          {/* Gross Profit → Operating Income */}
-          {data.operatingIncome != null && data.operatingIncome > 0 && (
-            <SankeyLink x1={cols[1] + nodeW} y1={gpY + opExTotalH} h1={opIncH} x2={cols[2]} y2={opIncY} h2={opIncH} color={GREEN_LIGHT} />
-          )}
-
-          {/* Operating Income → Tax */}
-          {data.tax != null && data.tax > 0 && (
-            <SankeyLink x1={cols[2] + nodeW} y1={opIncY} h1={taxH} x2={cols[3]} y2={taxY} h2={taxH} color={RED_LIGHT} />
-          )}
-
-          {/* Operating Income → Interest */}
-          {data.interest != null && data.interest > 0 && (
-            <SankeyLink x1={cols[2] + nodeW} y1={opIncY + taxH} h1={intH} x2={cols[3]} y2={intY} h2={intH} color={RED_LIGHT} />
-          )}
-
-          {/* Operating Income → Other non-op */}
-          {data.otherNonOp != null && Math.abs(data.otherNonOp) > 0 && (
-            <SankeyLink x1={cols[2] + nodeW} y1={opIncY + taxH + intH} h1={otherNonOpH} x2={cols[3]} y2={otherNonOpY} h2={otherNonOpH} color={RED_LIGHT} />
-          )}
-
-          {/* Operating Income → Net Income */}
-          {data.netIncome != null && data.netIncome > 0 && (
-            <SankeyLink x1={cols[2] + nodeW} y1={opIncY + deductionsH} h1={niH} x2={cols[3]} y2={niY} h2={niH} color={GREEN_LIGHT} />
-          )}
-
-          {/* ── NODES ── */}
-
-          {/* Revenue */}
-          <NodeBlock x={cols[0]} y={revY} w={nodeW} nodeH={revH}
-            label="Revenue" value={data.revenue} color={GRAY}
-            yoyChange={data.yoy.revenue} align="left" />
-
-          {/* COGS */}
-          {data.cogs != null && data.cogs > 0 && (
-            <NodeBlock x={cols[1]} y={cogsY} w={nodeW} nodeH={cogsH}
-              label="Cost of Revenue" value={data.cogs} color={RED}
-              yoyChange={data.yoy.cogs} align="right" />
-          )}
-
-          {/* Gross Profit */}
-          {data.grossProfit != null && data.grossProfit > 0 && (
-            <NodeBlock x={cols[1]} y={gpY} w={nodeW} nodeH={gpH}
-              label="Gross Profit" value={data.grossProfit} color={GREEN}
-              yoyChange={data.yoy.grossProfit}
-              subLabel={data.grossMargin != null ? `${data.grossMargin.toFixed(0)}% margin` : undefined}
-              align="right" />
-          )}
-
-          {/* SG&A */}
-          {data.sga != null && data.sga > 0 && (
-            <NodeBlock x={cols[2]} y={sgaY} w={nodeW} nodeH={sgaH}
-              label="SG&A" value={data.sga} color={RED}
-              yoyChange={data.yoy.sga} align="right" />
-          )}
-
-          {/* R&D */}
-          {data.rd != null && data.rd > 0 && (
-            <NodeBlock x={cols[2]} y={rdY} w={nodeW} nodeH={rdH}
-              label="R&D" value={data.rd} color={RED}
-              yoyChange={data.yoy.rd} align="right" />
-          )}
-
-          {/* D&A */}
-          {data.depreciation != null && data.depreciation > 0 && (
-            <NodeBlock x={cols[2]} y={daY} w={nodeW} nodeH={daH}
-              label="D&A" value={data.depreciation} color="#b45309" align="right" />
-          )}
-
-          {/* Other OpEx */}
-          {data.otherOpEx != null && data.otherOpEx > 0 && (
-            <NodeBlock x={cols[2]} y={otherOpExY} w={nodeW} nodeH={otherOpExH}
-              label="Other OpEx" value={data.otherOpEx} color="#991b1b" align="right" />
-          )}
-
-          {/* Operating Income */}
-          {data.operatingIncome != null && data.operatingIncome > 0 && (
-            <NodeBlock x={cols[2]} y={opIncY} w={nodeW} nodeH={opIncH}
-              label="Operating Profit" value={data.operatingIncome} color={GREEN}
-              yoyChange={data.yoy.operatingIncome}
-              subLabel={data.operatingMargin != null ? `${data.operatingMargin.toFixed(0)}% margin` : undefined}
-              align="right" />
-          )}
-
-          {/* Tax */}
-          {data.tax != null && data.tax > 0 && (
-            <NodeBlock x={cols[3]} y={taxY} w={nodeW} nodeH={taxH}
-              label="Tax" value={data.tax} color={RED}
-              yoyChange={data.yoy.tax} align="right" />
-          )}
-
-          {/* Interest */}
-          {data.interest != null && data.interest > 0 && (
-            <NodeBlock x={cols[3]} y={intY} w={nodeW} nodeH={intH}
-              label="Interest" value={data.interest} color="#dc2626" align="right" />
-          )}
-
-          {/* Other non-operating */}
-          {data.otherNonOp != null && Math.abs(data.otherNonOp) > 0 && (
-            <NodeBlock x={cols[3]} y={otherNonOpY} w={nodeW} nodeH={otherNonOpH}
-              label="Other" value={Math.abs(data.otherNonOp)} color="#7c2d12" align="right" />
-          )}
-
-          {/* Net Income */}
-          {data.netIncome != null && data.netIncome > 0 && (
-            <NodeBlock x={cols[3]} y={niY} w={nodeW} nodeH={niH}
-              label="Net Profit" value={data.netIncome} color={GREEN}
-              yoyChange={data.yoy.netIncome}
-              subLabel={data.netMargin != null ? `${data.netMargin.toFixed(0)}% margin` : undefined}
-              align="right" />
-          )}
-        </svg>
-      </div>
+      {/* Chart */}
+      {loading && (
+        <div className="flex items-center justify-center py-12 gap-2">
+          <Loader2 className="w-4 h-4 animate-spin text-bloomberg-amber" />
+          <span className="text-muted-foreground text-xs font-mono">Ladowanie danych Sankey...</span>
+        </div>
+      )}
+      {error && (
+        <div className="text-center py-8 text-bloomberg-red text-xs font-mono">{error}</div>
+      )}
+      {!loading && !error && yearData && (
+        <div className="overflow-x-auto">
+          <SankeyChart data={yearData} currency={currency} />
+        </div>
+      )}
+      {!loading && !error && !yearData && data && (
+        <div className="text-center py-8 text-muted-foreground text-xs font-mono">
+          Brak danych dla wybranego roku
+        </div>
+      )}
     </div>
   )
 }
