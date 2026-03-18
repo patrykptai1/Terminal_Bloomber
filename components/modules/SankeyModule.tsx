@@ -83,17 +83,16 @@ function SankeyChart({ data, currency }: { data: SankeyYearData; currency: strin
   // Dynamic height based on segments — generous spacing
   const segRowH = 70
   const H = Math.max(700, hasSeg ? segN * segRowH + 100 : 700)
-  const W = 1500
+  const W = 1350
   const NW = 18 // node bar width
   const pad = 40
 
-  // Column X positions — wide label area for long segment names
-  const segLabelW = 340 // space for segment labels on left
-  const colSegNode = segLabelW
-  const colRev = hasSeg ? 520 : 200
-  const colGP = hasSeg ? 740 : 460
-  const colOP = hasSeg ? 960 : 720
-  const colNI = hasSeg ? 1180 : 980
+  // Column X positions — segments start at left edge, labels between seg and revenue
+  const colSegNode = 20
+  const colRev = hasSeg ? 460 : 140
+  const colGP = hasSeg ? 680 : 380
+  const colOP = hasSeg ? 900 : 620
+  const colNI = hasSeg ? 1120 : 860
 
   const totalH = H - pad * 2
   const pct = (v: number | null) => (v != null && rev > 0) ? v / rev : 0
@@ -200,7 +199,7 @@ function SankeyChart({ data, currency }: { data: SankeyYearData; currency: strin
 
           const lY = labelYs[i]
           const nodeMidY = sY + sH / 2
-          const labelRightX = colSegNode - 8
+          const labelX = colSegNode + NW + 8
           const needsLeader = Math.abs(lY + 8 - nodeMidY) > 10
 
           return (
@@ -210,12 +209,12 @@ function SankeyChart({ data, currency }: { data: SankeyYearData; currency: strin
               {/* Leader line when label is displaced from node */}
               {needsLeader && (
                 <g>
-                  <line x1={labelRightX + 4} y1={lY + 8} x2={colSegNode - 1} y2={nodeMidY}
+                  <line x1={labelX - 4} y1={lY + 8} x2={colSegNode + NW + 2} y2={nodeMidY}
                     stroke="#4b5563" strokeWidth={0.8} opacity={0.5} />
-                  <circle cx={colSegNode - 1} cy={nodeMidY} r={1.5} fill="#6b7280" opacity={0.6} />
+                  <circle cx={colSegNode + NW + 2} cy={nodeMidY} r={1.5} fill="#6b7280" opacity={0.6} />
                 </g>
               )}
-              <Label x={labelRightX} y={lY} align="left" lines={[
+              <Label x={colSegNode + NW} y={lY} align="right" lines={[
                 seg.name,
                 fmt(seg.revenue, currency),
                 seg.yoyChange != null ? yoyStr(seg.yoyChange) : `${seg.pctOfTotal.toFixed(0)}% of rev`,
