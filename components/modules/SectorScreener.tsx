@@ -90,7 +90,6 @@ const COLUMNS: { key: MetricKey; label: string; short: string; suffix?: string; 
   { key: "peRatio", label: "P/E", short: "P/E" },
   { key: "evToEbitda", label: "EV/EBITDA", short: "EV/EB" },
   { key: "dividendYield", label: "Div Yield", short: "Div%", suffix: "%", pct: true },
-  { key: "pegRatio", label: "PEG", short: "PEG" },
   { key: "profitMargin", label: "Marża zysku", short: "Marża%", suffix: "%", pct: true },
   { key: "revenueGrowth", label: "Wzrost przych.", short: "Rev Gr%", suffix: "%", pct: true },
   { key: "avgValuation", label: "Wycena mnożn.", short: "Wycena" },
