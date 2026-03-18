@@ -198,6 +198,13 @@ export interface IncomeStatementEntry {
   totalExpenses: number | null
   dilutedEPS: number | null
   depreciation: number | null
+  // Cost breakdown for Sankey chart
+  costOfRevenue: number | null
+  sellingGeneralAndAdministration: number | null
+  researchAndDevelopment: number | null
+  interestExpense: number | null
+  taxProvision: number | null
+  otherIncomeExpense: number | null
 }
 
 export interface AnnualIncomeEntry {
@@ -355,6 +362,12 @@ export async function fetchEarnings(symbol: string): Promise<EarningsData> {
       })(),
       dilutedEPS: num(s.dilutedEPS),
       depreciation: null,
+      costOfRevenue: null,
+      sellingGeneralAndAdministration: null,
+      researchAndDevelopment: null,
+      interestExpense: null,
+      taxProvision: null,
+      otherIncomeExpense: null,
     }))
     .reverse()
 
@@ -408,6 +421,13 @@ export async function fetchEarnings(symbol: string): Promise<EarningsData> {
           })(),
           dilutedEPS: basic?.dilutedEPS ?? num(ftsItem?.dilutedEPS) ?? null,
           depreciation: da ?? null,
+          // Cost breakdown for Sankey chart
+          costOfRevenue: num(ftsItem?.costOfRevenue) ?? null,
+          sellingGeneralAndAdministration: num(ftsItem?.sellingGeneralAndAdministration) ?? null,
+          researchAndDevelopment: num(ftsItem?.researchAndDevelopment) ?? null,
+          interestExpense: num(ftsItem?.interestExpenseNonOperating) ?? num(ftsItem?.interestExpense) ?? null,
+          taxProvision: num(ftsItem?.taxProvision) ?? num(ftsItem?.incomeTaxExpense) ?? null,
+          otherIncomeExpense: num(ftsItem?.otherIncomeExpense) ?? num(ftsItem?.otherNonOperatingIncomeExpenses) ?? null,
         })
       }
       incomeStatements = merged.sort((a, b) => a.date.localeCompare(b.date))

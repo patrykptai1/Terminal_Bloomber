@@ -5,6 +5,7 @@ import { CheckCircle, XCircle, Minus, AlertTriangle, TrendingUp, TrendingDown, I
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip as ReTooltip } from "recharts"
 import TerminalInput from "@/components/TerminalInput"
 import BarCompareChart from "@/components/charts/BarCompareChart"
+import SankeyFlow from "@/components/charts/SankeyFlow"
 import type { QuoteData, EarningsData } from "@/lib/yahoo"
 import { fmtBigValue } from "@/lib/currency"
 
@@ -740,6 +741,15 @@ export default function EarningsReport() {
                 )
               })()}
             </>
+          )}
+
+          {/* ═══ SANKEY FLOW CHART ═══ */}
+          {(e.incomeStatements ?? []).length >= 2 && (
+            <SankeyFlow
+              incomeStatements={e.incomeStatements ?? []}
+              companyName={q?.name ?? q?.symbol ?? ""}
+              currency={q?.currency === "PLN" ? "PLN " : "$"}
+            />
           )}
 
           {e.quarterly.length === 0 && e.financials.length === 0 && (e.incomeStatements ?? []).length === 0 && <div className="bg-bloomberg-card border border-bloomberg-border rounded p-4 text-center text-muted-foreground text-sm">No earnings data available for this ticker</div>}
