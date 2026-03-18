@@ -176,21 +176,45 @@ function SankeyChart({ data, currency }: { data: SankeyYearData; currency: strin
     <svg width={W} height={H} viewBox={`0 0 ${W} ${H}`} className="w-full h-auto" style={{ maxHeight: "calc(100vh - 200px)" }}>
       {/* ═══ SEGMENT FLOWS → Revenue ═══ */}
       {hasSeg && (() => {
+        // Calculate node Y positions (proportional)
         let sy = topY
+        const segYs: number[] = []
+        data.segments.forEach((_, i) => { segYs.push(sy); sy += segHeights[i] + segGap })
+
+        // Calculate label Y positions (evenly spaced, no overlap)
+        const labelH = 52 // height per label block
+        const labelTotalH = segN * labelH
+        const labelStartY = topY + Math.max(0, (totalH - labelTotalH) / 2)
+        const labelYs = data.segments.map((_, i) => labelStartY + i * labelH)
+
         let cumRev = 0
         return data.segments.map((seg, i) => {
           const sH = segHeights[i]
-          const sY = sy
-          sy += sH + segGap
+          const sY = segYs[i]
           const revTargetY = revY + (cumRev / rev) * totalH
           const revSliceH = pct(seg.revenue) * totalH
           cumRev += seg.revenue
+
+          // Label position (evenly spaced)
+          const lY = labelYs[i]
+          // Node midpoint for leader line
+          const nodeMidY = sY + sH / 2
+          // Leader line: from label right edge → node left edge
+          const leaderX1 = colSegNode - 6
+          const leaderX2 = colSegNode - 1
 
           return (
             <g key={i}>
               <Flow x1={colSegNode + NW} y1={sY} h1={sH} x2={colRev} y2={revTargetY} h2={revSliceH} color={C_GRAY_FLOW} />
               <Node x={colSegNode} y={sY} w={NW} h={sH} color={C_GRAY} />
-              <Label x={colSegNode} y={sY + sH / 2 - 8} align="left" lines={[
+              {/* Leader line from label to node */}
+              <path
+                d={`M${leaderX1},${lY + 8} L${leaderX2},${nodeMidY}`}
+                stroke="#4b5563" strokeWidth={1} fill="none" opacity={0.5}
+              />
+              <circle cx={leaderX2} cy={nodeMidY} r={2} fill="#4b5563" opacity={0.5} />
+              {/* Label at evenly-spaced Y */}
+              <Label x={leaderX1 - 2} y={lY} align="left" lines={[
                 seg.name,
                 fmt(seg.revenue, currency),
                 seg.yoyChange != null ? yoyStr(seg.yoyChange) : `${seg.pctOfTotal.toFixed(0)}% of rev`,
