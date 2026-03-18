@@ -87,13 +87,13 @@ function SankeyChart({ data, currency }: { data: SankeyYearData; currency: strin
   const NW = 18 // node bar width
   const pad = 40
 
-  // Column X positions — generous spacing for labels
-  const segLabelW = 220 // space for segment labels on left
+  // Column X positions — wide label area for long segment names
+  const segLabelW = 340 // space for segment labels on left
   const colSegNode = segLabelW
-  const colRev = hasSeg ? 440 : 200
-  const colGP = hasSeg ? 700 : 460
+  const colRev = hasSeg ? 520 : 200
+  const colGP = hasSeg ? 740 : 460
   const colOP = hasSeg ? 960 : 720
-  const colNI = hasSeg ? 1220 : 980
+  const colNI = hasSeg ? 1180 : 980
 
   const totalH = H - pad * 2
   const pct = (v: number | null) => (v != null && rev > 0) ? v / rev : 0
