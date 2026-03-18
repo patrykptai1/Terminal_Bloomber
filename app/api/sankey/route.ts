@@ -85,7 +85,8 @@ export async function POST(req: NextRequest) {
           const revenue = sum("revenue")
           if (!revenue || revenue <= 0) continue
           const cogs = sum("costOfRevenue")
-          const gp = sum("grossProfit") ?? (cogs != null ? revenue - cogs : null)
+          const rawGP = sum("grossProfit")
+          const gp = (rawGP != null && rawGP > 0) ? rawGP : (cogs != null ? revenue - cogs : null)
           const sga = sum("sellingGeneralAndAdministration")
           const rd = sum("researchAndDevelopment")
           const da = sum("depreciation")
@@ -204,7 +205,8 @@ export async function POST(req: NextRequest) {
         + (sm ?? sga ?? 0)
         + (sm ? (ga ?? 0) : 0)
         + (is.depreciationAndAmortization ?? 0)
-      const totalOpex = is.grossProfit - (operatingIncome ?? 0)
+      const gpForCalc = is.grossProfit > 0 ? is.grossProfit : (is.costOfRevenue > 0 ? is.revenue - is.costOfRevenue : is.revenue)
+      const totalOpex = gpForCalc - (operatingIncome ?? 0)
       const otherOpex = totalOpex - knownOpex
 
       // Non-operating items
@@ -214,9 +216,12 @@ export async function POST(req: NextRequest) {
       const impliedTax = preTaxIncome - is.netIncome
       const tax = is.incomeTaxExpense ?? (impliedTax > 0 ? impliedTax : null)
 
+      // Fix: if grossProfit is 0 or missing, calculate from revenue - COGS
+      const actualGP = is.grossProfit > 0 ? is.grossProfit : (is.costOfRevenue > 0 ? is.revenue - is.costOfRevenue : null)
+
       const costs: SankeyCosts = {
         costOfRevenue: is.costOfRevenue > 0 ? is.costOfRevenue : null,
-        grossProfit: is.grossProfit > 0 ? is.grossProfit : null,
+        grossProfit: actualGP,
         researchAndDevelopment: is.researchAndDevelopmentExpenses > 0 ? is.researchAndDevelopmentExpenses : null,
         sellingAndMarketing: sm != null && sm > 0 ? sm : (sga != null && sga > 0 && !ga ? sga : null),
         generalAndAdmin: ga != null && ga > 0 ? ga : null,
@@ -237,7 +242,7 @@ export async function POST(req: NextRequest) {
         segments,
         costs,
         margins: {
-          gross: is.grossProfit > 0 ? (is.grossProfit / is.revenue) * 100 : null,
+          gross: actualGP != null && actualGP > 0 ? (actualGP / is.revenue) * 100 : null,
           operating: operatingIncome != null ? (operatingIncome / is.revenue) * 100 : null,
           net: (is.netIncome / is.revenue) * 100,
         },
