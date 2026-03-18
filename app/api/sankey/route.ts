@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server"
 import { fetchRevenueSegments, fetchIncomeStatements, fmpAvailable, type FMPSegmentYear, type FMPIncomeStatement } from "@/lib/fmp"
+import { fetchQuote } from "@/lib/yahoo"
 
 // ── Types ────────────────────────────────────────────────────
 
@@ -49,10 +50,11 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "FMP API key not configured" }, { status: 500 })
     }
 
-    // Fetch segments + income statements in parallel
-    const [segmentYears, incomeStmts] = await Promise.all([
+    // Fetch segments + income statements + quote (for company name) in parallel
+    const [segmentYears, incomeStmts, quote] = await Promise.all([
       fetchRevenueSegments(ticker),
       fetchIncomeStatements(ticker, 5),
+      fetchQuote(ticker).catch(() => null),
     ])
 
     if (!incomeStmts.length) {
@@ -162,7 +164,7 @@ export async function POST(req: NextRequest) {
 
     return NextResponse.json({
       ticker,
-      companyName: incomeStmts[0]?.symbol ?? ticker,
+      companyName: quote?.name ?? ticker,
       years,
       availableYears: years.map(y => y.year),
       hasSegments: years.some(y => y.segments.length > 0),
