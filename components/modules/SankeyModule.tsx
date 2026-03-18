@@ -81,8 +81,8 @@ function SankeyChart({ data, currency }: { data: SankeyYearData; currency: strin
   const rev = data.revenue
 
   // Dynamic height based on segments — generous spacing
-  const segRowH = 70
-  const H = Math.max(700, hasSeg ? segN * segRowH + 100 : 700)
+  const segRowH = 90
+  const H = Math.max(700, hasSeg ? segN * segRowH + 150 : 700)
   const W = 1350
   const NW = 18 // node bar width
   const pad = 40
@@ -172,7 +172,7 @@ function SankeyChart({ data, currency }: { data: SankeyYearData; currency: strin
   }
 
   return (
-    <svg width={W} height={H} viewBox={`0 0 ${W} ${H}`} className="w-full h-auto" style={{ maxHeight: "calc(100vh - 200px)" }}>
+    <svg width={W} height={H} viewBox={`0 0 ${W} ${H}`} className="w-full h-auto">
       {/* ═══ SEGMENT FLOWS → Revenue ═══ */}
       {hasSeg && (() => {
         // Node Y positions (proportional to revenue)
