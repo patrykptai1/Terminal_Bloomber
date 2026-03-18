@@ -7,6 +7,14 @@ import { getTabCache, setTabCache } from "@/lib/tabCache"
 
 // ── Types ────────────────────────────────────────────────────
 
+interface StockValuation {
+  peValuation: number | null
+  evEbitdaValuation: number | null
+  avgValuation: number | null
+  upside: number | null
+  premiumDiscount: string | null
+}
+
 interface SectorStock {
   symbol: string
   name: string
@@ -22,14 +30,17 @@ interface SectorStock {
   source: "S&P500" | "NASDAQ" | "GPW" | "NC"
   peRatio: number | null
   forwardPE: number | null
-  priceToSales: number | null
   evToEbitda: number | null
   dividendYield: number | null
   pegRatio: number | null
   ebitda: number | null
+  netIncome: number | null
   enterpriseValue: number | null
+  totalDebt: number | null
+  totalCash: number | null
   profitMargin: number | null
   revenueGrowth: number | null
+  valuation: StockValuation | null
 }
 
 interface SectorData {
@@ -43,7 +54,7 @@ interface SectorData {
 }
 
 type SortDir = "asc" | "desc" | null
-type MetricKey = "marketCap" | "peRatio" | "forwardPE" | "priceToSales" | "evToEbitda" | "dividendYield" | "pegRatio" | "profitMargin" | "revenueGrowth" | "changePercent"
+type MetricKey = "marketCap" | "peRatio" | "forwardPE" | "evToEbitda" | "dividendYield" | "pegRatio" | "profitMargin" | "revenueGrowth" | "changePercent" | "upside"
 
 interface RangeFilter {
   min: string
@@ -77,22 +88,32 @@ const COLUMNS: { key: MetricKey; label: string; short: string; suffix?: string; 
   { key: "marketCap", label: "Kapitalizacja", short: "MCap" },
   { key: "changePercent", label: "Zmiana %", short: "Chg%", pct: true },
   { key: "peRatio", label: "P/E", short: "P/E" },
-  { key: "priceToSales", label: "P/S", short: "P/S" },
   { key: "evToEbitda", label: "EV/EBITDA", short: "EV/EB" },
   { key: "dividendYield", label: "Div Yield", short: "Div%", suffix: "%", pct: true },
   { key: "pegRatio", label: "PEG", short: "PEG" },
   { key: "profitMargin", label: "Marża zysku", short: "Marża%", suffix: "%", pct: true },
   { key: "revenueGrowth", label: "Wzrost przych.", short: "Rev Gr%", suffix: "%", pct: true },
+  { key: "upside", label: "Wycena mnożn.", short: "Upside", suffix: "%", pct: true },
 ]
 
 const CACHE_KEY = "sectors:data"
 
 // ── Helpers ──────────────────────────────────────────────────
 
+/** Get metric value from stock, including computed "upside" */
+function getMetric(stock: SectorStock, key: MetricKey): number | null {
+  if (key === "upside") return stock.valuation?.upside ?? null
+  return stock[key] as number | null
+}
+
 function fmtMetric(val: number | null, key: MetricKey, currency?: string): string {
   if (val == null || !isFinite(val)) return "—"
   if (key === "marketCap") return fmtBigValue(val, currency ?? "USD")
   if (key === "changePercent" || key === "dividendYield" || key === "profitMargin" || key === "revenueGrowth") return `${val.toFixed(2)}%`
+  if (key === "upside") {
+    const sign = val > 0 ? "+" : ""
+    return `${sign}${val.toFixed(1)}%`
+  }
   return val.toFixed(2)
 }
 
@@ -118,7 +139,7 @@ function valuationColor(v: "over" | "under" | "fair" | null, inverse?: boolean):
   return "text-bloomberg-amber"
 }
 
-const INVERSE_METRICS: MetricKey[] = ["dividendYield", "profitMargin", "revenueGrowth"]
+const INVERSE_METRICS: MetricKey[] = ["dividendYield", "profitMargin", "revenueGrowth", "upside"]
 
 // ── Component ────────────────────────────────────────────────
 
@@ -221,9 +242,7 @@ export default function SectorScreener() {
       if (minVal == null && maxVal == null) continue
 
       stocks = stocks.filter(s => {
-        let val: number | null = null
-        if (key === "marketCap") val = s.marketCap
-        else val = s[key as keyof SectorStock] as number | null
+        const val = getMetric(s, key as MetricKey)
         if (val == null) return false
         // For marketCap, allow input in millions
         const v = key === "marketCap" ? val / 1e6 : val
@@ -242,8 +261,8 @@ export default function SectorScreener() {
           va = a.symbol
           vb = b.symbol
         } else {
-          va = a[sortKey]
-          vb = b[sortKey]
+          va = getMetric(a, sortKey)
+          vb = getMetric(b, sortKey)
         }
         if (va == null && vb == null) return 0
         if (va == null) return 1
@@ -600,7 +619,7 @@ function StockRow({ stock, medians, sector }: {
         </td>
         {/* Columns */}
         {COLUMNS.map(col => {
-          const val = stock[col.key]
+          const val = getMetric(stock, col.key)
           const med = medians?.[col.key] ?? null
           const isInverse = INVERSE_METRICS.includes(col.key)
           const valu = sector !== "ALL" ? valuation(val, med) : null
@@ -610,6 +629,18 @@ function StockRow({ stock, medians, sector }: {
             return (
               <td key={col.key} className={`px-2 py-1.5 text-right font-bold ${changeColor}`}>
                 {val != null ? `${val > 0 ? "+" : ""}${val.toFixed(2)}%` : "—"}
+              </td>
+            )
+          }
+
+          // Upside column — special coloring
+          if (col.key === "upside") {
+            const upsideColor = val != null
+              ? val > 10 ? "text-bloomberg-green font-bold" : val < -10 ? "text-bloomberg-red font-bold" : "text-bloomberg-amber"
+              : "text-muted-foreground"
+            return (
+              <td key={col.key} className={`px-2 py-1.5 text-right ${upsideColor}`}>
+                {fmtMetric(val, col.key, stock.currency)}
               </td>
             )
           }
@@ -653,8 +684,8 @@ function StockRow({ stock, medians, sector }: {
             {medians && sector !== "ALL" && (
               <div className="mt-2 flex items-center gap-2 flex-wrap">
                 <span className="text-[8px] text-bloomberg-amber font-bold">VS MEDIANA:</span>
-                {COLUMNS.filter(c => c.key !== "marketCap" && c.key !== "changePercent").map(col => {
-                  const val = stock[col.key]
+                {COLUMNS.filter(c => c.key !== "marketCap" && c.key !== "changePercent" && c.key !== "upside").map(col => {
+                  const val = getMetric(stock, col.key)
                   const med = medians[col.key]
                   if (val == null || med == null || !isFinite(val) || med === 0) return null
                   const pctDiff = ((val - med) / Math.abs(med)) * 100
@@ -671,6 +702,50 @@ function StockRow({ stock, medians, sector }: {
                     </span>
                   )
                 })}
+              </div>
+            )}
+            {/* Multiplier Valuation Details */}
+            {stock.valuation && (stock.valuation.peValuation || stock.valuation.evEbitdaValuation) && (
+              <div className="mt-2 pt-2 border-t border-bloomberg-border/30">
+                <span className="text-[8px] text-purple-400 font-bold">WYCENA MNOŻNIKOWA:</span>
+                <div className="flex items-center gap-3 flex-wrap mt-1">
+                  {stock.valuation.peValuation != null && (
+                    <span className="text-[7px]">
+                      <span className="text-muted-foreground">P/E → </span>
+                      <span className="text-foreground font-bold">{fmtBigValue(stock.valuation.peValuation, stock.currency)}</span>
+                      <span className="text-muted-foreground"> (Zysk netto × mediana P/E sektora)</span>
+                    </span>
+                  )}
+                  {stock.valuation.evEbitdaValuation != null && (
+                    <span className="text-[7px]">
+                      <span className="text-muted-foreground">EV/EBITDA → </span>
+                      <span className="text-foreground font-bold">{fmtBigValue(stock.valuation.evEbitdaValuation, stock.currency)}</span>
+                      <span className="text-muted-foreground"> (EBITDA × mediana EV/EBITDA − dług netto)</span>
+                    </span>
+                  )}
+                  {stock.valuation.avgValuation != null && (
+                    <span className="text-[7px]">
+                      <span className="text-muted-foreground">Średnia → </span>
+                      <span className="text-foreground font-bold">{fmtBigValue(stock.valuation.avgValuation, stock.currency)}</span>
+                    </span>
+                  )}
+                  {stock.valuation.upside != null && (
+                    <span className={`text-[7px] font-bold ${stock.valuation.upside > 10 ? "text-bloomberg-green" : stock.valuation.upside < -10 ? "text-bloomberg-red" : "text-bloomberg-amber"}`}>
+                      Potencjał: {stock.valuation.upside > 0 ? "+" : ""}{stock.valuation.upside.toFixed(1)}%
+                    </span>
+                  )}
+                  {stock.valuation.premiumDiscount && (
+                    <span className={`text-[7px] font-bold border px-1 py-px rounded ${
+                      stock.valuation.premiumDiscount === "PREMIUM" ? "text-bloomberg-green border-bloomberg-green/30" :
+                      stock.valuation.premiumDiscount === "DISCOUNT" ? "text-bloomberg-red border-bloomberg-red/30" :
+                      "text-bloomberg-amber border-bloomberg-amber/30"
+                    }`}>
+                      {stock.valuation.premiumDiscount === "PREMIUM" ? "PREMIA (wyższe marże)" :
+                       stock.valuation.premiumDiscount === "DISCOUNT" ? "DYSKONTO (niższe marże)" :
+                       "FAIR VALUE (marże = mediana)"}
+                    </span>
+                  )}
+                </div>
               </div>
             )}
           </td>

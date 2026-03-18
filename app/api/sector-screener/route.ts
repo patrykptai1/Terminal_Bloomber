@@ -20,14 +20,25 @@ export interface SectorStock {
   source: "S&P500" | "NASDAQ" | "GPW" | "NC"
   peRatio: number | null
   forwardPE: number | null
-  priceToSales: number | null
   evToEbitda: number | null
   dividendYield: number | null
   pegRatio: number | null
+  // Underlying financials for valuation
   ebitda: number | null
+  netIncome: number | null
   enterpriseValue: number | null
+  totalDebt: number | null
+  totalCash: number | null
   profitMargin: number | null
   revenueGrowth: number | null
+  // Multiplier valuation (calculated server-side)
+  valuation: {
+    peValuation: number | null       // Net Income × Sector Median P/E
+    evEbitdaValuation: number | null  // EBITDA × Sector Median EV/EBITDA - Net Debt
+    avgValuation: number | null       // Average of available valuations
+    upside: number | null             // % upside vs current market cap
+    premiumDiscount: string | null    // "PREMIUM" / "DISCOUNT" / "FAIR" based on margins
+  } | null
 }
 
 // GICS sector mapping from Yahoo Finance names
@@ -82,6 +93,20 @@ async function fetchStock(
   // Filter by sector (for NASDAQ tickers where sector comes from Yahoo)
   if (targetSector && targetSector !== "ALL" && gicsSector !== targetSector) return null
 
+  // Calculate EBITDA from EV and EV/EBITDA ratio
+  const ev = stats?.enterpriseValue ?? null
+  const evToEbitda = stats?.enterpriseToEbitda ?? null
+  let ebitda: number | null = null
+  if (ev && evToEbitda && evToEbitda > 0) {
+    ebitda = ev / evToEbitda
+  }
+
+  // Calculate Net Income from Market Cap and P/E
+  let netIncome: number | null = null
+  if (quote.marketCap && quote.peRatio && quote.peRatio > 0) {
+    netIncome = quote.marketCap / quote.peRatio
+  }
+
   return {
     symbol: quote.symbol,
     name: quote.name,
@@ -97,14 +122,17 @@ async function fetchStock(
     source,
     peRatio: quote.peRatio,
     forwardPE: stats?.forwardPE ?? quote.forwardPE,
-    priceToSales: stats?.priceToSales ?? null,
-    evToEbitda: stats?.enterpriseToEbitda ?? null,
+    evToEbitda,
     dividendYield: quote.dividendYield != null ? quote.dividendYield * 100 : null,
     pegRatio: stats?.pegRatio ?? null,
-    ebitda: stats?.freeCashFlow ?? null,
-    enterpriseValue: stats?.enterpriseValue ?? null,
+    ebitda,
+    netIncome,
+    enterpriseValue: ev,
+    totalDebt: stats?.totalDebt ?? null,
+    totalCash: stats?.totalCash ?? null,
     profitMargin: stats?.profitMargin != null ? stats.profitMargin * 100 : null,
     revenueGrowth: stats?.revenueGrowth != null ? stats.revenueGrowth * 100 : null,
+    valuation: null, // Filled after sector medians are calculated
   }
 }
 
@@ -197,15 +225,21 @@ export async function POST(req: NextRequest) {
     // 2. Fetch data in batches of 20
     const { results, errors } = await fetchBatch(tasks, sector, 20)
 
-    // 3. Calculate sector medians for US stocks
-    const usStocks = results.filter(s => s.market === "US")
+    // 3. Calculate sector medians (all stocks in results, grouped by sector)
     const sectorMedians: Record<string, Record<string, number | null>> = {}
-    const metricKeys = ["peRatio", "forwardPE", "priceToSales", "evToEbitda", "dividendYield", "pegRatio", "profitMargin", "revenueGrowth"] as const
+    const metricKeys = ["peRatio", "forwardPE", "evToEbitda", "dividendYield", "pegRatio", "profitMargin", "revenueGrowth"] as const
 
     const bySector: Record<string, SectorStock[]> = {}
-    for (const s of usStocks) {
+    for (const s of results) {
       if (!bySector[s.sector]) bySector[s.sector] = []
       bySector[s.sector].push(s)
+    }
+
+    function calcMedian(vals: number[]): number | null {
+      if (vals.length === 0) return null
+      vals.sort((a, b) => a - b)
+      const mid = Math.floor(vals.length / 2)
+      return vals.length % 2 === 0 ? (vals[mid - 1] + vals[mid]) / 2 : vals[mid]
     }
 
     for (const [sec, stocks] of Object.entries(bySector)) {
@@ -213,17 +247,57 @@ export async function POST(req: NextRequest) {
       for (const key of metricKeys) {
         const vals = stocks
           .map(s => s[key])
-          .filter((v): v is number => v != null && isFinite(v))
-          .sort((a, b) => a - b)
-        if (vals.length === 0) {
-          sectorMedians[sec][key] = null
-        } else {
-          const mid = Math.floor(vals.length / 2)
-          sectorMedians[sec][key] = vals.length % 2 === 0
-            ? (vals[mid - 1] + vals[mid]) / 2
-            : vals[mid]
-        }
+          .filter((v): v is number => v != null && isFinite(v) && v > 0)
+        sectorMedians[sec][key] = calcMedian(vals)
       }
+    }
+
+    // 4. Multiplier Valuation for each stock
+    for (const stock of results) {
+      const medians = sectorMedians[stock.sector]
+      if (!medians) continue
+
+      const medPE = medians.peRatio
+      const medEVEB = medians.evToEbitda
+      const medMargin = medians.profitMargin
+
+      let peValuation: number | null = null
+      let evEbitdaValuation: number | null = null
+
+      // P/E Valuation: Net Income × Sector Median P/E
+      if (stock.netIncome && stock.netIncome > 0 && medPE && medPE > 0) {
+        peValuation = stock.netIncome * medPE
+      }
+
+      // EV/EBITDA Valuation: EBITDA × Sector Median EV/EBITDA - Net Debt
+      if (stock.ebitda && stock.ebitda > 0 && medEVEB && medEVEB > 0) {
+        const impliedEV = stock.ebitda * medEVEB
+        const netDebt = (stock.totalDebt ?? 0) - (stock.totalCash ?? 0)
+        evEbitdaValuation = impliedEV - netDebt
+        if (evEbitdaValuation < 0) evEbitdaValuation = null // Negative equity value = skip
+      }
+
+      // Margin-based premium/discount
+      let premiumDiscount: string | null = null
+      if (stock.profitMargin != null && medMargin != null && medMargin > 0) {
+        const marginRatio = stock.profitMargin / medMargin
+        if (marginRatio > 1.2) premiumDiscount = "PREMIUM"
+        else if (marginRatio < 0.8) premiumDiscount = "DISCOUNT"
+        else premiumDiscount = "FAIR"
+      }
+
+      // Average valuation
+      const valuations = [peValuation, evEbitdaValuation].filter((v): v is number => v != null && v > 0)
+      const avgValuation = valuations.length > 0
+        ? valuations.reduce((a, b) => a + b, 0) / valuations.length
+        : null
+
+      // Upside %
+      const upside = avgValuation && stock.marketCap > 0
+        ? ((avgValuation - stock.marketCap) / stock.marketCap) * 100
+        : null
+
+      stock.valuation = { peValuation, evEbitdaValuation, avgValuation, upside, premiumDiscount }
     }
 
     return NextResponse.json({
