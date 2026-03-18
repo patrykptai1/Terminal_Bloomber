@@ -176,16 +176,19 @@ function SankeyChart({ data, currency }: { data: SankeyYearData; currency: strin
     <svg width={W} height={H} viewBox={`0 0 ${W} ${H}`} className="w-full h-auto" style={{ maxHeight: "calc(100vh - 200px)" }}>
       {/* ═══ SEGMENT FLOWS → Revenue ═══ */}
       {hasSeg && (() => {
-        // Calculate node Y positions (proportional)
+        // Node Y positions (proportional to revenue)
         let sy = topY
         const segYs: number[] = []
         data.segments.forEach((_, i) => { segYs.push(sy); sy += segHeights[i] + segGap })
 
-        // Calculate label Y positions (evenly spaced, no overlap)
-        const labelH = 52 // height per label block
-        const labelTotalH = segN * labelH
-        const labelStartY = topY + Math.max(0, (totalH - labelTotalH) / 2)
-        const labelYs = data.segments.map((_, i) => labelStartY + i * labelH)
+        // Label Y positions — start from node center, then push down to avoid overlap
+        const minLabelSpacing = 52
+        const labelYs: number[] = []
+        for (let i = 0; i < segN; i++) {
+          const idealY = segYs[i] + segHeights[i] / 2 - 8
+          const prevBottom = i > 0 ? labelYs[i - 1] + minLabelSpacing : -Infinity
+          labelYs.push(Math.max(idealY, prevBottom))
+        }
 
         let cumRev = 0
         return data.segments.map((seg, i) => {
@@ -195,26 +198,24 @@ function SankeyChart({ data, currency }: { data: SankeyYearData; currency: strin
           const revSliceH = pct(seg.revenue) * totalH
           cumRev += seg.revenue
 
-          // Label position (evenly spaced)
           const lY = labelYs[i]
-          // Node midpoint for leader line
           const nodeMidY = sY + sH / 2
-          // Leader line: from label right edge → node left edge
-          const leaderX1 = colSegNode - 6
-          const leaderX2 = colSegNode - 1
+          const labelRightX = colSegNode - 8
+          const needsLeader = Math.abs(lY + 8 - nodeMidY) > 10
 
           return (
             <g key={i}>
               <Flow x1={colSegNode + NW} y1={sY} h1={sH} x2={colRev} y2={revTargetY} h2={revSliceH} color={C_GRAY_FLOW} />
               <Node x={colSegNode} y={sY} w={NW} h={sH} color={C_GRAY} />
-              {/* Leader line from label to node */}
-              <path
-                d={`M${leaderX1},${lY + 8} L${leaderX2},${nodeMidY}`}
-                stroke="#4b5563" strokeWidth={1} fill="none" opacity={0.5}
-              />
-              <circle cx={leaderX2} cy={nodeMidY} r={2} fill="#4b5563" opacity={0.5} />
-              {/* Label at evenly-spaced Y */}
-              <Label x={leaderX1 - 2} y={lY} align="left" lines={[
+              {/* Leader line when label is displaced from node */}
+              {needsLeader && (
+                <g>
+                  <line x1={labelRightX + 4} y1={lY + 8} x2={colSegNode - 1} y2={nodeMidY}
+                    stroke="#4b5563" strokeWidth={0.8} opacity={0.5} />
+                  <circle cx={colSegNode - 1} cy={nodeMidY} r={1.5} fill="#6b7280" opacity={0.6} />
+                </g>
+              )}
+              <Label x={labelRightX} y={lY} align="left" lines={[
                 seg.name,
                 fmt(seg.revenue, currency),
                 seg.yoyChange != null ? yoyStr(seg.yoyChange) : `${seg.pctOfTotal.toFixed(0)}% of rev`,
