@@ -186,6 +186,7 @@ export default function StockAnalysis() {
 
   const q = data?.quote
   const a = data?.analysis
+  const st = data?.stats
   const news = data?.news ?? []
   const history = data?.history ?? []
 
@@ -214,8 +215,33 @@ export default function StockAnalysis() {
 
           {/* ═══ SECTION 1: DECISION DASHBOARD ═══ */}
           <div className={`border rounded p-5 ${verdictBg(a.verdict)}`}>
-            <div className="text-xs text-bloomberg-amber font-bold mb-4 tracking-widest">
+            <div className="text-xs text-bloomberg-amber font-bold mb-2 tracking-widest">
               DECISION DASHBOARD
+            </div>
+
+            {/* Company info: MCap + description */}
+            <div className="flex items-start gap-3 mb-4 pb-3 border-b border-bloomberg-border/30">
+              <div className="flex items-center gap-2 shrink-0">
+                <span className="text-[10px] text-muted-foreground">MCap:</span>
+                <span className="text-[11px] text-foreground font-bold">{fmtBigValue(q.marketCap, q.currency)}</span>
+                {st?.sector && (
+                  <>
+                    <span className="text-[10px] text-muted-foreground">|</span>
+                    <span className="text-[10px] text-bloomberg-amber">{st.sector}</span>
+                  </>
+                )}
+                {st?.industry && (
+                  <>
+                    <span className="text-[10px] text-muted-foreground">|</span>
+                    <span className="text-[10px] text-muted-foreground">{st.industry}</span>
+                  </>
+                )}
+              </div>
+              {st?.longBusinessSummary && (
+                <div className="text-[9px] text-muted-foreground leading-snug flex-1 line-clamp-2">
+                  {st.longBusinessSummary.slice(0, 200)}{st.longBusinessSummary.length > 200 ? "..." : ""}
+                </div>
+              )}
             </div>
 
             {/* Verdict + Thesis + Confidence */}

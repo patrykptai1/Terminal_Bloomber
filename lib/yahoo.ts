@@ -79,6 +79,7 @@ export async function fetchQuote(symbol: string): Promise<QuoteData> {
 export interface KeyStatistics {
   sector: string | null
   industry: string | null
+  longBusinessSummary: string | null
   enterpriseValue: number | null
   forwardPE: number | null
   pegRatio: number | null
@@ -119,6 +120,7 @@ export async function fetchKeyStats(symbol: string): Promise<KeyStatistics> {
   return {
     sector: ap.sector ?? null,
     industry: ap.industry ?? null,
+    longBusinessSummary: ap.longBusinessSummary ?? null,
     enterpriseValue: num(ks.enterpriseValue),
     forwardPE: num(ks.forwardPE),
     pegRatio: num(ks.pegRatio),
