@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server"
 import { fetchWorldNews, fetchCompanyNews } from "@/lib/worldnews"
 
+export const dynamic = "force-dynamic"
+
 export async function GET(req: NextRequest) {
   const { searchParams } = req.nextUrl
   const category = searchParams.get("category") || undefined

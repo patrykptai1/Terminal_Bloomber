@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
 
+export const dynamic = "force-dynamic"
+
 const XAI_API_KEY = process.env.XAI_API_KEY ?? ""
 const XAI_BASE_URL = "https://api.x.ai/v1"
 

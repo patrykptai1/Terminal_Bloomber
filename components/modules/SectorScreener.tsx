@@ -1,7 +1,7 @@
 "use client"
 
-import { useState, useMemo, useCallback } from "react"
-import { ArrowUpDown, ArrowUp, ArrowDown, RotateCcw, Filter, Loader2, TrendingUp, TrendingDown, ChevronDown, ExternalLink } from "lucide-react"
+import { useState, useMemo, useCallback, useRef } from "react"
+import { ArrowUpDown, ArrowUp, ArrowDown, RotateCcw, Filter, Loader2, TrendingUp, TrendingDown, ChevronDown, ExternalLink, Search, X } from "lucide-react"
 import { fmtBigValue } from "@/lib/currency"
 import { getTabCache, setTabCache } from "@/lib/tabCache"
 
@@ -158,6 +158,46 @@ export default function SectorScreener() {
   const [sortDir, setSortDir] = useState<SortDir>("desc")
   const [rangeFilters, setRangeFilters] = useState<Record<string, RangeFilter>>({})
   const [showFilters, setShowFilters] = useState(false)
+
+  // Keyword search
+  const [keywordQuery, setKeywordQuery] = useState("")
+  const [keywordResults, setKeywordResults] = useState<SectorStock[] | null>(null)
+  const [keywordLoading, setKeywordLoading] = useState(false)
+  const [keywordError, setKeywordError] = useState<string | null>(null)
+  const [keywordInfo, setKeywordInfo] = useState<string | null>(null)
+  const keywordInputRef = useRef<HTMLInputElement>(null)
+
+  // Keyword search handler
+  const handleKeywordSearch = useCallback(async (query?: string) => {
+    const q = (query ?? keywordQuery).trim()
+    if (q.length < 2) return
+    setKeywordLoading(true)
+    setKeywordError(null)
+    setKeywordInfo(null)
+    try {
+      const res = await fetch("/api/keyword-search", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ keyword: q }),
+      })
+      const json = await res.json()
+      if (json.error) throw new Error(json.error)
+      setKeywordResults(json.stocks ?? [])
+      setKeywordInfo(`"${q}" — ${json.total} spółek`)
+    } catch (e: unknown) {
+      setKeywordError(e instanceof Error ? e.message : "Błąd wyszukiwania")
+      setKeywordResults(null)
+    } finally {
+      setKeywordLoading(false)
+    }
+  }, [keywordQuery])
+
+  const clearKeywordSearch = useCallback(() => {
+    setKeywordQuery("")
+    setKeywordResults(null)
+    setKeywordError(null)
+    setKeywordInfo(null)
+  }, [])
 
   // Fetch
   const fetchSector = useCallback(async (sector: string, market: string, withNasdaq?: boolean) => {
@@ -337,6 +377,106 @@ export default function SectorScreener() {
           })}
         </div>
       </div>
+
+      {/* KEYWORD SEARCH */}
+      <div className="bg-bloomberg-card border border-bloomberg-border rounded p-3">
+        <div className="flex items-center gap-2 mb-2">
+          <Search className="w-3.5 h-3.5 text-bloomberg-amber" />
+          <span className="text-[9px] text-bloomberg-amber font-bold tracking-wider">SZUKAJ SPOLKI PO SLOWIE KLUCZOWYM</span>
+          <span className="text-[8px] text-muted-foreground/60 ml-1">np. AI, quantum, solar, blockchain, cybersecurity</span>
+        </div>
+        <div className="flex items-center gap-2">
+          <div className="relative flex-1">
+            <input
+              ref={keywordInputRef}
+              type="text"
+              placeholder="Wpisz slowo kluczowe..."
+              value={keywordQuery}
+              onChange={e => setKeywordQuery(e.target.value)}
+              onKeyDown={e => { if (e.key === "Enter") handleKeywordSearch() }}
+              className="w-full bg-bloomberg-bg border border-bloomberg-border rounded px-3 py-1.5 text-[10px] text-foreground placeholder:text-muted-foreground/40 focus:border-bloomberg-amber/50 focus:outline-none"
+            />
+            {keywordQuery && (
+              <button
+                onClick={clearKeywordSearch}
+                className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-bloomberg-red transition-colors"
+              >
+                <X className="w-3 h-3" />
+              </button>
+            )}
+          </div>
+          <button
+            onClick={() => handleKeywordSearch()}
+            disabled={keywordLoading || keywordQuery.trim().length < 2}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded text-[10px] font-bold bg-bloomberg-amber/20 text-bloomberg-amber border border-bloomberg-amber/50 hover:bg-bloomberg-amber/30 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+          >
+            {keywordLoading ? <Loader2 className="w-3 h-3 animate-spin" /> : <Search className="w-3 h-3" />}
+            {keywordLoading ? "SZUKAM..." : "SZUKAJ"}
+          </button>
+          {keywordResults && (
+            <button
+              onClick={clearKeywordSearch}
+              className="flex items-center gap-1 px-2 py-1.5 rounded text-[9px] border border-bloomberg-border/50 text-muted-foreground hover:border-bloomberg-red/30 hover:text-bloomberg-red transition-colors"
+            >
+              <X className="w-3 h-3" />
+              WYCZYSC
+            </button>
+          )}
+        </div>
+        {keywordError && (
+          <div className="mt-2 text-[9px] text-bloomberg-red">{keywordError}</div>
+        )}
+        {keywordInfo && !keywordLoading && (
+          <div className="mt-2 text-[9px] text-muted-foreground">
+            Wynik: <span className="text-bloomberg-amber font-bold">{keywordInfo}</span>
+          </div>
+        )}
+      </div>
+
+      {/* KEYWORD SEARCH RESULTS */}
+      {keywordResults && !keywordLoading && (
+        <div className="bg-bloomberg-card border border-bloomberg-amber/30 rounded overflow-hidden">
+          <div className="px-3 py-1.5 border-b border-bloomberg-border flex items-center gap-2">
+            <Search className="w-3 h-3 text-bloomberg-amber" />
+            <span className="text-[9px] text-bloomberg-amber font-bold">
+              WYNIKI WYSZUKIWANIA
+            </span>
+            <span className="text-[8px] text-muted-foreground">
+              {keywordResults.length} spółek
+            </span>
+          </div>
+
+          {keywordResults.length === 0 ? (
+            <div className="px-4 py-6 text-center text-muted-foreground text-[10px]">
+              Nie znaleziono spółek dla tego słowa kluczowego.
+            </div>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full text-[9px]">
+                <thead>
+                  <tr className="border-b border-bloomberg-border bg-bloomberg-bg/50">
+                    <th className="text-left px-2 py-1.5 sticky left-0 bg-bloomberg-bg/90 z-10 text-muted-foreground">TICKER</th>
+                    <th className="text-left px-2 py-1.5 min-w-[120px] text-muted-foreground">NAZWA</th>
+                    <th className="text-left px-2 py-1.5 text-muted-foreground">BRANŻA</th>
+                    <th className="text-left px-2 py-1.5 text-muted-foreground">SEKTOR</th>
+                    <th className="text-right px-2 py-1.5 text-muted-foreground">CENA</th>
+                    <th className="text-right px-2 py-1.5 text-muted-foreground">CHG%</th>
+                    <th className="text-right px-2 py-1.5 text-muted-foreground">MCAP</th>
+                    <th className="text-right px-2 py-1.5 text-muted-foreground">P/E</th>
+                    <th className="text-right px-2 py-1.5 text-muted-foreground">MARŻA%</th>
+                    <th className="text-left px-2 py-1.5 text-muted-foreground">MATCH</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {keywordResults.map((stock: any) => (
+                    <KeywordRow key={stock.symbol} stock={stock} />
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+      )}
 
       {/* MARKET + CONTROLS BAR */}
       <div className="flex items-center gap-2 flex-wrap">
@@ -769,6 +909,86 @@ function StockRow({ stock, medians, sector }: {
                     </span>
                   )}
                 </div>
+              </div>
+            )}
+          </td>
+        </tr>
+      )}
+    </>
+  )
+}
+
+// ── Keyword Search Row ──────────────────────────────────────
+
+function KeywordRow({ stock }: { stock: any }) {
+  const [expanded, setExpanded] = useState(false)
+  const changeColor = stock.changePercent > 0 ? "text-bloomberg-green" : stock.changePercent < 0 ? "text-bloomberg-red" : "text-muted-foreground"
+  const matchColor = stock.keywordMatch === "name" ? "text-bloomberg-green" : stock.keywordMatch === "industry" ? "text-blue-400" : stock.keywordMatch === "theme" ? "text-bloomberg-amber" : "text-purple-400"
+  const matchLabel = stock.keywordMatch === "name" ? "NAZWA" : stock.keywordMatch === "industry" ? "BRANŻA" : stock.keywordMatch === "theme" ? "TEMAT" : "OPIS"
+
+  return (
+    <>
+      <tr
+        onClick={() => setExpanded(!expanded)}
+        className="border-b border-bloomberg-border/30 hover:bg-bloomberg-card/80 cursor-pointer transition-colors"
+      >
+        <td className="px-2 py-1.5 sticky left-0 bg-bloomberg-card/95 z-10">
+          <span className="font-bold text-foreground">{stock.symbol}</span>
+        </td>
+        <td className="px-2 py-1.5 text-muted-foreground truncate max-w-[140px]">{stock.name}</td>
+        <td className="px-2 py-1.5 text-muted-foreground truncate max-w-[120px] text-[8px]">{stock.industry ?? "—"}</td>
+        <td className="px-2 py-1.5 text-muted-foreground truncate max-w-[100px] text-[8px]">{stock.sector}</td>
+        <td className="px-2 py-1.5 text-right text-foreground">
+          {stock.currency === "PLN" ? `${stock.price.toFixed(2)} zł` : `$${stock.price.toFixed(2)}`}
+        </td>
+        <td className={`px-2 py-1.5 text-right font-bold ${changeColor}`}>
+          {stock.changePercent != null ? `${stock.changePercent > 0 ? "+" : ""}${stock.changePercent.toFixed(2)}%` : "—"}
+        </td>
+        <td className="px-2 py-1.5 text-right text-foreground">
+          {stock.marketCap > 0 ? fmtBigValue(stock.marketCap, stock.currency) : "—"}
+        </td>
+        <td className="px-2 py-1.5 text-right text-foreground">
+          {stock.peRatio != null ? stock.peRatio.toFixed(2) : "—"}
+        </td>
+        <td className="px-2 py-1.5 text-right text-foreground">
+          {stock.profitMargin != null ? `${stock.profitMargin.toFixed(1)}%` : "—"}
+        </td>
+        <td className="px-2 py-1.5">
+          <span className={`text-[7px] font-bold border px-1 py-px rounded ${matchColor} border-current/30`}>
+            {matchLabel}
+          </span>
+        </td>
+      </tr>
+      {expanded && (
+        <tr className="bg-bloomberg-bg/50">
+          <td colSpan={10} className="px-3 py-2">
+            <div className="flex items-center gap-3 flex-wrap text-[8px]">
+              <span className="text-muted-foreground">Sektor: <span className="text-foreground">{stock.sector}</span></span>
+              <span className="text-muted-foreground">Branża: <span className="text-foreground">{stock.industry ?? "—"}</span></span>
+              <span className="text-muted-foreground">Giełda: <span className="text-foreground">{stock.exchange}</span></span>
+              {stock.evToEbitda != null && (
+                <span className="text-muted-foreground">EV/EBITDA: <span className="text-foreground">{stock.evToEbitda.toFixed(2)}</span></span>
+              )}
+              {stock.dividendYield != null && (
+                <span className="text-muted-foreground">Div: <span className="text-foreground">{stock.dividendYield.toFixed(2)}%</span></span>
+              )}
+              {stock.revenueGrowth != null && (
+                <span className="text-muted-foreground">Rev Gr: <span className="text-foreground">{stock.revenueGrowth.toFixed(1)}%</span></span>
+              )}
+              <div className="flex gap-1.5 ml-auto">
+                <a href={`https://finance.yahoo.com/quote/${stock.symbol}`} target="_blank" rel="noopener noreferrer"
+                  className="inline-flex items-center gap-0.5 px-1.5 py-0.5 bg-bloomberg-green/15 text-bloomberg-green border border-bloomberg-green/30 rounded hover:bg-bloomberg-green/25 transition-colors">
+                  Yahoo <ExternalLink className="w-2 h-2" />
+                </a>
+                <a href={`https://stockanalysis.com/stocks/${stock.symbol.toLowerCase()}/`} target="_blank" rel="noopener noreferrer"
+                  className="inline-flex items-center gap-0.5 px-1.5 py-0.5 bg-bloomberg-amber/15 text-bloomberg-amber border border-bloomberg-amber/30 rounded hover:bg-bloomberg-amber/25 transition-colors">
+                  StockAnalysis <ExternalLink className="w-2 h-2" />
+                </a>
+              </div>
+            </div>
+            {stock.businessSummary && (
+              <div className="mt-2 text-[8px] text-muted-foreground/80 leading-relaxed">
+                {stock.businessSummary}
               </div>
             )}
           </td>
