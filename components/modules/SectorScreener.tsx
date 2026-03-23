@@ -77,6 +77,13 @@ const GICS_SECTORS = [
   { key: "Communication Services", icon: "📡", label: "Komunikacja" },
 ] as const
 
+const THEMATIC_SECTORS = [
+  { key: "Quantum", icon: "⚛️", label: "Quantum" },
+  { key: "Defense", icon: "🛡️", label: "Obronność" },
+  { key: "Fusion", icon: "☢️", label: "Fuzja termojądrowa" },
+  { key: "Space", icon: "🚀", label: "Kosmos" },
+] as const
+
 const MARKETS = [
   { key: "ALL", label: "WSZYSTKIE" },
   { key: "US", label: "US" },
@@ -152,6 +159,7 @@ export default function SectorScreener() {
 
   // Filters
   const [selectedSector, setSelectedSector] = useState<string>("ALL")
+  const [selectedThematic, setSelectedThematic] = useState<string | null>(null)
   const [selectedMarket, setSelectedMarket] = useState<string>("US")
   const [includeNasdaq, setIncludeNasdaq] = useState(false)
   const [sortKey, setSortKey] = useState<MetricKey | "symbol">("marketCap")
@@ -224,10 +232,40 @@ export default function SectorScreener() {
     }
   }, [])
 
+  // Fetch thematic sector
+  const fetchThematic = useCallback(async (thematicKey: string) => {
+    setLoading(true)
+    setError(null)
+    try {
+      const res = await fetch("/api/sector-screener", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ thematic: thematicKey }),
+      })
+      const json = await res.json()
+      if (json.error) throw new Error(json.error)
+      setData(json)
+      setTabCache(CACHE_KEY, json)
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : "Błąd")
+    } finally {
+      setLoading(false)
+    }
+  }, [])
+
   const handleSectorSelect = useCallback((sectorKey: string) => {
     setSelectedSector(sectorKey)
+    setSelectedThematic(null)
+    setData(null)  // Clear old data immediately
     fetchSector(sectorKey, selectedMarket, includeNasdaq)
   }, [fetchSector, selectedMarket, includeNasdaq])
+
+  const handleThematicSelect = useCallback((thematicKey: string) => {
+    setSelectedThematic(thematicKey)
+    setSelectedSector("")
+    setData(null)  // Clear old data immediately
+    fetchThematic(thematicKey)
+  }, [fetchThematic])
 
   const handleMarketSelect = useCallback((mkt: string) => {
     setSelectedMarket(mkt)
@@ -276,13 +314,15 @@ export default function SectorScreener() {
     if (!data) return []
     let stocks = [...data.stocks]
 
-    // Filter by selected market (in case cache has mixed data)
-    if (selectedMarket === "US") {
-      stocks = stocks.filter(s => s.market === "US")
-    } else if (selectedMarket === "GPW") {
-      stocks = stocks.filter(s => s.market === "GPW")
-    } else if (selectedMarket === "NC") {
-      stocks = stocks.filter(s => s.market === "NC")
+    // Filter by selected market (skip for thematic sectors which have mixed markets)
+    if (!selectedThematic) {
+      if (selectedMarket === "US") {
+        stocks = stocks.filter(s => s.market === "US")
+      } else if (selectedMarket === "GPW") {
+        stocks = stocks.filter(s => s.market === "GPW")
+      } else if (selectedMarket === "NC") {
+        stocks = stocks.filter(s => s.market === "NC")
+      }
     }
 
     // Apply range filters
@@ -325,10 +365,11 @@ export default function SectorScreener() {
     }
 
     return stocks
-  }, [data, rangeFilters, sortKey, sortDir])
+  }, [data, rangeFilters, sortKey, sortDir, selectedThematic])
 
   // Current sector info
   const sectorInfo = GICS_SECTORS.find(s => s.key === selectedSector)
+  const thematicInfo = THEMATIC_SECTORS.find(s => s.key === selectedThematic)
 
   return (
     <div className="font-mono space-y-3">
@@ -346,7 +387,7 @@ export default function SectorScreener() {
           <button
             onClick={() => handleSectorSelect("ALL")}
             className={`flex items-center gap-1.5 px-2 py-1.5 rounded text-[9px] font-bold border transition-colors ${
-              selectedSector === "ALL"
+              selectedSector === "ALL" && !selectedThematic
                 ? "bg-bloomberg-amber/20 text-bloomberg-amber border-bloomberg-amber/50"
                 : "border-bloomberg-border/50 text-muted-foreground hover:border-bloomberg-amber/30 hover:text-bloomberg-amber/70"
             }`}
@@ -375,6 +416,32 @@ export default function SectorScreener() {
               </button>
             )
           })}
+        </div>
+
+        {/* THEMATIC SECTORS */}
+        <div className="mt-2 pt-2 border-t border-bloomberg-border/30">
+          <div className="flex items-center gap-2 mb-1.5">
+            <span className="text-[9px] text-purple-400 font-bold tracking-wider">SEKTORY TEMATYCZNE</span>
+          </div>
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-1.5">
+            {THEMATIC_SECTORS.map(s => (
+              <button
+                key={s.key}
+                onClick={() => handleThematicSelect(s.key)}
+                className={`flex items-center gap-1.5 px-2 py-1.5 rounded text-[9px] font-bold border transition-colors ${
+                  selectedThematic === s.key
+                    ? "bg-purple-500/20 text-purple-300 border-purple-500/50"
+                    : "border-purple-500/20 text-muted-foreground hover:border-purple-500/40 hover:text-purple-300/70"
+                }`}
+              >
+                <span className="text-xs">{s.icon}</span>
+                <span className="truncate">{s.label}</span>
+                {selectedThematic === s.key && data?.total != null && (
+                  <span className="text-[7px] opacity-60">({data.total})</span>
+                )}
+              </button>
+            ))}
+          </div>
         </div>
       </div>
 
@@ -665,7 +732,7 @@ export default function SectorScreener() {
           {/* Table header */}
           <div className="px-3 py-1.5 border-b border-bloomberg-border flex items-center gap-2">
             <span className="text-[9px] text-bloomberg-amber font-bold">
-              {selectedSector === "ALL" ? "🌐 WSZYSTKIE SEKTORY" : `${sectorInfo?.icon} ${sectorInfo?.label}`}
+              {selectedThematic ? `${thematicInfo?.icon} ${thematicInfo?.label}` : selectedSector === "ALL" ? "🌐 WSZYSTKIE SEKTORY" : `${sectorInfo?.icon} ${sectorInfo?.label}`}
             </span>
             <span className="text-[8px] text-muted-foreground">
               {displayStocks.length} spółek

@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
 import { fetchQuote, fetchKeyStats } from "@/lib/yahoo"
 import { getIndexConstituents, getTickersForSector } from "@/lib/indexConstituents"
-import { PL_TICKERS, NC_TICKERS } from "@/lib/sectorTickers"
+import { PL_TICKERS, NC_TICKERS, getThematicSector } from "@/lib/sectorTickers"
 
 // ── Types ────────────────────────────────────────────────────
 
@@ -88,7 +88,7 @@ async function fetchStock(
   if (!gicsSector && stats?.sector) {
     gicsSector = normalizeSector(stats.sector)
   }
-  if (!gicsSector) return null // Skip unknown sectors
+  if (!gicsSector) gicsSector = "Other" // Fallback for unknown sectors
 
   // Filter by sector (for NASDAQ tickers where sector comes from Yahoo)
   if (targetSector && targetSector !== "ALL" && gicsSector !== targetSector) return null
@@ -166,15 +166,114 @@ async function fetchBatch(
   return { results, errors }
 }
 
+// ── Helpers ──────────────────────────────────────────────────
+
+function calcMedian(vals: number[]): number | null {
+  if (vals.length === 0) return null
+  const sorted = [...vals].sort((a, b) => a - b)
+  const mid = Math.floor(sorted.length / 2)
+  return sorted.length % 2 === 0 ? (sorted[mid - 1] + sorted[mid]) / 2 : sorted[mid]
+}
+
 // ── Main handler ─────────────────────────────────────────────
 
 export async function POST(req: NextRequest) {
   try {
-    const { sector, market, includeNasdaq } = await req.json() as {
+    const { sector, market, includeNasdaq, thematic } = await req.json() as {
       sector?: string
       market?: string
-      includeNasdaq?: boolean // Include NASDAQ-only stocks (not in S&P 500)
+      includeNasdaq?: boolean
+      thematic?: string  // Thematic sector key (e.g., "Quantum", "Defense")
     }
+
+    // ── Thematic sector mode ──────────────────────────────────
+    if (thematic) {
+      const theme = getThematicSector(thematic)
+      if (!theme) {
+        return NextResponse.json({ error: `Unknown thematic sector: ${thematic}` }, { status: 400 })
+      }
+
+      const tasks = theme.tickers.map(sym => {
+        const isWA = sym.endsWith(".WA")
+        return {
+          symbol: sym,
+          mkt: (isWA ? "GPW" : "US") as "US" | "GPW" | "NC",
+          preSector: null,
+          source: (isWA ? "GPW" : "NASDAQ") as "S&P500" | "NASDAQ" | "GPW" | "NC",
+        }
+      })
+
+      const { results, errors } = await fetchBatch(tasks, undefined, 10)
+
+      // Calculate medians across all results
+      const sectorMedians: Record<string, Record<string, number | null>> = {}
+      const metricKeys = ["peRatio", "forwardPE", "evToEbitda", "dividendYield", "pegRatio", "profitMargin", "revenueGrowth"] as const
+
+      // Group by GICS sector for median calculation
+      const bySector: Record<string, SectorStock[]> = {}
+      for (const s of results) {
+        if (!bySector[s.sector]) bySector[s.sector] = []
+        bySector[s.sector].push(s)
+      }
+
+      for (const [sec, stocks] of Object.entries(bySector)) {
+        sectorMedians[sec] = {}
+        for (const key of metricKeys) {
+          const vals = stocks.map(s => s[key]).filter((v): v is number => v != null && isFinite(v) && v > 0)
+          sectorMedians[sec][key] = calcMedian(vals)
+        }
+      }
+
+      // Thematic median (across all stocks regardless of GICS)
+      sectorMedians[thematic] = {}
+      for (const key of metricKeys) {
+        const vals = results.map(s => s[key]).filter((v): v is number => v != null && isFinite(v) && v > 0)
+        sectorMedians[thematic][key] = calcMedian(vals)
+      }
+
+      // Calculate valuations using thematic medians
+      for (const stock of results) {
+        const medians = sectorMedians[thematic]
+        if (!medians) continue
+        const medPE = medians.peRatio
+        const medEVEB = medians.evToEbitda
+        const medMargin = medians.profitMargin
+        let peValuation: number | null = null
+        let evEbitdaValuation: number | null = null
+        if (stock.netIncome && stock.netIncome > 0 && medPE && medPE > 0) {
+          peValuation = stock.netIncome * medPE
+        }
+        if (stock.ebitda && stock.ebitda > 0 && medEVEB && medEVEB > 0) {
+          const impliedEV = stock.ebitda * medEVEB
+          const netDebt = (stock.totalDebt ?? 0) - (stock.totalCash ?? 0)
+          evEbitdaValuation = impliedEV - netDebt
+          if (evEbitdaValuation < 0) evEbitdaValuation = null
+        }
+        let premiumDiscount: string | null = null
+        if (stock.profitMargin != null && medMargin != null && medMargin > 0) {
+          const marginRatio = stock.profitMargin / medMargin
+          if (marginRatio > 1.2) premiumDiscount = "PREMIUM"
+          else if (marginRatio < 0.8) premiumDiscount = "DISCOUNT"
+          else premiumDiscount = "FAIR"
+        }
+        const valuations = [peValuation, evEbitdaValuation].filter((v): v is number => v != null && v > 0)
+        const avgValuation = valuations.length > 0 ? valuations.reduce((a, b) => a + b, 0) / valuations.length : null
+        const upside = avgValuation && stock.marketCap > 0 ? ((avgValuation - stock.marketCap) / stock.marketCap) * 100 : null
+        stock.valuation = { peValuation, evEbitdaValuation, avgValuation, upside, premiumDiscount }
+      }
+
+      return NextResponse.json({
+        stocks: results,
+        total: results.length,
+        sectorCounts: {},
+        sectorMedians,
+        thematic: thematic,
+        errors: errors > 0 ? errors : undefined,
+        timestamp: new Date().toISOString(),
+      })
+    }
+
+    // ── Standard GICS sector mode ─────────────────────────────
 
     // 1. Get index constituents (cached 24h)
     const indexData = await getIndexConstituents()
@@ -233,13 +332,6 @@ export async function POST(req: NextRequest) {
     for (const s of results) {
       if (!bySector[s.sector]) bySector[s.sector] = []
       bySector[s.sector].push(s)
-    }
-
-    function calcMedian(vals: number[]): number | null {
-      if (vals.length === 0) return null
-      vals.sort((a, b) => a - b)
-      const mid = Math.floor(vals.length / 2)
-      return vals.length % 2 === 0 ? (vals[mid - 1] + vals[mid]) / 2 : vals[mid]
     }
 
     for (const [sec, stocks] of Object.entries(bySector)) {

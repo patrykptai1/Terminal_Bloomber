@@ -159,6 +159,164 @@ export const NC_TICKERS = [
   "NTT.WA","MLG.WA","GRN.WA","MDG.WA","NVG.WA","SUN.WA","PHR.WA","HRP.WA",
 ]
 
+// ── Thematic Sectors ────────────────────────────────────────
+// Cross-cutting sectors that span multiple GICS categories.
+// A company can belong to multiple thematic sectors.
+
+export interface ThematicSector {
+  key: string
+  icon: string
+  label: string
+  description: string
+  tickers: string[]  // Mix of US and .WA (Polish) tickers
+}
+
+export const THEMATIC_SECTORS: ThematicSector[] = [
+  {
+    key: "Quantum",
+    icon: "⚛️",
+    label: "Quantum",
+    description: "Quantum computing, quantum encryption, quantum sensors",
+    tickers: [
+      // Pure-play quantum computing
+      "QUBT",    // Quantum Computing Inc — quantum optimization
+      "IONQ",    // IonQ — trapped ion quantum computers
+      "RGTI",    // Rigetti Computing — superconducting quantum
+      "QBTS",    // D-Wave Quantum — quantum annealing
+      "ARQQ",    // Arqit Quantum — quantum encryption
+      // Big tech with major quantum divisions
+      "IBM",     // IBM Quantum — 1000+ qubit processors
+      "GOOGL",   // Google Quantum AI — Willow chip
+      "MSFT",    // Azure Quantum — topological qubits
+      "INTC",    // Intel — silicon spin qubits
+      "HON",     // Honeywell — Quantinuum (trapped ion)
+      // Quantum infrastructure & components
+      "FORM",    // FormFactor — quantum probe stations & testing
+      "AMAT",    // Applied Materials — quantum chip fabrication
+      "COHR",    // Coherent — lasers for quantum systems
+      "MKFG",    // Markforged — precision manufacturing (quantum hardware)
+      "NVDA",    // NVIDIA — quantum simulation & hybrid computing
+      // Polish
+      "CRI.WA",  // Creotech Instruments — quantum & space tech (Poland)
+    ],
+  },
+  {
+    key: "Defense",
+    icon: "🛡️",
+    label: "Obronność",
+    description: "Defense contractors, military tech, cybersecurity for defense",
+    tickers: [
+      // Prime defense contractors
+      "LMT",     // Lockheed Martin — F-35, missiles, space defense
+      "RTX",     // Raytheon Technologies — missiles, radar, engines
+      "NOC",     // Northrop Grumman — B-21 bomber, space systems
+      "GD",      // General Dynamics — submarines, tanks, IT systems
+      "BA",      // Boeing — military aircraft, defense systems
+      "LHX",     // L3Harris Technologies — ISR, comms, space
+      "HII",     // Huntington Ingalls — aircraft carriers, submarines
+      // Defense electronics & tech
+      "TDG",     // TransDigm — aerospace components
+      "HEI",     // HEICO — aerospace parts & defense electronics
+      "AXON",    // Axon Enterprise — tasers, body cameras, AI for defense
+      "PLTR",    // Palantir — defense AI & intelligence platforms
+      "LDOS",    // Leidos — defense IT, intelligence, R&D
+      "BAH",     // Booz Allen Hamilton — defense consulting & cyber
+      "SAIC",    // SAIC — defense IT solutions
+      "KTOS",    // Kratos Defense — drones, satellite, missile defense
+      "AVAV",    // AeroVironment — military drones (Switchblade)
+      "MRCY",    // Mercury Systems — defense electronics
+      "SPR",     // Spirit AeroSystems — military aircraft structures
+      "SWBI",    // Smith & Wesson — firearms
+      "RGR",     // Sturm Ruger — firearms
+      "BWXT",    // BWX Technologies — nuclear subs, defense reactors
+      // Defense cyber & software
+      "CRWD",    // CrowdStrike — gov/defense cybersecurity
+      "PANW",    // Palo Alto Networks — defense cyber
+      "FTNT",    // Fortinet — DoD cybersecurity
+      "NET",     // Cloudflare — defense infrastructure
+      "MSI",     // Motorola Solutions — defense comms
+      // Polish defense
+      "CRI.WA",  // Creotech Instruments — satellite & defense tech
+      "PCR.WA",  // PCR — electronic systems
+    ],
+  },
+  {
+    key: "Fusion",
+    icon: "☢️",
+    label: "Fuzja termojądrowa",
+    description: "Nuclear fusion energy, plasma tech, superconductors, fusion materials",
+    tickers: [
+      // Direct fusion exposure / components for fusion reactors
+      "AIN",     // Albany International — composite materials for ITER tokamak
+      "BWXT",    // BWX Technologies — nuclear components, fusion reactor parts
+      "SMR",     // NuScale Power — small modular reactors, fusion-adjacent tech
+      "OKLO",    // Oklo — advanced nuclear, micro-reactors
+      "LEU",     // Centrus Energy — uranium enrichment, HALEU for fusion
+      "NNE",     // Nano Nuclear Energy — micro nuclear reactors
+      // Companies invested in fusion startups
+      "MSFT",    // Microsoft — signed PPA with Helion Energy (fusion)
+      "GOOGL",   // Google — invested in TAE Technologies (fusion)
+      "GE",      // GE — turbine tech applicable to fusion power plants
+      // Critical materials & components for fusion
+      "APD",     // Air Products — tritium/deuterium gases for fusion
+      "LIN",     // Linde — cryogenics & gases for superconducting magnets
+      "HON",     // Honeywell — control systems for fusion reactors
+      "CCJ",     // Cameco — uranium (fusion-fission hybrids)
+      "UEC",     // Uranium Energy Corp — uranium supply
+      "UUUU",    // Energy Fuels — uranium & rare earths for fusion
+      "DNN",     // Denison Mines — uranium
+      // Superconducting magnets & laser tech for fusion
+      "COHR",    // Coherent — high-power lasers (inertial confinement fusion)
+      "AMSC",    // AMSC — superconducting wire for fusion magnets
+      "VST",     // Vistra — nuclear energy operator
+      "CEG",     // Constellation Energy — largest US nuclear fleet
+      // Fusion energy infrastructure
+      "ETN",     // Eaton — power management for fusion plants
+      "EMR",     // Emerson Electric — automation & control for fusion
+    ],
+  },
+  {
+    key: "Space",
+    icon: "🚀",
+    label: "Kosmos",
+    description: "Space exploration, satellites, launch vehicles, space infrastructure",
+    tickers: [
+      // Pure-play space companies
+      "RKLB",    // Rocket Lab — Electron/Neutron rockets, Photon satellites
+      "ASTS",    // AST SpaceMobile — space-based cellular broadband
+      "LUNR",    // Intuitive Machines — lunar landers (Moon missions)
+      "SPIR",    // Spire Global — satellite data analytics
+      "RDW",     // Redwire — space infrastructure & 3D printing in space
+      "BKSY",    // BlackSky Technology — satellite imagery & analytics
+      "SPCE",    // Virgin Galactic — space tourism
+      "MNTS",    // Momentus — in-space transport & infrastructure
+      "GSAT",    // Globalstar — satellite communications
+      "IRDM",    // Iridium Communications — satellite constellation
+      "VSAT",    // ViaSat — satellite internet & defense comms
+      // Large defense/aerospace with major space divisions
+      "BA",      // Boeing — Starliner, SLS, satellites
+      "LMT",     // Lockheed Martin — Orion, GPS satellites, Mars missions
+      "NOC",     // Northrop Grumman — Cygnus, solid rocket boosters
+      "RTX",     // Raytheon — space sensors, satellite systems
+      "LHX",     // L3Harris — ISR satellites, space payloads
+      "GD",      // General Dynamics — satellite ground systems
+      "AVAV",    // AeroVironment — small space systems
+      // Space-adjacent tech
+      "ANET",    // Arista Networks — data infrastructure for ground stations
+      "AMZN",    // Amazon — Project Kuiper satellite constellation
+      "EQIX",    // Equinix — satellite ground station colocation
+      "DLR",     // Digital Realty — data centers for satellite data
+      // Polish space
+      "CRI.WA",  // Creotech Instruments — EagleEye satellite, space electronics
+      "SES.WA",  // Sescom — space-adjacent engineering
+    ],
+  },
+]
+
+export function getThematicSector(key: string): ThematicSector | undefined {
+  return THEMATIC_SECTORS.find(s => s.key === key)
+}
+
 // Get all US tickers (deduped)
 export function getAllUSTickers(): string[] {
   const set = new Set<string>()
