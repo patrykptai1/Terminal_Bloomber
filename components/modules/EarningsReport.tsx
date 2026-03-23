@@ -7,6 +7,7 @@ import TerminalInput from "@/components/TerminalInput"
 import BarCompareChart from "@/components/charts/BarCompareChart"
 import type { QuoteData, EarningsData } from "@/lib/yahoo"
 import { fmtBigValue } from "@/lib/currency"
+import { calculateFinancialScore, type ScoreBreakdown } from "@/lib/financialScore"
 
 /* ══════════════════════════════════════════════════════════════
    HELPERS
@@ -265,6 +266,9 @@ export default function EarningsReport() {
   // Snapshot
   const snapshotItems = e && q ? buildSnapshot(e, q, fcfTTM, revenueTTM, netIncomeTTM, ebitdaTTM, sbcTTM, annualRevenue, annualSBC) : []
 
+  // Financial Score
+  const scoreData: ScoreBreakdown | null = q && e ? calculateFinancialScore(q, e) : null
+
   // Net Margin combined (annual + TTM)
   const marginRows: { label: string; rev: number; ni: number; date: string }[] = []
   for (const a of annualRevenue) {
@@ -295,8 +299,11 @@ export default function EarningsReport() {
 
           {/* ═══ HEADER ═══ */}
           <div className="bg-bloomberg-card border border-bloomberg-border rounded p-4">
-            <div className="flex items-baseline justify-between flex-wrap gap-2">
-              <div><span className="text-xl font-bold text-bloomberg-green">{q.symbol}</span><span className="text-sm text-muted-foreground ml-2">{q.name}</span></div>
+            <div className="flex items-center justify-between flex-wrap gap-3">
+              <div className="flex items-center gap-3">
+                <div><span className="text-xl font-bold text-bloomberg-green">{q.symbol}</span><span className="text-sm text-muted-foreground ml-2">{q.name}</span></div>
+              </div>
+              {scoreData && <FinancialScoreCircle score={scoreData} />}
             </div>
             <div className="mt-3 flex flex-wrap gap-4 items-center">
               {gaapEpsTTMVal != null && <div className="flex items-center gap-2"><span className="text-[10px] bg-bloomberg-red/20 text-bloomberg-red px-1.5 py-0.5 rounded font-bold">GAAP</span><span className="text-xs text-muted-foreground">EPS (TTM):</span><span className={`font-bold text-sm ${gaapEpsTTMVal >= 0 ? "text-bloomberg-green" : "text-bloomberg-red"}`}>{gaapEpsTTMVal.toFixed(2)}</span></div>}
@@ -321,64 +328,39 @@ export default function EarningsReport() {
             </div>
           )}
 
-          {/* ═══ SECTION 1: EPS ═══ */}
-          {e.quarterly.length > 0 && (
-            <div className="bg-bloomberg-card border border-bloomberg-border rounded p-4">
-              <div className="text-xs text-bloomberg-amber font-bold mb-3">EPS — ZYSK NA AKCJĘ (QUARTERLY)</div>
-              <div className="overflow-x-auto"><table className="w-full text-xs"><thead><tr className="border-b border-bloomberg-border"><th className="text-left py-2 text-muted-foreground">QUARTER</th><th className="text-right py-2 text-muted-foreground">ESTIMATE</th><th className="text-right py-2 text-muted-foreground">ACTUAL</th><th className="text-right py-2 text-muted-foreground">SURPRISE</th><th className="text-right py-2 text-muted-foreground">%</th>{hasGaapDiff && <th className="text-right py-2 text-muted-foreground">GAAP EPS</th>}<th className="text-center py-2 text-muted-foreground">TYPE</th><th className="text-center py-2 text-muted-foreground">STATUS</th></tr></thead>
-              <tbody>
-                {e.quarterly.map((row, i) => {
-                  const isBeat = row.surprise != null && row.surprise > 0; const isMiss = row.surprise != null && row.surprise < 0
-                  const gaapMatch = (e.incomeStatements ?? []).find((s) => s.date === row.date)
-                  return (<tr key={i} className="border-b border-bloomberg-border/50"><td className="py-2 font-bold">{row.date} <span className="text-[10px] text-muted-foreground">{shortQLabel(row.date)}</span></td><td className="py-2 text-right text-muted-foreground">{row.estimate?.toFixed(2) ?? "N/A"}</td><td className={`py-2 text-right font-bold ${isBeat ? "text-bloomberg-green" : isMiss ? "text-bloomberg-red" : ""}`}>{row.actual?.toFixed(2) ?? "N/A"}</td><td className={`py-2 text-right ${isBeat ? "text-bloomberg-green" : isMiss ? "text-bloomberg-red" : ""}`}>{row.surprise != null ? (row.surprise > 0 ? "+" : "") + row.surprise.toFixed(2) : "N/A"}</td><td className={`py-2 text-right ${isBeat ? "text-bloomberg-green" : isMiss ? "text-bloomberg-red" : ""}`}>{row.surprisePercent != null ? (row.surprisePercent > 0 ? "+" : "") + row.surprisePercent.toFixed(1) + "%" : "N/A"}</td>{hasGaapDiff && <td className={`py-2 text-right ${gaapMatch?.dilutedEPS != null && gaapMatch.dilutedEPS >= 0 ? "text-bloomberg-green" : "text-bloomberg-red"}`}>{gaapMatch?.dilutedEPS != null ? gaapMatch.dilutedEPS.toFixed(2) : "N/A"}</td>}<td className="py-2 text-center"><span className="text-[10px] text-muted-foreground">{hasGaapDiff ? "Non-GAAP" : "GAAP"}</span></td><td className="py-2 text-center">{isBeat ? <CheckCircle className="w-4 h-4 text-bloomberg-green inline" /> : isMiss ? <XCircle className="w-4 h-4 text-bloomberg-red inline" /> : <Minus className="w-4 h-4 text-bloomberg-amber inline" />}</td></tr>)
-                })}
-                {fwdQ.filter((f) => f.epsEstimate != null && !e.quarterly.some((q) => q.date === (f.endDate || f.period))).map((f, i) => (<tr key={`fwd-${i}`} className="border-b border-bloomberg-border/50 bg-bloomberg-amber/5"><td className="py-2 font-bold">{f.endDate || f.period}<span className="ml-1 text-[10px] text-bloomberg-amber font-bold">EST</span></td><td className="py-2 text-right text-bloomberg-amber font-bold">{f.epsEstimate?.toFixed(2) ?? "N/A"}</td><td className="py-2 text-right text-muted-foreground">---</td><td className="py-2 text-right text-muted-foreground">---</td><td className="py-2 text-right text-muted-foreground">---</td>{hasGaapDiff && <td className="py-2 text-right text-muted-foreground">---</td>}<td className="py-2 text-center"><span className="text-[10px] text-muted-foreground">Est.</span></td><td className="py-2 text-center"><span className="text-[10px] bg-bloomberg-amber/20 text-bloomberg-amber px-1.5 py-0.5 rounded font-bold">FORECAST</span></td></tr>))}
-              </tbody></table></div>
-            </div>
-          )}
-
-          {epsChartData.length > 0 && <div className="bg-bloomberg-card border border-bloomberg-border rounded p-4"><div className="text-xs text-bloomberg-amber font-bold mb-3">EPS: ESTIMATE vs ACTUAL (HISTORICAL)</div><BarCompareChart data={epsChartData} /></div>}
-
-          {/* Forward EPS cards */}
-          {fwdQ.filter((f) => f.epsEstimate != null).length > 0 && (
-            <div className="bg-bloomberg-card border border-bloomberg-border rounded p-4">
-              <div className="text-xs text-bloomberg-amber font-bold mb-3">FORWARD EPS — YoY</div>
-              <div className="grid grid-cols-2 gap-4">{fwdQ.filter((f) => f.epsEstimate != null).map((f, i) => { const yoy = f.yearAgoEps && f.epsEstimate ? ((f.epsEstimate - f.yearAgoEps) / Math.abs(f.yearAgoEps)) * 100 : null; return (<div key={i} className="bg-bloomberg-bg rounded p-3 border border-bloomberg-border/50"><div className="text-sm font-bold text-bloomberg-amber mb-2">{f.endDate?.slice(0,7) || f.period} <span className="text-[10px] bg-bloomberg-amber/20 px-1.5 py-0.5 rounded">EST</span></div><div className="space-y-1 text-xs"><div className="flex justify-between"><span className="text-muted-foreground">Forecast</span><span className="font-bold">${f.epsEstimate?.toFixed(3)}</span></div>{f.yearAgoEps != null && <div className="flex justify-between"><span className="text-muted-foreground">Year Ago</span><span className="font-bold">${f.yearAgoEps.toFixed(3)}</span></div>}{yoy != null && <div className="flex justify-between pt-1 border-t border-bloomberg-border/50"><span className="text-muted-foreground font-bold">YoY</span><span className={`font-bold ${yoy >= 0 ? "text-bloomberg-green" : "text-bloomberg-red"}`}>{yoy >= 0 ? "+" : ""}{yoy.toFixed(1)}%</span></div>}</div></div>) })}</div>
-            </div>
-          )}
-
-          {/* Annual estimates + Revisions */}
-          {fwdY.length > 0 && (<>
-            <div className="bg-bloomberg-card border border-bloomberg-border rounded p-4">
-              <div className="text-xs text-bloomberg-amber font-bold mb-3">ANNUAL ESTIMATES (CONSENSUS)</div>
-              <div className="grid grid-cols-2 gap-4">{fwdY.map((f, i) => { const y = f.endDate?.slice(0,4) || f.period; const eg = f.yearAgoEps && f.epsEstimate ? ((f.epsEstimate - f.yearAgoEps) / Math.abs(f.yearAgoEps)) * 100 : null; const rg = f.yearAgoRev && f.revEstimate ? ((f.revEstimate - f.yearAgoRev) / Math.abs(f.yearAgoRev)) * 100 : null; return (<div key={i} className="bg-bloomberg-bg rounded p-3 border border-bloomberg-border/50"><div className="text-sm font-bold text-bloomberg-green mb-2">FY {y} {f.period === "0y" ? "(Current)" : "(Next)"}</div><div className="space-y-1 text-xs"><div className="flex justify-between"><span className="text-muted-foreground">EPS Est.</span><span className="font-bold">${f.epsEstimate?.toFixed(2) ?? "N/A"}</span></div>{eg != null && <div className="flex justify-between"><span className="text-muted-foreground">EPS YoY</span><span className={`font-bold ${eg >= 0 ? "text-bloomberg-green" : "text-bloomberg-red"}`}>{eg >= 0 ? "+" : ""}{eg.toFixed(1)}%</span></div>}{f.revEstimate != null && <div className="flex justify-between"><span className="text-muted-foreground">Rev Est.</span><span className="font-bold">{fmtBigValue(f.revEstimate, q.currency)}</span></div>}{rg != null && <div className="flex justify-between"><span className="text-muted-foreground">Rev YoY</span><span className={`font-bold ${rg >= 0 ? "text-bloomberg-green" : "text-bloomberg-red"}`}>{rg >= 0 ? "+" : ""}{rg.toFixed(1)}%</span></div>}</div></div>) })}</div>
-            </div>
-
-            {/* ANALYST ESTIMATE REVISIONS */}
-            <div className="bg-bloomberg-card border border-bloomberg-border rounded p-4">
-              <div className="text-xs text-bloomberg-amber font-bold mb-3">ANALYST ESTIMATE REVISIONS</div>
-              {fwdY.some((f) => f.epsTrend30d != null) ? (
-                <div className="overflow-x-auto"><table className="w-full text-xs"><thead><tr className="border-b border-bloomberg-border"><th className="text-left py-2 text-muted-foreground">PERIOD</th><th className="text-left py-2 text-muted-foreground">METRIC</th><th className="text-right py-2 text-muted-foreground">30D AGO</th><th className="text-right py-2 text-muted-foreground">CURRENT</th><th className="text-right py-2 text-muted-foreground">CHANGE</th><th className="text-center py-2 text-muted-foreground">DIR</th><th className="text-center py-2 text-muted-foreground">UP/DOWN</th></tr></thead>
-                <tbody>{fwdY.map((f, i) => { const y = f.endDate ? `FY${f.endDate.slice(0,4)}` : f.period; const c = f.epsTrendCurrent; const p = f.epsTrend30d; const ch = c != null && p != null ? c - p : null; const dir = ch != null ? (ch > 0.001 ? "up" : ch < -0.001 ? "down" : "flat") : null; return (<tr key={i} className="border-b border-bloomberg-border/50"><td className="py-2 font-bold">{y}</td><td className="py-2">EPS Est.</td><td className="py-2 text-right text-muted-foreground">{p != null ? `$${p.toFixed(3)}` : "N/A"}</td><td className="py-2 text-right font-bold">{c != null ? `$${c.toFixed(3)}` : "N/A"}</td><td className={`py-2 text-right font-bold ${dir === "up" ? "text-bloomberg-green" : dir === "down" ? "text-bloomberg-red" : "text-muted-foreground"}`}>{ch != null ? `${ch >= 0 ? "+" : ""}${ch.toFixed(3)}` : "---"}</td><td className="py-2 text-center text-lg">{dir === "up" ? <span className="text-bloomberg-green">▲</span> : dir === "down" ? <span className="text-bloomberg-red">▼</span> : <span className="text-muted-foreground">—</span>}</td><td className="py-2 text-center"><span className="text-bloomberg-green">{f.epsRevisionsUp30d}↑</span><span className="text-muted-foreground mx-1">/</span><span className="text-bloomberg-red">{f.epsRevisionsDown30d}↓</span></td></tr>) })}</tbody></table></div>
-              ) : <div className="text-sm text-muted-foreground text-center py-4">Dane rewizji niedostępne dla tej spółki</div>}
-              <Explainer text="Rosnące estymaty = pozytywny momentum. Spadające = pogarszające się oczekiwania." />
-            </div>
-          </>)}
-
-          {/* Surprise History */}
-          {e.quarterly.length > 0 && e.quarterly.some((r) => r.surprise != null) && (
-            <div className="bg-bloomberg-card border border-bloomberg-border rounded p-4">
-              <div className="text-xs text-bloomberg-amber font-bold mb-3">EPS SURPRISE HISTORY</div>
-              <div className="space-y-2">{e.quarterly.map((row, i) => { const isBeat = row.surprise != null && row.surprise > 0; const isMiss = row.surprise != null && row.surprise < 0; const isNeutral = row.surprise == null || row.surprise === 0; const mag = row.surprisePercent != null ? Math.abs(row.surprisePercent) : 0; const maxS = Math.max(...e.quarterly.filter((r) => r.surprisePercent != null).map((r) => Math.abs(r.surprisePercent!)), 1); const bw = mag > 0 ? Math.max(5, (mag / maxS) * 100) : 0; return (<div key={i} className="flex items-center gap-3"><div className="w-20 text-xs text-muted-foreground shrink-0 font-mono">{shortQLabel(row.date)}</div><div className="flex-1 flex items-center gap-2"><div className="flex-1 h-5 bg-bloomberg-bg rounded overflow-hidden"><div className={`h-full rounded ${isBeat ? "bg-bloomberg-green/60" : isMiss ? "bg-bloomberg-red/60" : "bg-bloomberg-amber/30"}`} style={{ width: `${bw}%` }} /></div><div className={`w-16 text-right text-xs font-bold shrink-0 ${isBeat ? "text-bloomberg-green" : isMiss ? "text-bloomberg-red" : "text-muted-foreground"}`}>{isNeutral ? "---" : <>{isBeat ? "BEAT" : "MISS"} {row.surprisePercent != null ? `${Math.abs(row.surprisePercent).toFixed(1)}%` : ""}</>}</div></div><div className="shrink-0">{isBeat ? <CheckCircle className="w-4 h-4 text-bloomberg-green" /> : isMiss ? <XCircle className="w-4 h-4 text-bloomberg-red" /> : <Minus className="w-4 h-4 text-bloomberg-amber" />}</div></div>) })}</div>
-              {(() => { const beats = e.quarterly.filter((r) => r.surprise != null && r.surprise > 0).length; const misses = e.quarterly.filter((r) => r.surprise != null && r.surprise < 0).length; const total = e.quarterly.filter((r) => r.surprise != null).length; return <div className="mt-3 pt-3 border-t border-bloomberg-border flex items-center justify-between text-xs"><span className="text-muted-foreground">Track Record</span><div className="flex gap-4"><span className="text-bloomberg-green font-bold">{beats} Beats</span><span className="text-bloomberg-red font-bold">{misses} Misses</span><span className={`font-bold ${beats > misses ? "text-bloomberg-green" : "text-bloomberg-red"}`}>({total > 0 ? ((beats / total) * 100).toFixed(0) : 0}% beat rate)</span></div></div> })()}
-            </div>
-          )}
-
           {/* ═══ REVENUE TTM ═══ */}
           {(revenueTTM.length > 0 || annualRevenue.some((a) => a.value != null)) && (<>
             <div className="border-t border-bloomberg-border pt-4 mt-2" />
             <TTMBarSection title="REVENUE TTM TREND" ttmData={revenueTTM} annualData={annualRevenue} forwardAnnual={fwdAnnualRev} currency={q.currency} color="bg-bloomberg-blue" />
             <TTMTable title="REVENUE TTM TABLE" ttmData={revenueTTM} annualData={annualRevenue} forwardAnnual={fwdAnnualRev} currency={q.currency} />
+
+            {/* REVENUE QUARTERLY */}
+            {(e.incomeStatements ?? []).filter((s) => s.revenue != null).length > 0 && (
+              <div className="bg-bloomberg-card border border-bloomberg-border rounded p-4">
+                <div className="text-xs text-bloomberg-amber font-bold mb-3">REVENUE — QUARTERLY</div>
+                <div className="overflow-x-auto"><table className="w-full text-xs"><thead><tr className="border-b border-bloomberg-border"><th className="text-left py-2 text-muted-foreground">QUARTER</th><th className="text-right py-2 text-muted-foreground">REVENUE</th><th className="text-right py-2 text-muted-foreground">QoQ</th><th className="text-right py-2 text-muted-foreground">YoY</th></tr></thead>
+                <tbody>
+                  {(e.incomeStatements ?? []).filter((s) => s.revenue != null).sort((a, b) => a.date.localeCompare(b.date)).map((s, i, arr) => {
+                    const prev = arr[i - 1]
+                    const qoq = prev?.revenue && s.revenue ? ((s.revenue - prev.revenue) / Math.abs(prev.revenue)) * 100 : null
+                    const sameQPrevYear = arr.find((x) => {
+                      const xY = parseInt(yearFromDate(x.date)); const sY = parseInt(yearFromDate(s.date))
+                      const xM = x.date.slice(5, 7); const sM = s.date.slice(5, 7)
+                      return xY === sY - 1 && xM === sM
+                    })
+                    const yoy = sameQPrevYear?.revenue && s.revenue ? ((s.revenue - sameQPrevYear.revenue) / Math.abs(sameQPrevYear.revenue)) * 100 : null
+                    return (
+                      <tr key={i} className="border-b border-bloomberg-border/50">
+                        <td className="py-2 font-bold">{shortQLabel(s.date)}</td>
+                        <td className="py-2 text-right font-bold">{fmtBigValue(s.revenue!, q.currency)}</td>
+                        <td className={`py-2 text-right ${qoq != null && qoq >= 0 ? "text-bloomberg-green" : "text-bloomberg-red"}`}>{qoq != null ? `${qoq >= 0 ? "+" : ""}${qoq.toFixed(1)}%` : "—"}</td>
+                        <td className={`py-2 text-right font-bold ${yoy != null && yoy >= 0 ? "text-bloomberg-green" : "text-bloomberg-red"}`}>{yoy != null ? `${yoy >= 0 ? "+" : ""}${yoy.toFixed(1)}%` : "—"}</td>
+                      </tr>
+                    )
+                  })}
+                </tbody></table></div>
+              </div>
+            )}
 
             {/* OPERATING LEVERAGE */}
             {revenueTTM.length >= 1 && totalExpensesTTM.length >= 1 && (() => {
@@ -437,6 +419,39 @@ export default function EarningsReport() {
             <div className="border-t border-bloomberg-border pt-4 mt-2" />
             <TTMBarSection title="EBITDA TTM TREND (NORMALIZED)" ttmData={ebitdaTTM} annualData={annualEbitdaNorm} currency={q.currency} color="bg-bloomberg-purple" explainer="EBITDA = Operating Income + D&A. Adjusted EBITDA wyklucza koszty jednorazowe (restructuring, SBC)." />
             <TTMTable title="EBITDA TTM TABLE (NORMALIZED)" ttmData={ebitdaTTM} annualData={annualEbitdaNorm} currency={q.currency} />
+
+            {/* EBITDA QUARTERLY */}
+            {(e.incomeStatements ?? []).filter((s) => (s.ebitdaNormalized ?? s.ebitda) != null).length > 0 && (
+              <div className="bg-bloomberg-card border border-bloomberg-border rounded p-4">
+                <div className="text-xs text-bloomberg-amber font-bold mb-3">EBITDA — QUARTERLY (NORMALIZED)</div>
+                <div className="overflow-x-auto"><table className="w-full text-xs"><thead><tr className="border-b border-bloomberg-border"><th className="text-left py-2 text-muted-foreground">QUARTER</th><th className="text-right py-2 text-muted-foreground">EBITDA</th><th className="text-right py-2 text-muted-foreground">MARGIN</th><th className="text-right py-2 text-muted-foreground">QoQ</th><th className="text-right py-2 text-muted-foreground">YoY</th></tr></thead>
+                <tbody>
+                  {(e.incomeStatements ?? []).filter((s) => (s.ebitdaNormalized ?? s.ebitda) != null).sort((a, b) => a.date.localeCompare(b.date)).map((s, i, arr) => {
+                    const eb = (s.ebitdaNormalized ?? s.ebitda)!
+                    const margin = s.revenue && s.revenue > 0 ? (eb / s.revenue) * 100 : null
+                    const prev = arr[i - 1]
+                    const prevEb = prev ? (prev.ebitdaNormalized ?? prev.ebitda) : null
+                    const qoq = prevEb && prevEb !== 0 ? ((eb - prevEb) / Math.abs(prevEb)) * 100 : null
+                    const sameQPrevYear = arr.find((x) => {
+                      const xY = parseInt(yearFromDate(x.date)); const sY = parseInt(yearFromDate(s.date))
+                      const xM = x.date.slice(5, 7); const sM = s.date.slice(5, 7)
+                      return xY === sY - 1 && xM === sM
+                    })
+                    const prevYearEb = sameQPrevYear ? (sameQPrevYear.ebitdaNormalized ?? sameQPrevYear.ebitda) : null
+                    const yoy = prevYearEb && prevYearEb !== 0 ? ((eb - prevYearEb) / Math.abs(prevYearEb)) * 100 : null
+                    return (
+                      <tr key={i} className="border-b border-bloomberg-border/50">
+                        <td className="py-2 font-bold">{shortQLabel(s.date)}</td>
+                        <td className={`py-2 text-right font-bold ${eb >= 0 ? "text-bloomberg-green" : "text-bloomberg-red"}`}>{fmtBigValue(eb, q.currency)}</td>
+                        <td className={`py-2 text-right ${margin != null && margin >= 0 ? "text-muted-foreground" : "text-bloomberg-red"}`}>{margin != null ? `${margin.toFixed(1)}%` : "—"}</td>
+                        <td className={`py-2 text-right ${qoq != null && qoq >= 0 ? "text-bloomberg-green" : "text-bloomberg-red"}`}>{qoq != null ? `${qoq >= 0 ? "+" : ""}${qoq.toFixed(1)}%` : "—"}</td>
+                        <td className={`py-2 text-right font-bold ${yoy != null && yoy >= 0 ? "text-bloomberg-green" : "text-bloomberg-red"}`}>{yoy != null ? `${yoy >= 0 ? "+" : ""}${yoy.toFixed(1)}%` : "—"}</td>
+                      </tr>
+                    )
+                  })}
+                </tbody></table></div>
+              </div>
+            )}
           </>)}
 
           {/* ═══ FREE CASH FLOW TTM ═══ */}
@@ -745,6 +760,84 @@ export default function EarningsReport() {
           {e.quarterly.length === 0 && e.financials.length === 0 && (e.incomeStatements ?? []).length === 0 && <div className="bg-bloomberg-card border border-bloomberg-border rounded p-4 text-center text-muted-foreground text-sm">No earnings data available for this ticker</div>}
         </div>
       )}
+    </div>
+  )
+}
+
+// ── Financial Score Circle ──────────────────────────────────
+
+function FinancialScoreCircle({ score }: { score: ScoreBreakdown }) {
+  const [showBreakdown, setShowBreakdown] = useState(false)
+  const s = score.total
+  const deg = s * 3.6
+
+  // Color based on score
+  const color = s >= 75 ? { start: "#00e676", end: "#00c853", glow: "#00e676" }
+    : s >= 60 ? { start: "#ffeb3b", end: "#f9a825", glow: "#ffeb3b" }
+    : s >= 45 ? { start: "#ff9800", end: "#e65100", glow: "#ff9800" }
+    : { start: "#f44336", end: "#b71c1c", glow: "#f44336" }
+
+  const label = s >= 75 ? "STRONG" : s >= 60 ? "GOOD" : s >= 45 ? "FAIR" : "WEAK"
+
+  return (
+    <div className="relative">
+      <div
+        className="flex items-center gap-2 cursor-pointer group"
+        onClick={() => setShowBreakdown(!showBreakdown)}
+      >
+        {/* Circle */}
+        <div
+          className="relative w-14 h-14 rounded-full flex items-center justify-center shrink-0"
+          style={{
+            background: `conic-gradient(${color.start} 0deg, ${color.end} ${deg}deg, #1e1e1e ${deg}deg 360deg)`,
+            boxShadow: `0 0 16px ${color.glow}66`,
+          }}
+        >
+          <div className="absolute w-10 h-10 rounded-full bg-bloomberg-bg" />
+          <span className="relative text-sm font-extrabold text-white z-10">{s}</span>
+        </div>
+        <div className="flex flex-col">
+          <span className="text-[9px] text-muted-foreground tracking-wider">FINANCIAL SCORE</span>
+          <span className="text-[10px] font-bold" style={{ color: color.start }}>{label}</span>
+        </div>
+      </div>
+
+      {/* Breakdown tooltip */}
+      {showBreakdown && (
+        <div className="absolute right-0 top-16 z-50 bg-bloomberg-card border border-bloomberg-border rounded p-3 shadow-xl min-w-[220px]">
+          <div className="text-[9px] text-bloomberg-amber font-bold mb-2 tracking-wider">SCORE BREAKDOWN</div>
+          {(score.subIndustry || score.sector) && <div className="text-[8px] text-muted-foreground mb-2">Profil: <span className="text-bloomberg-amber">{score.subIndustry}</span>{score.sector && ` (${score.sector})`}</div>}
+          <div className="space-y-1.5">
+            <ScoreBar label="Growth" value={score.growth} max={score.maxGrowth} color="#22c55e" />
+            <ScoreBar label="Profitability" value={score.profitability} max={score.maxProfit} color="#3b82f6" />
+            <ScoreBar label="Earnings Quality" value={score.earningsQuality} max={score.maxEarningsQ} color="#a855f7" />
+            <ScoreBar label="Forward Outlook" value={score.forwardOutlook} max={score.maxForward} color="#f59e0b" />
+            <ScoreBar label="Dilution Risk" value={score.dilutionRisk} max={score.maxDilution} color="#ef4444" />
+            <ScoreBar label="Capital Structure" value={score.capitalStructure} max={score.maxCapital} color="#06b6d4" />
+            <ScoreBar label="Ownership" value={score.ownership} max={score.maxOwnership} color="#8b5cf6" />
+          </div>
+          {score.details.length > 0 && (
+            <div className="mt-2 pt-2 border-t border-bloomberg-border">
+              {score.details.map((d, i) => (
+                <div key={i} className="text-[8px] text-muted-foreground">{d}</div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  )
+}
+
+function ScoreBar({ label, value, max, color }: { label: string; value: number; max: number; color: string }) {
+  const pct = max > 0 ? (value / max) * 100 : 0
+  return (
+    <div className="flex items-center gap-2">
+      <span className="text-[8px] text-muted-foreground w-[85px] shrink-0 truncate">{label}</span>
+      <div className="flex-1 h-1.5 bg-bloomberg-bg rounded-full overflow-hidden">
+        <div className="h-full rounded-full transition-all" style={{ width: `${pct}%`, backgroundColor: color }} />
+      </div>
+      <span className="text-[8px] text-foreground font-bold w-8 text-right">{value}/{max}</span>
     </div>
   )
 }

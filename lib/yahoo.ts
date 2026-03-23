@@ -278,6 +278,7 @@ export interface EarningsData {
   gaapEpsTTM: number | null
   ownership: OwnershipData | null
   sector: string | null
+  industry: string | null
 }
 
 export async function fetchEarnings(symbol: string): Promise<EarningsData> {
@@ -595,14 +596,16 @@ export async function fetchEarnings(symbol: string): Promise<EarningsData> {
     }
   } catch { /* graceful */ }
 
-  // Sector (for bank detection in reconciliation)
+  // Sector & Industry (for scoring benchmarks)
   let sector: string | null = null
+  let industry: string | null = null
   try {
     const profileResult: any = await yf.quoteSummary(symbol, { modules: ["assetProfile"] })
     sector = profileResult.assetProfile?.sector ?? null
+    industry = profileResult.assetProfile?.industry ?? null
   } catch { /* graceful */ }
 
-  return { quarterly, financials, forwardEstimates, incomeStatements, annualStatements, cashFlowQuarterly, cashFlowAnnual, balanceSheetQuarterly, balanceSheetAnnual, gaapEpsTTM, ownership, sector }
+  return { quarterly, financials, forwardEstimates, incomeStatements, annualStatements, cashFlowQuarterly, cashFlowAnnual, balanceSheetQuarterly, balanceSheetAnnual, gaapEpsTTM, ownership, sector, industry }
 }
 
 export interface HistoricalPrice {
