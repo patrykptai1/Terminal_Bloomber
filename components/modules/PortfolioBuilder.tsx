@@ -28,6 +28,7 @@ function savePortfolio(entries: PortfolioEntry[]) {
 export default function PortfolioBuilder() {
   const [entries, setEntries] = useState<PortfolioEntry[]>([])
   const [quotes, setQuotes] = useState<Record<string, QuoteData>>({})
+  const [fxRates, setFxRates] = useState<Record<string, number>>({ USD: 1 })
   const [newTicker, setNewTicker] = useState("")
   const [newShares, setNewShares] = useState("")
   const [newAvgPrice, setNewAvgPrice] = useState("")
@@ -62,11 +63,22 @@ export default function PortfolioBuilder() {
         map[q.symbol] = q
       }
       setQuotes(map)
+      if (json.fxRates) setFxRates(json.fxRates)
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : "Failed to fetch quotes")
     } finally {
       setLoading(false)
     }
+  }
+
+  // Convert amount from any currency to the portfolio base currency
+  const toBase = (amount: number, currency: string, baseCurrency: string): number => {
+    if (currency === baseCurrency) return amount
+    // Convert to USD first, then to base
+    const toUsd = fxRates[currency] ?? 1
+    const fromUsd = fxRates[baseCurrency] ?? 1
+    if (fromUsd === 0) return amount
+    return (amount * toUsd) / fromUsd
   }
 
   const addEntry = () => {
@@ -90,20 +102,36 @@ export default function PortfolioBuilder() {
     savePortfolio(updated)
   }
 
-  // Calculate totals
-  let totalCost = 0
-  let totalValue = 0
+  // Determine base currency: use the currency of the largest position by value
   const currencies = new Set<string>()
   entries.forEach((e) => {
     const q = quotes[e.ticker]
-    totalCost += e.shares * e.avgPrice
-    totalValue += e.shares * (q?.price ?? e.avgPrice)
     if (q?.currency) currencies.add(q.currency)
+  })
+  const portfolioCurrency = (() => {
+    if (currencies.size <= 1) return [...currencies][0] ?? "USD"
+    // Pick currency of the largest position (by value in USD)
+    let maxVal = 0, maxCur = "USD"
+    entries.forEach((e) => {
+      const q = quotes[e.ticker]
+      if (!q) return
+      const valUsd = e.shares * q.price * (fxRates[q.currency] ?? 1)
+      if (valUsd > maxVal) { maxVal = valUsd; maxCur = q.currency }
+    })
+    return maxCur
+  })()
+
+  // Calculate totals with currency conversion
+  let totalCost = 0
+  let totalValue = 0
+  entries.forEach((e) => {
+    const q = quotes[e.ticker]
+    const cur = q?.currency ?? "USD"
+    totalCost += toBase(e.shares * e.avgPrice, cur, portfolioCurrency)
+    totalValue += toBase(e.shares * (q?.price ?? e.avgPrice), cur, portfolioCurrency)
   })
   const totalPnl = totalValue - totalCost
   const totalPnlPct = totalCost > 0 ? (totalPnl / totalCost * 100) : 0
-  // Use single currency if all positions share one, otherwise default to USD
-  const portfolioCurrency = currencies.size === 1 ? [...currencies][0] : "USD"
 
   return (
     <div className="space-y-4">
@@ -174,6 +202,12 @@ export default function PortfolioBuilder() {
       {entries.length > 0 && (
         <>
           <div className="bg-bloomberg-card border border-bloomberg-border rounded p-4">
+            {currencies.size > 1 && (
+              <div className="text-[9px] text-muted-foreground mb-2 text-right">
+                Wartości przeliczone na {portfolioCurrency}
+                {fxRates["PLN"] ? ` | 1 PLN = ${fxRates["PLN"].toFixed(4)} USD` : ""}
+              </div>
+            )}
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 text-center">
               <div>
                 <div className="text-xs text-muted-foreground">TOTAL COST</div>
@@ -218,12 +252,17 @@ export default function PortfolioBuilder() {
                 <tbody>
                   {entries.map((entry, i) => {
                     const q = quotes[entry.ticker]
+                    const cur = q?.currency ?? "USD"
                     const currentPrice = q?.price ?? entry.avgPrice
                     const value = entry.shares * currentPrice
                     const cost = entry.shares * entry.avgPrice
                     const pnl = value - cost
                     const pnlPct = cost > 0 ? (pnl / cost * 100) : 0
-                    const alloc = totalValue > 0 ? (value / totalValue * 100) : 0
+                    // Convert everything to portfolio base currency
+                    const valueInBase = toBase(value, cur, portfolioCurrency)
+                    const costInBase = toBase(cost, cur, portfolioCurrency)
+                    const pnlInBase = valueInBase - costInBase
+                    const alloc = totalValue > 0 ? (valueInBase / totalValue * 100) : 0
                     return (
                       <tr key={i} className="border-b border-bloomberg-border/30 hover:bg-bloomberg-bg/50">
                         <td className="py-2 px-3">
@@ -231,8 +270,12 @@ export default function PortfolioBuilder() {
                           {q && <span className="text-muted-foreground ml-1 text-[10px]">{alloc.toFixed(1)}%</span>}
                         </td>
                         <td className="py-2 px-3 text-right">{entry.shares}</td>
-                        <td className="py-2 px-3 text-right">{q ? fmtCurrencyPrice(entry.avgPrice, q.currency) : `$${entry.avgPrice.toFixed(2)}`}</td>
-                        <td className="py-2 px-3 text-right font-bold">{q ? fmtCurrencyPrice(q.price, q.currency) : "..."}</td>
+                        <td className="py-2 px-3 text-right">
+                          {q ? fmtCurrencyPrice(entry.avgPrice, q.currency) : `$${entry.avgPrice.toFixed(2)}`}
+                        </td>
+                        <td className="py-2 px-3 text-right font-bold">
+                          {q ? fmtCurrencyPrice(q.price, q.currency) : "..."}
+                        </td>
                         <td className={`py-2 px-3 text-right ${(q?.changePercent ?? 0) >= 0 ? "text-bloomberg-green" : "text-bloomberg-red"}`}>
                           {q ? (
                             <span className="inline-flex items-center gap-0.5">
@@ -241,9 +284,9 @@ export default function PortfolioBuilder() {
                             </span>
                           ) : "..."}
                         </td>
-                        <td className="py-2 px-3 text-right">{q ? fmtCurrencyPrice(value, q.currency) : `$${value.toFixed(2)}`}</td>
-                        <td className={`py-2 px-3 text-right font-bold ${pnl >= 0 ? "text-bloomberg-green" : "text-bloomberg-red"}`}>
-                          {pnl >= 0 ? "+" : "-"}{q ? fmtCurrencyPrice(Math.abs(pnl), q.currency) : Math.abs(pnl).toFixed(2)}
+                        <td className="py-2 px-3 text-right">{fmtCurrencyPrice(valueInBase, portfolioCurrency)}</td>
+                        <td className={`py-2 px-3 text-right font-bold ${pnlInBase >= 0 ? "text-bloomberg-green" : "text-bloomberg-red"}`}>
+                          {pnlInBase >= 0 ? "+" : "-"}{fmtCurrencyPrice(Math.abs(pnlInBase), portfolioCurrency)}
                         </td>
                         <td className={`py-2 px-3 text-right ${pnlPct >= 0 ? "text-bloomberg-green" : "text-bloomberg-red"}`}>
                           {pnlPct >= 0 ? "+" : ""}{pnlPct.toFixed(2)}%

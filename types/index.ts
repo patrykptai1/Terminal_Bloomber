@@ -140,4 +140,3 @@ export type TabId =
   | "analyst"
   | "sectors"
   | "worldnews"
-  | "sankey"

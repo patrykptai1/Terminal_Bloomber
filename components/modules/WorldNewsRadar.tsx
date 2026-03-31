@@ -441,22 +441,41 @@ export default function WorldNewsRadar() {
 // --- Translation cache (persists across re-renders) ---
 const translationCache = new Map<string, string>()
 
-async function translateToPL(text: string): Promise<string> {
-  const cached = translationCache.get(text)
-  if (cached) return cached
+async function translateChunk(text: string): Promise<string> {
   try {
-    // MyMemory allows up to 500 chars per request
-    const chunk = text.slice(0, 500)
     const res = await fetch(
-      `https://api.mymemory.translated.net/get?q=${encodeURIComponent(chunk)}&langpair=en|pl`
+      `https://api.mymemory.translated.net/get?q=${encodeURIComponent(text)}&langpair=en|pl`
     )
     if (!res.ok) return text
     const data = await res.json()
     const translated = data?.responseData?.translatedText || text
-    // MyMemory returns UPPERCASE when low confidence — normalize
-    const result = translated === translated.toUpperCase() && translated.length > 20
-      ? text // fallback to original if all caps (bad translation)
-      : translated
+    return translated === translated.toUpperCase() && translated.length > 20 ? text : translated
+  } catch {
+    return text
+  }
+}
+
+async function translateToPL(text: string): Promise<string> {
+  const cached = translationCache.get(text)
+  if (cached) return cached
+  try {
+    // Split into ~480 char chunks at sentence boundaries
+    const chunks: string[] = []
+    let remaining = text
+    while (remaining.length > 0) {
+      if (remaining.length <= 480) {
+        chunks.push(remaining)
+        break
+      }
+      // Find last sentence end within 480 chars
+      const slice = remaining.slice(0, 480)
+      const lastDot = Math.max(slice.lastIndexOf(". "), slice.lastIndexOf("? "), slice.lastIndexOf("! "))
+      const splitAt = lastDot > 100 ? lastDot + 2 : 480
+      chunks.push(remaining.slice(0, splitAt))
+      remaining = remaining.slice(splitAt)
+    }
+    const translated = await Promise.all(chunks.map(c => translateChunk(c)))
+    const result = translated.join(" ")
     translationCache.set(text, result)
     return result
   } catch {
@@ -479,7 +498,19 @@ function buildTranslationText(item: WorldNewsItem): string {
   const impactEN = item.impact === "high" ? "High market impact expected" : item.impact === "medium" ? "Moderate market impact" : "Low direct market impact"
   const region = REGION_LABELS[item.region] || item.region
 
-  return `${item.title}. This news relates to ${catEN[item.category] || item.category} in the ${region} region. Source: ${item.source}. Analyst assessment: ${sentEN}. ${impactEN}. Investors should monitor this development closely.`
+  const impactDetails = item.impact === "high"
+    ? "This development could significantly move markets in the short term, affecting major indices and sector ETFs. Portfolio managers should reassess exposure to affected sectors and consider hedging strategies."
+    : item.impact === "medium"
+    ? "This is expected to have a moderate effect on related sectors. Investors should watch for follow-up developments and earnings revisions in affected companies."
+    : "While the direct market impact is limited, this may signal a longer-term trend worth monitoring for strategic positioning."
+
+  const sentDetails = item.sentiment === "positive"
+    ? "The overall tone is constructive, suggesting potential opportunities for growth-oriented investors. Markets may react favorably in related sectors."
+    : item.sentiment === "negative"
+    ? "The negative outlook raises concerns about downside risk. Defensive positioning and careful risk management are advisable. Watch for contagion effects across correlated assets."
+    : "The situation remains balanced with both upside and downside scenarios possible. Key data points in coming days will determine the directional bias."
+
+  return `${item.title}. This news concerns ${catEN[item.category] || item.category} in the ${region} region, reported by ${item.source}. ${sentDetails} ${impactDetails}`
 }
 
 // --- Shared tooltip hook ---
@@ -540,7 +571,7 @@ function TooltipPortal({ show, tooltipPos, loading, tooltip, item }: {
 
   return createPortal(
     <div
-      className="fixed z-[9999] w-[360px] bg-gray-900 border border-bloomberg-green/40 rounded-lg p-3 shadow-lg shadow-black/50 pointer-events-none font-mono"
+      className="fixed z-[9999] w-[440px] max-h-[400px] overflow-y-auto bg-gray-900 border border-bloomberg-green/40 rounded-lg p-3 shadow-lg shadow-black/50 pointer-events-none font-mono"
       style={{ left: tooltipPos.x, top: tooltipPos.y }}
     >
       <div className="text-xs text-bloomberg-green font-bold mb-1.5 tracking-wider">PODSUMOWANIE</div>

@@ -186,6 +186,529 @@ function buildSnapshot(e: EarningsData, q: QuoteData, fcfTTM: TTMPoint[], revenu
 }
 
 /* ══════════════════════════════════════════════════════════════
+   FINANCIAL REPORT — Raport finansowy (algorytmiczny)
+   ══════════════════════════════════════════════════════════════ */
+
+function FinancialReport({ earnings: e, quote: q, currency }: { earnings: EarningsData; quote: QuoteData; currency: string }) {
+  const ann = (e.annualStatements ?? []).filter(a => a.revenue != null).sort((a, b) => a.date.localeCompare(b.date))
+  const qtr = (e.incomeStatements ?? []).filter(a => a.revenue != null).sort((a, b) => a.date.localeCompare(b.date)).slice(-8) // last 8 quarters
+  const cfAnn = (e.cashFlowAnnual ?? []).sort((a, b) => a.date.localeCompare(b.date))
+  const bsAnn = (e.balanceSheetAnnual ?? []).sort((a, b) => a.date.localeCompare(b.date))
+  const bsQ = (e.balanceSheetQuarterly ?? []).sort((a, b) => a.date.localeCompare(b.date))
+
+  if (ann.length < 1) return null
+
+  const latest = ann[ann.length - 1]
+  const latestBS = bsQ.length > 0 ? bsQ[bsQ.length - 1] : bsAnn.length > 0 ? bsAnn[bsAnn.length - 1] : null
+  const latestCF = cfAnn.length > 0 ? cfAnn[cfAnn.length - 1] : null
+
+  const pct = (part: number | null, whole: number | null) => (part != null && whole != null && whole !== 0) ? ((part / whole) * 100).toFixed(1) + "%" : "—"
+  const chg = (curr: number | null, prev: number | null) => (curr != null && prev != null && prev !== 0) ? (((curr - prev) / Math.abs(prev)) * 100).toFixed(1) : null
+  const valColor = (v: number | null) => v == null ? "text-muted-foreground" : v > 0 ? "text-bloomberg-green" : v < 0 ? "text-bloomberg-red" : "text-muted-foreground"
+  const fmtV = (v: number | null) => v != null ? fmtBigValue(v, currency) : "—"
+  const pctColor = (s: string | null) => {
+    if (!s || s === "—") return "text-muted-foreground"
+    const n = parseFloat(s)
+    return n > 0 ? "text-bloomberg-green" : n < 0 ? "text-bloomberg-red" : "text-muted-foreground"
+  }
+
+  // ── P&L WATERFALL rows ──
+  type PLRow = { label: string; key: string; indent?: boolean; isBold?: boolean; isSubtotal?: boolean }
+  const plRows: PLRow[] = [
+    { label: "Przychody", key: "revenue", isBold: true },
+    { label: "Koszt własny sprzedaży", key: "costOfRevenue", indent: true },
+    { label: "ZYSK BRUTTO", key: "grossProfit", isBold: true, isSubtotal: true },
+    { label: "SG&A (Sprzedaż, administracja)", key: "sga", indent: true },
+    { label: "R&D (Badania i rozwój)", key: "rd", indent: true },
+    { label: "ZYSK OPERACYJNY", key: "operatingIncome", isBold: true, isSubtotal: true },
+    { label: "Odsetki", key: "interest", indent: true },
+    { label: "Podatki", key: "tax", indent: true },
+    { label: "Pozostałe", key: "other", indent: true },
+    { label: "ZYSK NETTO", key: "netIncome", isBold: true, isSubtotal: true },
+  ]
+
+  const getPlValue = (a: typeof ann[0], key: string): number | null => {
+    switch (key) {
+      case "revenue": return a.revenue
+      case "costOfRevenue": return a.costOfRevenue != null ? -Math.abs(a.costOfRevenue) : null
+      case "grossProfit": return a.grossProfit ?? (a.revenue != null && a.costOfRevenue != null ? a.revenue - a.costOfRevenue : null)
+      case "sga": return a.sellingGeneralAndAdministration != null ? -Math.abs(a.sellingGeneralAndAdministration) : null
+      case "rd": return a.researchAndDevelopment != null ? -Math.abs(a.researchAndDevelopment) : null
+      case "operatingIncome": return a.operatingIncome
+      case "interest": return a.interestExpense != null ? -Math.abs(a.interestExpense) : null
+      case "tax": return a.taxProvision != null ? -Math.abs(a.taxProvision) : null
+      case "other": return a.otherIncomeExpense
+      case "netIncome": return a.netIncome
+      default: return null
+    }
+  }
+
+  // ── ONE-TIME ITEM DETECTION ──
+  // Detect if a value is a one-time/non-recurring anomaly:
+  // 1. Compare each value to median of the series
+  // 2. If |value| > 3× median AND significant vs revenue (>5%), flag it
+  // 3. Only flag non-subtotal, non-revenue rows (interest, tax, other)
+  const oneTimeKeys = new Set(["other", "tax", "interest", "sga", "rd", "costOfRevenue"])
+  const isOneTimeItem = (key: string, vals: (number | null)[], idx: number, rev: number | null): boolean => {
+    if (!oneTimeKeys.has(key)) return false
+    const v = vals[idx]
+    if (v == null || rev == null || rev === 0) return false
+    // Must be significant relative to revenue (>5%)
+    if (Math.abs(v) / Math.abs(rev) < 0.05) return false
+    // Get non-null values for comparison
+    const nonNull = vals.filter((x): x is number => x != null)
+    if (nonNull.length < 3) return false
+    // Calculate median absolute value
+    const sorted = nonNull.map(x => Math.abs(x)).sort((a, b) => a - b)
+    const median = sorted[Math.floor(sorted.length / 2)]
+    if (median === 0) return Math.abs(v) > 0
+    // Flag if this value is >3× the median
+    return Math.abs(v) / median > 3
+  }
+
+  // ── BALANCE SHEET rows ──
+  type BSRow = { label: string; getValue: (b: typeof latestBS) => number | null; isBold?: boolean; isRatio?: boolean; ratioFn?: (b: typeof latestBS) => string }
+  const bsRows: BSRow[] = [
+    { label: "Gotówka i ekwiwalenty", getValue: b => b?.cashAndEquivalents ?? null },
+    { label: "Aktywa obrotowe", getValue: b => b?.currentAssets ?? null },
+    { label: "Aktywa razem", getValue: b => b?.totalAssets ?? null, isBold: true },
+    { label: "Goodwill", getValue: b => b?.goodwill ?? null },
+    { label: "Wartości niematerialne", getValue: b => b?.intangibleAssets ?? null },
+    { label: "Zobowiązania bieżące", getValue: b => b?.currentLiabilities ?? null },
+    { label: "Dług", getValue: b => b?.totalDebt ?? null },
+    { label: "Zobowiązania razem", getValue: b => b?.totalLiabilities ?? null, isBold: true },
+    { label: "Kapitał własny", getValue: b => b?.stockholdersEquity ?? null, isBold: true },
+    { label: "Zyski zatrzymane", getValue: b => b?.retainedEarnings ?? null },
+    { label: "Należności", getValue: b => b?.accountsReceivable ?? null },
+  ]
+
+  // ── CASH FLOW rows ──
+  type CFRow = { label: string; getValue: (c: typeof latestCF) => number | null; isBold?: boolean }
+  const cfRows: CFRow[] = [
+    { label: "Przepływy operacyjne (OCF)", getValue: c => c?.operatingCashFlow ?? null, isBold: true },
+    { label: "CapEx", getValue: c => c?.capitalExpenditure ?? null },
+    { label: "Free Cash Flow (FCF)", getValue: c => c?.freeCashFlow ?? null, isBold: true },
+    { label: "SBC (wynagrodzenie akcjami)", getValue: c => c?.stockBasedCompensation ?? null },
+    { label: "Buyback (skup akcji)", getValue: c => c?.repurchaseOfStock ?? null },
+    { label: "Emisja akcji", getValue: c => c?.issuanceOfStock ?? null },
+  ]
+
+  // ── ALGORITHMIC COMMENTARY ──
+  const comments: { text: string; type: "good" | "warn" | "bad" | "neutral" }[] = []
+
+  // Revenue growth
+  if (ann.length >= 2) {
+    const first = ann[0]; const last = ann[ann.length - 1]
+    if (first.revenue && last.revenue) {
+      const totalGrowth = ((last.revenue - first.revenue) / Math.abs(first.revenue)) * 100
+      const years = ann.length - 1
+      const cagr = years > 0 ? ((Math.pow(last.revenue / first.revenue, 1 / years) - 1) * 100) : 0
+      comments.push({
+        text: `Przychody wzrosły z ${fmtV(first.revenue)} (${yearFromDate(first.date)}) do ${fmtV(last.revenue)} (${yearFromDate(last.date)}), CAGR: ${cagr.toFixed(1)}%.`,
+        type: cagr > 15 ? "good" : cagr > 5 ? "neutral" : cagr > 0 ? "warn" : "bad"
+      })
+    }
+  }
+
+  // Gross Margin
+  if (latest.grossProfit != null && latest.revenue) {
+    const gm = (latest.grossProfit / latest.revenue) * 100
+    comments.push({
+      text: `Marża brutto: ${gm.toFixed(1)}% — ${gm > 60 ? "wysoka, silna pozycja cenowa" : gm > 40 ? "umiarkowana" : gm > 20 ? "niska, presja kosztowa" : "bardzo niska, model niskomarżowy"}.`,
+      type: gm > 50 ? "good" : gm > 30 ? "neutral" : "warn"
+    })
+  }
+
+  // SG&A discipline
+  if (latest.sellingGeneralAndAdministration != null && latest.revenue) {
+    const sgaPct = (latest.sellingGeneralAndAdministration / latest.revenue) * 100
+    comments.push({
+      text: `SG&A stanowi ${sgaPct.toFixed(1)}% przychodów — ${sgaPct > 40 ? "bardzo wysoki, brak dźwigni operacyjnej" : sgaPct > 25 ? "podwyższony, wymaga optymalizacji" : "kontrolowany"}.`,
+      type: sgaPct < 25 ? "good" : sgaPct < 40 ? "warn" : "bad"
+    })
+    // Check SG&A scaling over time
+    if (ann.length >= 2) {
+      const prev = ann[ann.length - 2]
+      if (prev.sellingGeneralAndAdministration && prev.revenue && latest.revenue) {
+        const sgaGrowth = ((latest.sellingGeneralAndAdministration - prev.sellingGeneralAndAdministration) / Math.abs(prev.sellingGeneralAndAdministration)) * 100
+        const revGrowth = ((latest.revenue - prev.revenue) / Math.abs(prev.revenue)) * 100
+        if (revGrowth > sgaGrowth + 5) {
+          comments.push({ text: `Pozytywny sygnał: przychody rosną szybciej (${revGrowth.toFixed(1)}%) niż SG&A (${sgaGrowth.toFixed(1)}%) — pojawia się dźwignia operacyjna.`, type: "good" })
+        } else if (sgaGrowth > revGrowth + 5) {
+          comments.push({ text: `Negatywny sygnał: SG&A (${sgaGrowth.toFixed(1)}%) rośnie szybciej niż przychody (${revGrowth.toFixed(1)}%) — brak skalowalności.`, type: "bad" })
+        }
+      }
+    }
+  }
+
+  // Operating income trend
+  if (latest.operatingIncome != null && ann.length >= 2) {
+    const prev = ann[ann.length - 2]
+    if (prev.operatingIncome != null) {
+      if (prev.operatingIncome < 0 && latest.operatingIncome >= 0) {
+        comments.push({ text: `Zysk operacyjny przeszedł z ujemnego (${fmtV(prev.operatingIncome)}) na dodatni (${fmtV(latest.operatingIncome)}) — punkt zwrotny.`, type: "good" })
+      } else if (latest.operatingIncome < 0) {
+        comments.push({ text: `Zysk operacyjny wciąż ujemny: ${fmtV(latest.operatingIncome)}.`, type: "bad" })
+      }
+    }
+  }
+
+  // Balance sheet: goodwill risk
+  if (latestBS?.goodwill != null && latestBS?.totalAssets != null && latestBS.totalAssets > 0) {
+    const gwPct = ((latestBS.goodwill + (latestBS.intangibleAssets ?? 0)) / latestBS.totalAssets) * 100
+    if (gwPct > 30) {
+      comments.push({ text: `Goodwill + wartości niematerialne stanowią ${gwPct.toFixed(0)}% aktywów — wzrost oparty na akwizycjach, ryzyko odpisów.`, type: "warn" })
+    }
+  }
+
+  // Balance sheet: liquidity
+  if (latestBS?.currentAssets != null && latestBS?.currentLiabilities != null && latestBS.currentLiabilities > 0) {
+    const cr = latestBS.currentAssets / latestBS.currentLiabilities
+    comments.push({
+      text: `Wskaźnik płynności bieżącej: ${cr.toFixed(2)}x — ${cr > 2 ? "silna płynność" : cr > 1.2 ? "wystarczająca płynność" : cr > 1 ? "napięta płynność, do obserwacji" : "poniżej 1.0x — ryzyko płynnościowe"}.`,
+      type: cr > 1.5 ? "good" : cr > 1 ? "warn" : "bad"
+    })
+  }
+
+  // Retained earnings
+  if (latestBS?.retainedEarnings != null && latestBS.retainedEarnings < 0) {
+    comments.push({ text: `Zyski zatrzymane głęboko ujemne (${fmtV(latestBS.retainedEarnings)}) — historycznie akcjonariusze finansowali straty.`, type: "warn" })
+  }
+
+  // Debt
+  if (latestBS?.totalDebt != null && latest.revenue) {
+    const debtToRev = (latestBS.totalDebt / latest.revenue) * 100
+    comments.push({
+      text: `Dług: ${fmtV(latestBS.totalDebt)} (${debtToRev.toFixed(0)}% przychodów) — ${debtToRev > 100 ? "wysoki" : debtToRev > 50 ? "umiarkowany" : "niski"}.`,
+      type: debtToRev < 50 ? "good" : debtToRev < 100 ? "neutral" : "warn"
+    })
+  }
+
+  // Cash flow: OCF quality
+  if (latestCF?.operatingCashFlow != null && latest.revenue) {
+    const ocfMargin = (latestCF.operatingCashFlow / latest.revenue) * 100
+    comments.push({
+      text: `OCF margin: ${ocfMargin.toFixed(1)}% — ${ocfMargin > 20 ? "silna konwersja gotówkowa" : ocfMargin > 10 ? "przyzwoita" : ocfMargin > 0 ? "słaba" : "ujemna — firma spala gotówkę"}.`,
+      type: ocfMargin > 15 ? "good" : ocfMargin > 5 ? "neutral" : "bad"
+    })
+  }
+
+  // SBC vs FCF
+  if (latestCF?.stockBasedCompensation != null && latestCF?.freeCashFlow != null && latestCF.freeCashFlow > 0) {
+    const sbcPctFcf = (latestCF.stockBasedCompensation / latestCF.freeCashFlow) * 100
+    if (sbcPctFcf > 80) {
+      comments.push({ text: `SBC stanowi ${sbcPctFcf.toFixed(0)}% FCF — większość wolnej gotówki to efekt dystrybucji kosztu przez rozwodnienie, nie realny zysk.`, type: "bad" })
+    } else if (sbcPctFcf > 40) {
+      comments.push({ text: `SBC stanowi ${sbcPctFcf.toFixed(0)}% FCF — znacząca część gotówki pochodzi z kompensacji akcjami.`, type: "warn" })
+    }
+  }
+
+  // Buybacks
+  if (latestCF?.repurchaseOfStock != null && Math.abs(latestCF.repurchaseOfStock) > 0) {
+    comments.push({
+      text: `Skup akcji: ${fmtV(Math.abs(latestCF.repurchaseOfStock))} — ${latestCF.issuanceOfStock != null && latestCF.issuanceOfStock > 0 ? "ale jednocześnie emitowano nowe akcje" : "firma zwraca kapitał akcjonariuszom"}.`,
+      type: "neutral"
+    })
+  }
+
+  return (
+    <div className="space-y-3">
+      <div className="border-t border-bloomberg-border pt-4 mt-2" />
+      <div className="text-xs text-bloomberg-amber font-bold tracking-wider">📊 RAPORT FINANSOWY — OSTATNIE SPRAWOZDANIE</div>
+
+      {/* ── P&L WATERFALL ── */}
+      <div className="bg-bloomberg-card border border-bloomberg-border rounded p-4">
+        <div className="text-[10px] text-bloomberg-amber font-bold mb-3">RACHUNEK ZYSKÓW I STRAT (ROCZNY)</div>
+        <div className="overflow-x-auto">
+          <table className="w-full text-[9px]">
+            <thead>
+              <tr className="border-b border-bloomberg-border">
+                <th className="text-left py-1.5 text-muted-foreground sticky left-0 bg-bloomberg-card z-10 min-w-[160px]">POZYCJA</th>
+                {ann.map((a, i) => (
+                  <th key={i} className="text-right py-1.5 text-muted-foreground min-w-[90px]">{yearFromDate(a.date)}</th>
+                ))}
+                {ann.length >= 2 && <th className="text-right py-1.5 text-muted-foreground min-w-[70px]">YoY</th>}
+              </tr>
+            </thead>
+            <tbody>
+              {plRows.map((row, ri) => {
+                const vals = ann.map(a => getPlValue(a, row.key))
+                const lastTwo = vals.length >= 2 ? [vals[vals.length - 2], vals[vals.length - 1]] : null
+                const yoyVal = lastTwo && lastTwo[0] != null && lastTwo[1] != null && lastTwo[0] !== 0 ? chg(lastTwo[1], lastTwo[0]) : null
+                return (
+                  <tr key={ri} className={`border-b border-bloomberg-border/30 ${row.isSubtotal ? "bg-bloomberg-bg/30" : ""}`}>
+                    <td className={`py-1.5 sticky left-0 bg-bloomberg-card z-10 ${row.indent ? "pl-3 text-muted-foreground" : ""} ${row.isBold ? "font-bold text-foreground" : ""}`}>
+                      {row.label}
+                    </td>
+                    {vals.map((v, vi) => {
+                      const flagged = isOneTimeItem(row.key, vals, vi, ann[vi].revenue)
+                      return (
+                        <td key={vi} className={`py-1.5 text-right ${row.isBold ? "font-bold" : ""} ${row.isSubtotal ? valColor(v) : v != null && v < 0 ? "text-bloomberg-red/70" : "text-muted-foreground"}`}>
+                          {fmtV(v)}
+                          {row.isSubtotal && v != null && ann[vi].revenue ? (
+                            <span className="text-[7px] text-muted-foreground/60 ml-0.5">({pct(v, ann[vi].revenue)})</span>
+                          ) : null}
+                          {flagged && (
+                            <span className="ml-1 text-[7px] text-yellow-400 border border-yellow-400/40 rounded px-0.5" title="Pozycja jednorazowa — odbiega znacząco od normy historycznej">1x</span>
+                          )}
+                        </td>
+                      )
+                    })}
+                    {ann.length >= 2 && (
+                      <td className={`py-1.5 text-right font-bold ${pctColor(yoyVal)}`}>
+                        {yoyVal != null ? `${parseFloat(yoyVal) > 0 ? "+" : ""}${yoyVal}%` : "—"}
+                      </td>
+                    )}
+                  </tr>
+                )
+              })}
+            </tbody>
+          </table>
+        </div>
+        <Explainer text="Wartości ujemne oznaczają koszty. % w nawiasach to udział w przychodach. YoY = zmiana ostatni rok vs poprzedni. Tag [1x] = pozycja jednorazowa." />
+
+        {/* ── P&L VISUAL BAR (stacked for latest year) ── */}
+        {latest.revenue != null && latest.revenue > 0 && (
+          <div className="mt-3">
+            <div className="text-[8px] text-muted-foreground mb-1.5">STRUKTURA KOSZTÓW — {yearFromDate(latest.date)}</div>
+            {(() => {
+              const rev = latest.revenue!
+              const items = [
+                { label: "Koszt sprzedaży", val: latest.costOfRevenue, color: "bg-red-600/60" },
+                { label: "SG&A", val: latest.sellingGeneralAndAdministration, color: "bg-red-500/50" },
+                { label: "R&D", val: latest.researchAndDevelopment, color: "bg-orange-500/50" },
+              ].filter(x => x.val != null && x.val > 0) as { label: string; val: number; color: string }[]
+              const totalCost = items.reduce((s, x) => s + x.val, 0)
+              const profit = rev - totalCost
+              return (
+                <div className="space-y-1">
+                  <div className="flex h-5 rounded overflow-hidden border border-bloomberg-border/30">
+                    {items.map((item, i) => (
+                      <div key={i} className={`${item.color} flex items-center justify-center text-[7px] text-white/80 overflow-hidden`}
+                        style={{ width: `${(item.val / rev) * 100}%` }}>
+                        {(item.val / rev) * 100 > 8 ? `${item.label} ${((item.val / rev) * 100).toFixed(0)}%` : ""}
+                      </div>
+                    ))}
+                    <div className={`${profit >= 0 ? "bg-bloomberg-green/40" : "bg-bloomberg-red/40"} flex items-center justify-center text-[7px] text-white/80`}
+                      style={{ width: `${Math.max((Math.abs(profit) / rev) * 100, 2)}%` }}>
+                      {profit >= 0 ? `Zysk ${((profit / rev) * 100).toFixed(0)}%` : `Strata`}
+                    </div>
+                  </div>
+                  <div className="flex flex-wrap gap-3 text-[7px] text-muted-foreground">
+                    {items.map((item, i) => (
+                      <span key={i}><span className={`inline-block w-2 h-2 rounded-sm mr-0.5 ${item.color}`} />{item.label}: {fmtV(item.val)} ({((item.val / rev) * 100).toFixed(1)}%)</span>
+                    ))}
+                    <span><span className={`inline-block w-2 h-2 rounded-sm mr-0.5 ${profit >= 0 ? "bg-bloomberg-green/40" : "bg-bloomberg-red/40"}`} />
+                      Pozostałe/Zysk: {fmtV(profit)}
+                    </span>
+                  </div>
+                </div>
+              )
+            })()}
+          </div>
+        )}
+      </div>
+
+      {/* ── P&L QUARTERLY ── */}
+      {qtr.length > 0 && (
+        <div className="bg-bloomberg-card border border-bloomberg-border rounded p-4">
+          <div className="text-[10px] text-bloomberg-amber font-bold mb-3">RACHUNEK ZYSKÓW I STRAT (KWARTALNY)</div>
+          <div className="overflow-x-auto">
+            <table className="w-full text-[9px]">
+              <thead>
+                <tr className="border-b border-bloomberg-border">
+                  <th className="text-left py-1.5 text-muted-foreground sticky left-0 bg-bloomberg-card z-10 min-w-[160px]">POZYCJA</th>
+                  {qtr.map((q2, i) => (
+                    <th key={i} className="text-right py-1.5 text-muted-foreground min-w-[80px]">{shortQLabel(q2.date)}</th>
+                  ))}
+                  {qtr.length >= 2 && <th className="text-right py-1.5 text-muted-foreground min-w-[60px]">QoQ</th>}
+                </tr>
+              </thead>
+              <tbody>
+                {plRows.map((row, ri) => {
+                  const vals = qtr.map(a => getPlValue(a, row.key))
+                  const lastTwo = vals.length >= 2 ? [vals[vals.length - 2], vals[vals.length - 1]] : null
+                  const qoqVal = lastTwo && lastTwo[0] != null && lastTwo[1] != null && lastTwo[0] !== 0 ? chg(lastTwo[1], lastTwo[0]) : null
+                  return (
+                    <tr key={ri} className={`border-b border-bloomberg-border/30 ${row.isSubtotal ? "bg-bloomberg-bg/30" : ""}`}>
+                      <td className={`py-1.5 sticky left-0 bg-bloomberg-card z-10 ${row.indent ? "pl-3 text-muted-foreground" : ""} ${row.isBold ? "font-bold text-foreground" : ""}`}>
+                        {row.label}
+                      </td>
+                      {vals.map((v, vi) => {
+                        const flagged = isOneTimeItem(row.key, vals, vi, qtr[vi].revenue)
+                        return (
+                          <td key={vi} className={`py-1.5 text-right ${row.isBold ? "font-bold" : ""} ${row.isSubtotal ? valColor(v) : v != null && v < 0 ? "text-bloomberg-red/70" : "text-muted-foreground"}`}>
+                            {fmtV(v)}
+                            {row.isSubtotal && v != null && qtr[vi].revenue ? (
+                              <span className="text-[7px] text-muted-foreground/60 ml-0.5">({pct(v, qtr[vi].revenue)})</span>
+                            ) : null}
+                            {flagged && (
+                              <span className="ml-1 text-[7px] text-yellow-400 border border-yellow-400/40 rounded px-0.5" title="Pozycja jednorazowa — odbiega znacząco od normy historycznej">1x</span>
+                            )}
+                          </td>
+                        )
+                      })}
+                      {qtr.length >= 2 && (
+                        <td className={`py-1.5 text-right font-bold ${pctColor(qoqVal)}`}>
+                          {qoqVal != null ? `${parseFloat(qoqVal) > 0 ? "+" : ""}${qoqVal}%` : "—"}
+                        </td>
+                      )}
+                    </tr>
+                  )
+                })}
+              </tbody>
+            </table>
+          </div>
+          <Explainer text="Ostatnie 8 kwartałów. % w nawiasach to udział w przychodach. QoQ = zmiana vs poprzedni kwartał. Tag [1x] = pozycja jednorazowa." />
+        </div>
+      )}
+
+      {/* ── BALANCE SHEET ── */}
+      {latestBS && (latestBS.totalAssets != null || latestBS.totalDebt != null) && (
+        <div className="bg-bloomberg-card border border-bloomberg-border rounded p-4">
+          <div className="text-[10px] text-bloomberg-amber font-bold mb-3">BILANS — {latestBS.date ? shortQLabel(latestBS.date) : "OSTATNI"}</div>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {/* Assets */}
+            <div>
+              <div className="text-[8px] text-bloomberg-green font-bold mb-1.5">AKTYWA</div>
+              <table className="w-full text-[9px]">
+                <tbody>
+                  {bsRows.filter(r => ["Gotówka i ekwiwalenty", "Aktywa obrotowe", "Aktywa razem", "Goodwill", "Wartości niematerialne", "Należności"].includes(r.label)).map((row, i) => {
+                    const v = row.getValue(latestBS)
+                    if (v == null && !row.isBold) return null
+                    return (
+                      <tr key={i} className="border-b border-bloomberg-border/20">
+                        <td className={`py-1 ${row.isBold ? "font-bold" : "text-muted-foreground pl-2"}`}>{row.label}</td>
+                        <td className={`py-1 text-right ${row.isBold ? "font-bold text-bloomberg-green" : ""}`}>{fmtV(v)}</td>
+                      </tr>
+                    )
+                  })}
+                </tbody>
+              </table>
+            </div>
+            {/* Liabilities + Equity */}
+            <div>
+              <div className="text-[8px] text-bloomberg-red font-bold mb-1.5">PASYWA</div>
+              <table className="w-full text-[9px]">
+                <tbody>
+                  {bsRows.filter(r => ["Zobowiązania bieżące", "Dług", "Zobowiązania razem", "Kapitał własny", "Zyski zatrzymane"].includes(r.label)).map((row, i) => {
+                    const v = row.getValue(latestBS)
+                    if (v == null && !row.isBold) return null
+                    const isEquity = row.label === "Kapitał własny"
+                    return (
+                      <tr key={i} className="border-b border-bloomberg-border/20">
+                        <td className={`py-1 ${row.isBold ? "font-bold" : "text-muted-foreground pl-2"}`}>{row.label}</td>
+                        <td className={`py-1 text-right ${row.isBold ? `font-bold ${isEquity ? "text-bloomberg-blue" : "text-bloomberg-red"}` : ""} ${!row.isBold && v != null && v < 0 ? "text-bloomberg-red" : ""}`}>{fmtV(v)}</td>
+                      </tr>
+                    )
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          {/* Ratios */}
+          <div className="mt-3 flex flex-wrap gap-4 text-[9px]">
+            {latestBS.currentAssets != null && latestBS.currentLiabilities != null && latestBS.currentLiabilities > 0 && (
+              <div className="flex items-center gap-1">
+                <span className="text-muted-foreground">Płynność bieżąca:</span>
+                <span className={`font-bold ${(latestBS.currentAssets / latestBS.currentLiabilities) >= 1.2 ? "text-bloomberg-green" : "text-bloomberg-red"}`}>
+                  {(latestBS.currentAssets / latestBS.currentLiabilities).toFixed(2)}x
+                </span>
+              </div>
+            )}
+            {latestBS.totalDebt != null && latestBS.stockholdersEquity != null && latestBS.stockholdersEquity > 0 && (
+              <div className="flex items-center gap-1">
+                <span className="text-muted-foreground">Dług/Kapitał:</span>
+                <span className={`font-bold ${(latestBS.totalDebt / latestBS.stockholdersEquity) <= 1 ? "text-bloomberg-green" : "text-bloomberg-amber"}`}>
+                  {(latestBS.totalDebt / latestBS.stockholdersEquity).toFixed(2)}x
+                </span>
+              </div>
+            )}
+            {latestBS.goodwill != null && latestBS.totalAssets != null && latestBS.totalAssets > 0 && (
+              <div className="flex items-center gap-1">
+                <span className="text-muted-foreground">Goodwill/Aktywa:</span>
+                <span className={`font-bold ${((latestBS.goodwill + (latestBS.intangibleAssets ?? 0)) / latestBS.totalAssets) > 0.3 ? "text-bloomberg-amber" : "text-muted-foreground"}`}>
+                  {(((latestBS.goodwill + (latestBS.intangibleAssets ?? 0)) / latestBS.totalAssets) * 100).toFixed(1)}%
+                </span>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* ── CASH FLOW ANNUAL ── */}
+      {cfAnn.length > 0 && (
+        <div className="bg-bloomberg-card border border-bloomberg-border rounded p-4">
+          <div className="text-[10px] text-bloomberg-amber font-bold mb-3">PRZEPŁYWY PIENIĘŻNE (ROCZNE)</div>
+          <div className="overflow-x-auto">
+            <table className="w-full text-[9px]">
+              <thead>
+                <tr className="border-b border-bloomberg-border">
+                  <th className="text-left py-1.5 text-muted-foreground sticky left-0 bg-bloomberg-card z-10 min-w-[160px]">POZYCJA</th>
+                  {cfAnn.map((c, i) => (
+                    <th key={i} className="text-right py-1.5 text-muted-foreground min-w-[90px]">{yearFromDate(c.date)}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {cfRows.map((row, ri) => (
+                  <tr key={ri} className="border-b border-bloomberg-border/30">
+                    <td className={`py-1.5 sticky left-0 bg-bloomberg-card z-10 ${row.isBold ? "font-bold" : "text-muted-foreground pl-2"}`}>{row.label}</td>
+                    {cfAnn.map((c, ci) => {
+                      const v = row.getValue(c)
+                      return <td key={ci} className={`py-1.5 text-right ${row.isBold ? "font-bold" : ""} ${valColor(v)}`}>{fmtV(v)}</td>
+                    })}
+                  </tr>
+                ))}
+                {/* FCF - SBC row */}
+                <tr className="border-b border-bloomberg-border/30 bg-bloomberg-bg/30">
+                  <td className="py-1.5 sticky left-0 bg-bloomberg-card z-10 font-bold">FCF realny (FCF − SBC)</td>
+                  {cfAnn.map((c, ci) => {
+                    const fcf = c.freeCashFlow; const sbc = c.stockBasedCompensation
+                    const realFcf = fcf != null && sbc != null ? fcf - sbc : null
+                    return <td key={ci} className={`py-1.5 text-right font-bold ${valColor(realFcf)}`}>{fmtV(realFcf)}</td>
+                  })}
+                </tr>
+                {/* SBC % Revenue */}
+                {ann.length > 0 && (
+                  <tr className="border-b border-bloomberg-border/30">
+                    <td className="py-1.5 sticky left-0 bg-bloomberg-card z-10 text-muted-foreground pl-2">SBC % przychodów</td>
+                    {cfAnn.map((c, ci) => {
+                      const matchAnn = ann.find(a => yearFromDate(a.date) === yearFromDate(c.date))
+                      const sbcPct = c.stockBasedCompensation != null && matchAnn?.revenue ? ((c.stockBasedCompensation / matchAnn.revenue) * 100) : null
+                      return <td key={ci} className={`py-1.5 text-right ${sbcPct != null && sbcPct > 15 ? "text-bloomberg-red" : sbcPct != null && sbcPct > 8 ? "text-bloomberg-amber" : "text-muted-foreground"}`}>
+                        {sbcPct != null ? `${sbcPct.toFixed(1)}%` : "—"}
+                      </td>
+                    })}
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+          <Explainer text="FCF realny = Free Cash Flow minus SBC. Pokazuje ile gotówki firma generuje po uwzględnieniu rozwodnienia." />
+        </div>
+      )}
+
+      {/* ── KOMENTARZ ALGORYTMICZNY ── */}
+      {comments.length > 0 && (
+        <div className="bg-bloomberg-card border border-bloomberg-amber/30 rounded p-4">
+          <div className="text-[10px] text-bloomberg-amber font-bold mb-3">💬 KOMENTARZ — PODSUMOWANIE</div>
+          <div className="space-y-1.5">
+            {comments.map((c, i) => (
+              <div key={i} className="flex items-start gap-2 text-[10px]">
+                <span className="shrink-0 mt-0.5">{c.type === "good" ? "🟢" : c.type === "warn" ? "🟡" : c.type === "bad" ? "🔴" : "⚪"}</span>
+                <span className={c.type === "good" ? "text-bloomberg-green" : c.type === "bad" ? "text-bloomberg-red" : c.type === "warn" ? "text-bloomberg-amber" : "text-muted-foreground"}>{c.text}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
+/* ══════════════════════════════════════════════════════════════
    MAIN COMPONENT
    ══════════════════════════════════════════════════════════════ */
 
@@ -312,6 +835,113 @@ export default function EarningsReport() {
             </div>
             {hasGaapDiff && <Explainer text="GAAP uwzgl. koszty jednorazowe i SBC. Non-GAAP (Adjusted) je wyklucza." />}
           </div>
+
+          {/* ═══ RULE OF 40 (Tech only) ═══ */}
+          {(() => {
+            const sector = e.sector ?? ""
+            const isTech = sector === "Technology" || sector === "Information Technology" || sector === "Communication Services"
+            if (!isTech) return null
+
+            // Revenue Growth YoY (TTM vs previous year annual)
+            let revGrowth: number | null = null
+            if (revenueTTM.length > 0 && annualRevenue.length > 0) {
+              const latestTTMRev = revenueTTM[revenueTTM.length - 1].value
+              // Find previous FY revenue
+              const sortedAnnual = [...annualRevenue].filter(a => a.value != null && a.value > 0).sort((a, b) => a.date.localeCompare(b.date))
+              const prevFY = sortedAnnual.length >= 2 ? sortedAnnual[sortedAnnual.length - 2] : sortedAnnual[sortedAnnual.length - 1]
+              if (prevFY && prevFY.value && prevFY.value > 0 && latestTTMRev > 0) {
+                revGrowth = ((latestTTMRev - prevFY.value) / prevFY.value) * 100
+              }
+            }
+
+            // FCF Margin (TTM)
+            let fcfMargin: number | null = null
+            if (fcfTTM.length > 0 && revenueTTM.length > 0) {
+              const latFCF = fcfTTM[fcfTTM.length - 1].value
+              const latRev = revenueTTM[revenueTTM.length - 1].value
+              if (latRev > 0) fcfMargin = (latFCF / latRev) * 100
+            }
+
+            if (revGrowth == null || fcfMargin == null) return null
+
+            const rule40 = revGrowth + fcfMargin
+            const passed = rule40 >= 40
+            const tier = rule40 >= 60 ? { label: "JEDNOROŻEC", emoji: "🦄", color: "text-purple-400", border: "border-purple-500/40", bg: "bg-purple-500/10", glow: "shadow-purple-500/20" }
+              : rule40 >= 50 ? { label: "PERŁA", emoji: "💎", color: "text-cyan-400", border: "border-cyan-500/40", bg: "bg-cyan-500/10", glow: "shadow-cyan-500/20" }
+              : rule40 >= 40 ? { label: "DIAMENT", emoji: "💠", color: "text-bloomberg-green", border: "border-bloomberg-green/40", bg: "bg-bloomberg-green/10", glow: "shadow-bloomberg-green/20" }
+              : { label: "FILAR", emoji: "🧱", color: "text-bloomberg-amber", border: "border-bloomberg-amber/40", bg: "bg-bloomberg-amber/10", glow: "shadow-bloomberg-amber/20" }
+
+            // Bar width calculation (capped at 120%)
+            const barPct = Math.min(Math.max(rule40 / 120 * 100, 0), 100)
+            const growthBarPct = Math.min(Math.max(Math.abs(revGrowth) / 120 * 100, 0), 50)
+            const fcfBarPct = Math.min(Math.max(Math.abs(fcfMargin) / 120 * 100, 0), 50)
+
+            return (
+              <div className={`${tier.bg} border ${tier.border} rounded p-4 ${tier.glow} shadow-lg`}>
+                <div className="flex items-center justify-between mb-3">
+                  <div className="flex items-center gap-2">
+                    <span className="text-lg">{tier.emoji}</span>
+                    <div>
+                      <div className="text-[11px] font-bold tracking-wider text-foreground">RULE OF 40</div>
+                      <div className="text-[8px] text-muted-foreground">Revenue Growth + FCF Margin ≥ 40%</div>
+                    </div>
+                  </div>
+                  <div className="text-right">
+                    <div className={`text-2xl font-black ${tier.color}`}>{rule40.toFixed(1)}%</div>
+                    <div className={`text-[9px] font-bold ${tier.color}`}>{tier.label}</div>
+                  </div>
+                </div>
+
+                {/* Progress bar */}
+                <div className="relative h-6 bg-bloomberg-bg rounded-full overflow-hidden mb-3 border border-bloomberg-border/50">
+                  {/* 40% threshold marker */}
+                  <div className="absolute top-0 bottom-0 left-[33.3%] w-px bg-white/30 z-10" />
+                  <div className="absolute -top-4 left-[33.3%] -translate-x-1/2 text-[7px] text-white/50">40%</div>
+                  {/* Revenue growth portion */}
+                  <div
+                    className="absolute top-0 bottom-0 left-0 bg-bloomberg-green/60 transition-all duration-500"
+                    style={{ width: `${growthBarPct}%` }}
+                  />
+                  {/* FCF margin portion (stacked) */}
+                  <div
+                    className={`absolute top-0 bottom-0 transition-all duration-500 ${fcfMargin >= 0 ? "bg-blue-500/60" : "bg-bloomberg-red/40"}`}
+                    style={{ left: `${growthBarPct}%`, width: `${fcfBarPct}%` }}
+                  />
+                  {/* Score label on bar */}
+                  <div className="absolute inset-0 flex items-center justify-center">
+                    <span className="text-[10px] font-bold text-white drop-shadow-md">{rule40.toFixed(1)}%</span>
+                  </div>
+                </div>
+
+                {/* Breakdown */}
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="bg-bloomberg-bg/50 rounded p-2.5 border border-bloomberg-border/30">
+                    <div className="text-[8px] text-muted-foreground mb-1">📈 Revenue Growth (YoY)</div>
+                    <div className={`text-lg font-bold ${revGrowth >= 0 ? "text-bloomberg-green" : "text-bloomberg-red"}`}>
+                      {revGrowth > 0 ? "+" : ""}{revGrowth.toFixed(1)}%
+                    </div>
+                  </div>
+                  <div className="bg-bloomberg-bg/50 rounded p-2.5 border border-bloomberg-border/30">
+                    <div className="text-[8px] text-muted-foreground mb-1">💰 FCF Margin (TTM)</div>
+                    <div className={`text-lg font-bold ${fcfMargin >= 0 ? "text-bloomberg-green" : "text-bloomberg-red"}`}>
+                      {fcfMargin > 0 ? "+" : ""}{fcfMargin.toFixed(1)}%
+                    </div>
+                  </div>
+                </div>
+
+                {/* Status */}
+                <div className="mt-3 flex items-center gap-2">
+                  {passed
+                    ? <span className="text-[10px] text-bloomberg-green font-bold">✅ Rule of 40 SPEŁNIONA — spółka rośnie szybko i/lub generuje silny FCF</span>
+                    : <span className="text-[10px] text-bloomberg-red font-bold">❌ Rule of 40 NIESPEŁNIONA — wzrost + FCF poniżej progu 40%</span>
+                  }
+                </div>
+              </div>
+            )
+          })()}
+
+          {/* ═══ RAPORT FINANSOWY ═══ */}
+          <FinancialReport earnings={e} quote={q} currency={q.currency} />
 
           {/* ═══ EARNINGS SNAPSHOT ═══ */}
           {snapshotItems.length > 0 && (

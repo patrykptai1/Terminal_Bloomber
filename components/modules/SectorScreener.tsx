@@ -4,6 +4,7 @@ import { useState, useMemo, useCallback, useRef } from "react"
 import { ArrowUpDown, ArrowUp, ArrowDown, RotateCcw, Filter, Loader2, TrendingUp, TrendingDown, ChevronDown, ExternalLink, Search, X } from "lucide-react"
 import { fmtBigValue } from "@/lib/currency"
 import { getTabCache, setTabCache } from "@/lib/tabCache"
+import { useTranslatePL } from "@/hooks/useTranslate"
 
 // ── Types ────────────────────────────────────────────────────
 
@@ -82,6 +83,7 @@ const THEMATIC_SECTORS = [
   { key: "Defense", icon: "🛡️", label: "Obronność" },
   { key: "Fusion", icon: "☢️", label: "Fuzja termojądrowa" },
   { key: "Space", icon: "🚀", label: "Kosmos" },
+  { key: "Robotics", icon: "🤖", label: "Roboty" },
 ] as const
 
 const MARKETS = [
@@ -1054,13 +1056,20 @@ function KeywordRow({ stock }: { stock: any }) {
               </div>
             </div>
             {stock.businessSummary && (
-              <div className="mt-2 text-[8px] text-muted-foreground/80 leading-relaxed">
-                {stock.businessSummary}
-              </div>
+              <TranslatedDescription text={stock.businessSummary} />
             )}
           </td>
         </tr>
       )}
     </>
+  )
+}
+
+function TranslatedDescription({ text }: { text: string }) {
+  const translated = useTranslatePL(text)
+  return (
+    <div className="mt-2 text-[8px] text-muted-foreground/80 leading-relaxed">
+      {translated}
+    </div>
   )
 }

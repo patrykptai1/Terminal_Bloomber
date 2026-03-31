@@ -79,6 +79,56 @@ Dla AI RADAR:
 - chainOfEffects powinien pokazywać: trend → zapotrzebowanie → kto dostarcza → kto zyskuje
 - deepAnalysis: 5-8 zdań, głęboka analiza DOKĄD zmierza AI i jakie to ma implikacje inwestycyjne
 
+## ⚡ OBOWIĄZKOWA SEKCJA: NOWINKI TECHNICZNE
+
+ZAWSZE — niezależnie od newsów — musisz wygenerować OSOBNY temat o nazwie zaczynającej się od "🔬 TECH BREAKTHROUGHS:" w polu "themeName".
+Ten temat MUSI być DRUGI w tablicy "themes" (zaraz po AI RADAR) i musi mieć flagę "isTechBreakthroughs": true.
+
+W tym temacie przeanalizuj WSZYSTKIE newsy pod kątem PRZEŁOMOWYCH technologii i produktów ogłoszonych w ostatnich 24h. Szukaj:
+
+a) **NOWE PRODUKTY/CHIPY** — jakie firmy ogłosiły nowe procesory, chipy, akceleratory, urządzenia? (np. ARM ogłasza nowy chip AGI CPU, NVIDIA prezentuje nową architekturę GPU, Apple nowy M-chip)
+b) **PATENTY I ODKRYCIA** — jakie patenty zostały złożone? Jakie przełomowe odkrycia naukowe mają zastosowanie komercyjne? (np. nowy materiał nadprzewodnikowy, przełom w bateriach solid-state, nowa metoda produkcji chipów)
+c) **PRZEJĘCIA TECHNOLOGICZNE** — jakie firmy kupiły/inwestują w nowe technologie? (np. AMD kupuje startup AI, Broadcom przejmuje firmę od quantum)
+d) **KONTRAKTY & PARTNERSTWA** — kluczowe umowy technologiczne: kto z kim, co dostarczają, jaka wartość? (np. OpenAI podpisuje kontrakt z ARM, Meta zamawia chipy od TSMC)
+e) **INFRASTRUKTURA** — nowe centra danych, fabryki chipów (fabs), sieci energetyczne dla tech, nowe linie produkcyjne
+f) **PRZEŁOMY W SEKTORACH** — biotechnologia (nowe leki, terapie genowe), energia (fuzja, perovskity), materiały (grafen, metamateriały), quantum (nowe kubity, korekcja błędów), robotyka (nowe platformy)
+g) **REGULACJE TECH** — nowe prawo wpływające na tech: bany eksportowe, regulacje AI, zmiany patentowe, antitrust
+
+Dla TECH BREAKTHROUGHS:
+- Podaj 4-6 spółek które BEZPOŚREDNIO ogłosiły nowinkę lub są jej głównym beneficjentem
+- Podaj 2-3 spółki zagrożone (czyj produkt staje się przestarzały? kto traci przewagę?)
+- chainOfEffects: pokaż KONKRETNIE co zostało ogłoszone → jaki to ma wpływ na rynek → kto zarabia/traci
+- deepAnalysis: 5-8 zdań, opisz KONKRETNE produkty/technologie z nazwami, parametrami, datami premier
+- WAŻNE: Nie powtarzaj spółek z AI RADAR. Skup się na HARDWARE, MATERIAŁACH, INFRASTRUKTURZE, BIOTECH — nie na czystym AI/software
+
+## ⚡ OBOWIĄZKOWA SEKCJA: QUANTUM RADAR
+
+ZAWSZE — niezależnie od newsów — musisz wygenerować OSOBNY temat o nazwie zaczynającej się od "⚛️ QUANTUM RADAR:" w polu "themeName".
+Ten temat MUSI być TRZECI w tablicy "themes" (po AI RADAR i TECH BREAKTHROUGHS) i musi mieć flagę "isQuantumRadar": true.
+
+Quantum computing i quantum technology to jeden z najszybciej rozwijających się sektorów na najbliższe 5 lat. Przeanalizuj WSZYSTKIE dostępne newsy i swoją wiedzę o aktualnych wydarzeniach w quantum. Szukaj:
+
+a) **QUANTUM COMPUTING** — nowe procesory kwantowe, rekordy kubitów, korekcja błędów kwantowych, quantum advantage/supremacy. Kto buduje najlepsze komputery kwantowe? (IonQ, Rigetti, D-Wave, IBM, Google, Quantinuum). Jakie nowe milestones osiągnięto?
+b) **QUANTUM NETWORKING & INTERNET** — quantum key distribution (QKD), quantum repeaters, quantum internet. Kto buduje infrastrukturę? (Arqit, Toshiba QKD, ID Quantique)
+c) **QUANTUM SENSING** — quantum sensors w medycynie, nawigacji, geologii. Nowe zastosowania komercyjne.
+d) **QUANTUM SOFTWARE** — algorytmy kwantowe, quantum-as-a-service, cloud quantum platforms. Kto oferuje dostęp? (IBM Quantum, Amazon Braket, Azure Quantum)
+e) **KONTRAKTY I FINANSOWANIE** — rządowe programy quantum (US CHIPS Act, EU Quantum Flagship), kontrakty z DoD/NASA/NSA, finansowanie startupów quantum
+f) **MATERIAŁY I KOMPONENTY** — nadprzewodniki, kriogenika, lasery do pułapkowania jonów, chipy fotoniczne — kto dostarcza krytyczne komponenty?
+g) **QUANTUM-SAFE CRYPTO** — post-quantum cryptography, migracja na quantum-resistant algorytmy (NIST standards). Kto jest liderem?
+h) **QUANTUM + AI** — quantum machine learning, optymalizacja kwantowa dla AI, hybrydowe algorytmy kwantowo-klasyczne
+
+Kluczowe spółki quantum do monitorowania:
+- Pure-play: IONQ, RGTI, QBTS, QUBT, ARQQ
+- Komponenty: FORM (probe stations), COHR (lasery), AMSC (nadprzewodniki)
+- Big tech z quantum divisions: IBM (Quantum), GOOGL (Willow), MSFT (Azure Quantum), HON (Quantinuum)
+- Polska: CRI.WA (Creotech — quantum instruments)
+
+Dla QUANTUM RADAR:
+- Podaj 4-6 beneficjentów z konkretnymi powodami (szukaj pure-play quantum + dostawców komponentów)
+- Podaj 2-3 zagrożone spółki (kto przegrywa wyścig quantum? Czyja technologia staje się przestarzała?)
+- chainOfEffects: pokaż trend quantum → jakie problemy rozwiązuje → kto zarabia
+- deepAnalysis: 5-8 zdań, opisz AKTUALNY stan wyścigu quantum — kto prowadzi, jakie milestones osiągnięto, co dalej
+
 ## FORMAT ODPOWIEDZI
 
 Odpowiedz WYŁĄCZNIE w formacie JSON (bez markdown, bez komentarzy):
@@ -115,6 +165,31 @@ Odpowiedz WYŁĄCZNIE w formacie JSON (bez markdown, bez komentarzy):
       ]
     },
     {
+      "themeName": "🔬 TECH BREAKTHROUGHS: [tytuł opisujący główne nowinki technologiczne]",
+      "isTechBreakthroughs": true,
+      "primarySector": "Information Technology",
+      "affectedSectors": ["Information Technology", "Industrials", "Healthcare"],
+      "impact": "bullish",
+      "deepAnalysis": "Konkretny opis nowinek: co ogłoszono, jakie parametry, kiedy premiera, jaki wpływ na rynek (5-8 zdań)",
+      "chainOfEffects": [
+        "Firma X ogłasza produkt Y → zwiększa konkurencję w segmencie Z → dostawca A zyskuje zamówienia",
+        "..."
+      ],
+      "topBullish": [{"symbol": "ARM", "name": "Arm Holdings", "index": "NASDAQ", "why": "Ogłoszenie nowego chipu AGI CPU z 136 rdzeniami Neoverse V3 — pivot z licencjonowania na bezpośrednią sprzedaż chipów", "relevance": "direct"}],
+      "topBearish": [{"symbol": "...", "name": "...", "index": "...", "why": "...", "relevance": "..."}]
+    },
+    {
+      "themeName": "⚛️ QUANTUM RADAR: [tytuł opisujący główne wydarzenia w quantum]",
+      "isQuantumRadar": true,
+      "primarySector": "Information Technology",
+      "affectedSectors": ["Information Technology", "Industrials", "Financials"],
+      "impact": "bullish",
+      "deepAnalysis": "Stan wyścigu quantum: kto prowadzi, jakie milestones, co dalej (5-8 zdań)",
+      "chainOfEffects": ["Postęp w korekcji błędów → quantum advantage bliżej → wzrost popytu na hardware quantum → IONQ i RGTI zyskują zamówienia"],
+      "topBullish": [{"symbol": "IONQ", "name": "IonQ", "index": "NASDAQ", "why": "Lider trapped-ion quantum computing — nowe kontrakty z DoD i enterprise", "relevance": "direct"}],
+      "topBearish": [{"symbol": "...", "name": "...", "index": "...", "why": "...", "relevance": "..."}]
+    },
+    {
       "themeName": "Kryzys dostaw helu — konsekwencje wojny w Iranie",
       "primarySector": "Materials",
       "affectedSectors": ["Materials", "Healthcare", "Information Technology"],
@@ -129,7 +204,9 @@ Odpowiedz WYŁĄCZNIE w formacie JSON (bez markdown, bez komentarzy):
 
 WAŻNE:
 - PIERWSZY temat ZAWSZE musi być AI RADAR z "isAIRadar": true.
-- Pozostałe tematy: 3-7 (tyle ile wynika z newsów, nie więcej).
+- DRUGI temat ZAWSZE musi być TECH BREAKTHROUGHS z "isTechBreakthroughs": true.
+- TRZECI temat ZAWSZE musi być QUANTUM RADAR z "isQuantumRadar": true.
+- Pozostałe tematy: 3-5 (tyle ile wynika z newsów, nie więcej).
 - Grupuj newsy TEMATYCZNIE, nie po sektorach GICS. Jeden temat może dotyczyć wielu sektorów.
 - Dla każdego tematu: 3-5 beneficjentów i 2-4 zagrożone spółki (AI RADAR: 5-8 beneficjentów, 3-5 zagrożonych).
 - NIGDY nie powtarzaj tej samej spółki jako beneficjent i zagrożona w tym samym temacie.

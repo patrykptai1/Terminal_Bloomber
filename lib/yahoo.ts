@@ -80,6 +80,7 @@ export interface KeyStatistics {
   sector: string | null
   industry: string | null
   longBusinessSummary: string | null
+  fullTimeEmployees: number | null
   enterpriseValue: number | null
   forwardPE: number | null
   pegRatio: number | null
@@ -121,6 +122,7 @@ export async function fetchKeyStats(symbol: string): Promise<KeyStatistics> {
     sector: ap.sector ?? null,
     industry: ap.industry ?? null,
     longBusinessSummary: ap.longBusinessSummary ?? null,
+    fullTimeEmployees: ap.fullTimeEmployees ?? null,
     enterpriseValue: num(ks.enterpriseValue),
     forwardPE: num(ks.forwardPE),
     pegRatio: num(ks.pegRatio),
@@ -215,6 +217,15 @@ export interface AnnualIncomeEntry {
   ebitda: number | null
   ebitdaNormalized: number | null
   netIncome: number | null
+  grossProfit: number | null
+  operatingIncome: number | null
+  costOfRevenue: number | null
+  sellingGeneralAndAdministration: number | null
+  researchAndDevelopment: number | null
+  interestExpense: number | null
+  taxProvision: number | null
+  otherIncomeExpense: number | null
+  totalExpenses: number | null
 }
 
 export interface CashFlowEntry {
@@ -227,12 +238,24 @@ export interface CashFlowEntry {
   taxesPaid: number | null
   interestPaid: number | null
   changeInWorkingCapital: number | null
+  repurchaseOfStock: number | null
+  issuanceOfStock: number | null
 }
 
 export interface BalanceSheetEntry {
   date: string
   cashAndEquivalents: number | null
   sharesOutstanding: number | null
+  totalDebt: number | null
+  totalAssets: number | null
+  totalLiabilities: number | null
+  currentAssets: number | null
+  currentLiabilities: number | null
+  goodwill: number | null
+  intangibleAssets: number | null
+  retainedEarnings: number | null
+  stockholdersEquity: number | null
+  accountsReceivable: number | null
 }
 
 export interface InstitutionHolder {
@@ -411,7 +434,14 @@ export async function fetchEarnings(symbol: string): Promise<EarningsData> {
           ebitda: gaapEbitda,
           ebitdaNormalized: normEbitda ?? calcEbitda ?? gaapEbitda,
           netIncome: basic?.netIncome ?? num(ftsItem?.netIncome) ?? null,
-          grossProfit: basic?.grossProfit ?? num(ftsItem?.grossProfit) ?? null,
+          grossProfit: (() => {
+            const gp = (basic?.grossProfit && basic.grossProfit !== 0 ? basic.grossProfit : null) ?? num(ftsItem?.grossProfit) ?? null
+            if (gp != null && gp !== 0) return gp
+            const rev = basic?.revenue ?? num(ftsItem?.totalRevenue)
+            const cor = num(ftsItem?.costOfRevenue)
+            if (rev != null && cor != null && rev > 0 && cor > 0) return rev - cor
+            return null
+          })(),
           operatingIncome: opInc ?? null,
           totalExpenses: (() => {
             // Yahoo sometimes returns 0 for totalExpenses — treat as unavailable
@@ -449,6 +479,21 @@ export async function fetchEarnings(symbol: string): Promise<EarningsData> {
       ebitda: num(s.ebitda),
       ebitdaNormalized: null,
       netIncome: num(s.netIncome),
+      grossProfit: num(s.grossProfit),
+      operatingIncome: num(s.operatingIncome),
+      costOfRevenue: num(s.costOfRevenue),
+      sellingGeneralAndAdministration: num(s.sellingGeneralAndAdministration) ?? num(s.sellingGeneralAdministrative),
+      researchAndDevelopment: num(s.researchAndDevelopment) ?? num(s.researchDevelopment),
+      interestExpense: num(s.interestExpense),
+      taxProvision: num(s.taxProvision) ?? num(s.incomeTaxExpense),
+      otherIncomeExpense: num(s.otherIncomeExpense) ?? num(s.nonOperatingIncomeExpense),
+      totalExpenses: (() => {
+        const raw = num(s.totalExpenses ?? s.totalOperatingExpenses)
+        if (raw != null && raw !== 0) return raw
+        const rev = num(s.totalRevenue); const opInc = num(s.operatingIncome)
+        if (rev != null && opInc != null && rev > 0) return rev - opInc
+        return null
+      })(),
     }))
     .reverse()
 
@@ -479,6 +524,28 @@ export async function fetchEarnings(symbol: string): Promise<EarningsData> {
           ebitda: gaapEbitda,
           ebitdaNormalized: normEbitda ?? gaapEbitda,
           netIncome: basic?.netIncome ?? num(ftsItem?.netIncome) ?? null,
+          grossProfit: (() => {
+            const gp = (basic?.grossProfit && basic.grossProfit !== 0 ? basic.grossProfit : null) ?? num(ftsItem?.grossProfit) ?? null
+            if (gp != null && gp !== 0) return gp
+            // Fallback: revenue - costOfRevenue
+            const rev = basic?.revenue ?? num(ftsItem?.totalRevenue)
+            const cor = (basic?.costOfRevenue && basic.costOfRevenue !== 0 ? basic.costOfRevenue : null) ?? num(ftsItem?.costOfRevenue)
+            if (rev != null && cor != null && rev > 0 && cor > 0) return rev - cor
+            return null
+          })(),
+          operatingIncome: basic?.operatingIncome ?? num(ftsItem?.operatingIncome) ?? null,
+          costOfRevenue: (basic?.costOfRevenue && basic.costOfRevenue !== 0 ? basic.costOfRevenue : null) ?? num(ftsItem?.costOfRevenue) ?? null,
+          sellingGeneralAndAdministration: basic?.sellingGeneralAndAdministration ?? num(ftsItem?.sellingGeneralAndAdministration) ?? null,
+          researchAndDevelopment: basic?.researchAndDevelopment ?? num(ftsItem?.researchAndDevelopment) ?? null,
+          interestExpense: basic?.interestExpense ?? num(ftsItem?.interestExpense) ?? null,
+          taxProvision: (basic?.taxProvision && basic.taxProvision !== 0 ? basic.taxProvision : null) ?? num(ftsItem?.taxProvision) ?? num(ftsItem?.incomeTaxExpense) ?? null,
+          otherIncomeExpense: basic?.otherIncomeExpense ?? num(ftsItem?.otherIncomeExpense) ?? null,
+          totalExpenses: basic?.totalExpenses ?? (() => {
+            const rev = basic?.revenue ?? num(ftsItem?.totalRevenue)
+            const opInc = basic?.operatingIncome ?? num(ftsItem?.operatingIncome)
+            if (rev != null && opInc != null && rev > 0) return rev - opInc
+            return null
+          })(),
         })
       }
       annualStatements = merged.sort((a, b) => a.date.localeCompare(b.date))
@@ -503,6 +570,8 @@ export async function fetchEarnings(symbol: string): Promise<EarningsData> {
       taxesPaid: num(item.incomeTaxPaidSupplementalData) ?? num(item.taxesPaid),
       interestPaid: num(item.interestPaidSupplementalData) ?? num(item.interestPaid),
       changeInWorkingCapital: num(item.changeInWorkingCapital),
+      repurchaseOfStock: num(item.repurchaseOfCapitalStock) ?? num(item.commonStockRepurchased),
+      issuanceOfStock: num(item.issuanceOfCapitalStock) ?? num(item.commonStockIssuance) ?? num(item.netIssuancePaymentsOfDebt),
     })).sort((a: CashFlowEntry, b: CashFlowEntry) => a.date.localeCompare(b.date))
   } catch { /* graceful */ }
   try {
@@ -517,6 +586,8 @@ export async function fetchEarnings(symbol: string): Promise<EarningsData> {
       taxesPaid: num(item.incomeTaxPaidSupplementalData) ?? num(item.taxesPaid),
       interestPaid: num(item.interestPaidSupplementalData) ?? num(item.interestPaid),
       changeInWorkingCapital: num(item.changeInWorkingCapital),
+      repurchaseOfStock: num(item.repurchaseOfCapitalStock) ?? num(item.commonStockRepurchased),
+      issuanceOfStock: num(item.issuanceOfCapitalStock) ?? num(item.commonStockIssuance) ?? num(item.netIssuancePaymentsOfDebt),
     })).sort((a: CashFlowEntry, b: CashFlowEntry) => a.date.localeCompare(b.date))
   } catch { /* graceful */ }
 
@@ -545,6 +616,16 @@ export async function fetchEarnings(symbol: string): Promise<EarningsData> {
       date: item.date instanceof Date ? formatDate(item.date) : typeof item.date === "string" ? item.date.split("T")[0] : "",
       cashAndEquivalents: num(item.cashAndCashEquivalents) ?? num(item.cashCashEquivalentsAndShortTermInvestments),
       sharesOutstanding: num(item.ordinarySharesNumber) ?? num(item.shareIssued),
+      totalDebt: num(item.totalDebt) ?? num(item.longTermDebt),
+      totalAssets: num(item.totalAssets),
+      totalLiabilities: num(item.totalLiabilitiesNetMinorityInterest) ?? num(item.totalLiabilities),
+      currentAssets: num(item.currentAssets),
+      currentLiabilities: num(item.currentLiabilities),
+      goodwill: num(item.goodwill),
+      intangibleAssets: num(item.otherIntangibleAssets) ?? num(item.intangibleAssets),
+      retainedEarnings: num(item.retainedEarnings),
+      stockholdersEquity: num(item.stockholdersEquity) ?? num(item.totalEquityGrossMinorityInterest),
+      accountsReceivable: num(item.accountsReceivable) ?? num(item.netReceivables) ?? num(item.receivables),
     })).filter((b: BalanceSheetEntry) => b.cashAndEquivalents != null || b.sharesOutstanding != null)
       .sort((a: BalanceSheetEntry, b: BalanceSheetEntry) => a.date.localeCompare(b.date))
   } catch { /* graceful */ }
@@ -554,6 +635,16 @@ export async function fetchEarnings(symbol: string): Promise<EarningsData> {
       date: item.date instanceof Date ? formatDate(item.date) : typeof item.date === "string" ? item.date.split("T")[0] : "",
       cashAndEquivalents: num(item.cashAndCashEquivalents) ?? num(item.cashCashEquivalentsAndShortTermInvestments),
       sharesOutstanding: num(item.ordinarySharesNumber) ?? num(item.shareIssued),
+      totalDebt: num(item.totalDebt) ?? num(item.longTermDebt),
+      totalAssets: num(item.totalAssets),
+      totalLiabilities: num(item.totalLiabilitiesNetMinorityInterest) ?? num(item.totalLiabilities),
+      currentAssets: num(item.currentAssets),
+      currentLiabilities: num(item.currentLiabilities),
+      goodwill: num(item.goodwill),
+      intangibleAssets: num(item.otherIntangibleAssets) ?? num(item.intangibleAssets),
+      retainedEarnings: num(item.retainedEarnings),
+      stockholdersEquity: num(item.stockholdersEquity) ?? num(item.totalEquityGrossMinorityInterest),
+      accountsReceivable: num(item.accountsReceivable) ?? num(item.netReceivables) ?? num(item.receivables),
     })).filter((b: BalanceSheetEntry) => b.cashAndEquivalents != null || b.sharesOutstanding != null)
       .sort((a: BalanceSheetEntry, b: BalanceSheetEntry) => a.date.localeCompare(b.date))
   } catch { /* graceful */ }
@@ -648,6 +739,30 @@ export async function searchTickers(
       exchange: q.exchDisp ?? "",
       type: q.typeDisp ?? "Equity",
     }))
+}
+
+/** Resolve a user query (e.g. "SIVE", "CREOTECH", "ALLEGRO") to a valid Yahoo Finance symbol.
+ *  Tries raw symbol first, then searches Yahoo and picks best equity match. */
+export async function resolveSymbol(raw: string): Promise<string> {
+  const upper = raw.toUpperCase().trim()
+  // First try the raw symbol directly
+  try {
+    const q = await fetchQuote(upper)
+    if (q) return upper
+  } catch { /* continue to search */ }
+
+  // Search Yahoo Finance for matching tickers
+  const results = await searchTickers(upper)
+  if (results.length === 0) throw new Error(`No data for ${raw}`)
+
+  // Prefer WSE (Warsaw Stock Exchange) if input has no dot (not a full ticker like X.WA)
+  if (!upper.includes(".")) {
+    const wse = results.find(r => r.exchange === "WSE" || r.symbol.endsWith(".WA"))
+    if (wse) return wse.symbol
+  }
+
+  // Otherwise return first equity result (covers Stockholm .ST, Frankfurt .F, etc.)
+  return results[0].symbol
 }
 
 export async function fetchMultipleQuotes(symbols: string[]): Promise<QuoteData[]> {

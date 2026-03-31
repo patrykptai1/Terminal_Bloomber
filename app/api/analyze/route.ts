@@ -1,30 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
-import { fetchQuote, fetchKeyStats, fetchHistory, searchTickers } from "@/lib/yahoo"
+import { fetchQuote, fetchKeyStats, fetchHistory, resolveSymbol } from "@/lib/yahoo"
 import { computeFullAnalysis } from "@/lib/analysis"
 import { fetchNews } from "@/lib/news"
-
-/** Try to resolve a user query to a valid Yahoo Finance symbol.
- *  If the raw symbol fails, search Yahoo and pick the best equity match. */
-async function resolveSymbol(raw: string): Promise<string> {
-  // First try the raw symbol directly
-  try {
-    const q = await fetchQuote(raw)
-    if (q) return raw
-  } catch { /* continue to search */ }
-
-  // Search Yahoo Finance for matching tickers
-  const results = await searchTickers(raw)
-  if (results.length === 0) throw new Error(`No data for ${raw}`)
-
-  // Prefer WSE (Warsaw Stock Exchange) if input looks Polish (no dot = not a full ticker)
-  if (!raw.includes(".")) {
-    const wse = results.find(r => r.exchange === "WSE" || r.symbol.endsWith(".WA"))
-    if (wse) return wse.symbol
-  }
-
-  // Otherwise return first equity result
-  return results[0].symbol
-}
 
 export async function POST(req: NextRequest) {
   try {

@@ -8,9 +8,12 @@ import RadarChart from "@/components/charts/RadarChart"
 import GaugeChart from "@/components/charts/GaugeChart"
 import HorizontalBar from "@/components/charts/HorizontalBar"
 import type { FullAnalysis } from "@/lib/analysis"
+import { useTranslatePL } from "@/hooks/useTranslate"
 import type { QuoteData, KeyStatistics, HistoricalPrice } from "@/lib/yahoo"
 import type { NewsItem } from "@/lib/news"
 import { fmtPrice as fmtCurrencyPrice, fmtBigValue, currencySymbol } from "@/lib/currency"
+import { computeFundamentalAnalysis } from "@/lib/fundamentalAnalysis"
+import type { FundamentalReport } from "@/lib/fundamentalAnalysis"
 
 // ── Helpers ──────────────────────────────────────────────────
 
@@ -238,9 +241,7 @@ export default function StockAnalysis() {
                 )}
               </div>
               {st?.longBusinessSummary && (
-                <div className="text-[9px] text-muted-foreground leading-snug flex-1 line-clamp-2">
-                  {st.longBusinessSummary.slice(0, 200)}{st.longBusinessSummary.length > 200 ? "..." : ""}
-                </div>
+                <TranslatedSummary text={st.longBusinessSummary.slice(0, 300)} />
               )}
             </div>
 
@@ -311,6 +312,243 @@ export default function StockAnalysis() {
               <CheckItem label="Sector Tailwind" value={a.checklist.sectorTailwind} />
             </div>
           </div>
+
+          {/* ═══ RULE OF 40 (Tech only) ═══ */}
+          {(() => {
+            const sec = st?.sector ?? a.sector ?? ""
+            const isTech = /technology|information technology|communication services/i.test(sec)
+            if (!isTech || a.revenueGrowth == null || a.fcfMargin == null) return null
+
+            const rule40 = a.revenueGrowth + a.fcfMargin
+            const passed = rule40 >= 40
+            const tier = rule40 >= 60
+              ? { label: "JEDNOROŻEC", emoji: "🦄", color: "text-purple-400", border: "border-purple-500/40", bg: "bg-purple-500/10" }
+              : rule40 >= 50
+              ? { label: "PERŁA", emoji: "💎", color: "text-cyan-400", border: "border-cyan-500/40", bg: "bg-cyan-500/10" }
+              : rule40 >= 40
+              ? { label: "DIAMENT", emoji: "💠", color: "text-bloomberg-green", border: "border-bloomberg-green/40", bg: "bg-bloomberg-green/10" }
+              : { label: "FILAR", emoji: "🧱", color: "text-bloomberg-amber", border: "border-bloomberg-amber/40", bg: "bg-bloomberg-amber/10" }
+
+            const barMax = 120
+            const growthBar = Math.min(Math.max(a.revenueGrowth, 0) / barMax * 100, 50)
+            const fcfBar = Math.min(Math.max(a.fcfMargin, 0) / barMax * 100, 50)
+
+            return (
+              <div className={`${tier.bg} border ${tier.border} rounded p-4`}>
+                <div className="flex items-center justify-between mb-3">
+                  <div className="flex items-center gap-2">
+                    <span className="text-lg">{tier.emoji}</span>
+                    <div>
+                      <div className="text-[11px] font-bold tracking-wider text-foreground">RULE OF 40</div>
+                      <div className="text-[8px] text-muted-foreground">Revenue Growth + FCF Margin ≥ 40%</div>
+                    </div>
+                  </div>
+                  <div className="text-right">
+                    <div className={`text-2xl font-black ${tier.color}`}>{rule40.toFixed(1)}%</div>
+                    <div className={`text-[9px] font-bold ${tier.color}`}>{tier.label}</div>
+                  </div>
+                </div>
+
+                {/* Bar */}
+                <div className="relative h-6 bg-bloomberg-bg rounded-full overflow-hidden mb-3 border border-bloomberg-border/50">
+                  <div className="absolute top-0 bottom-0 left-[33.3%] w-px bg-white/30 z-10" />
+                  <div className="absolute -top-4 left-[33.3%] -translate-x-1/2 text-[7px] text-white/50">40%</div>
+                  <div className="absolute top-0 bottom-0 left-0 bg-bloomberg-green/60 transition-all duration-500" style={{ width: `${growthBar}%` }} />
+                  <div className={`absolute top-0 bottom-0 transition-all duration-500 ${a.fcfMargin >= 0 ? "bg-blue-500/60" : "bg-bloomberg-red/40"}`} style={{ left: `${growthBar}%`, width: `${fcfBar}%` }} />
+                  <div className="absolute inset-0 flex items-center justify-center">
+                    <span className="text-[10px] font-bold text-white drop-shadow-md">{rule40.toFixed(1)}%</span>
+                  </div>
+                </div>
+
+                {/* Breakdown */}
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="bg-bloomberg-bg/50 rounded p-2.5 border border-bloomberg-border/30">
+                    <div className="text-[8px] text-muted-foreground mb-1">📈 Revenue Growth (YoY)</div>
+                    <div className={`text-lg font-bold ${a.revenueGrowth >= 0 ? "text-bloomberg-green" : "text-bloomberg-red"}`}>
+                      {a.revenueGrowth > 0 ? "+" : ""}{a.revenueGrowth.toFixed(1)}%
+                    </div>
+                  </div>
+                  <div className="bg-bloomberg-bg/50 rounded p-2.5 border border-bloomberg-border/30">
+                    <div className="text-[8px] text-muted-foreground mb-1">💰 FCF Margin (TTM)</div>
+                    <div className={`text-lg font-bold ${a.fcfMargin >= 0 ? "text-bloomberg-green" : "text-bloomberg-red"}`}>
+                      {a.fcfMargin > 0 ? "+" : ""}{a.fcfMargin.toFixed(1)}%
+                    </div>
+                  </div>
+                </div>
+
+                <div className="mt-3">
+                  {passed
+                    ? <span className="text-[10px] text-bloomberg-green font-bold">✅ Rule of 40 SPEŁNIONA — spółka rośnie szybko i/lub generuje silny FCF</span>
+                    : <span className="text-[10px] text-bloomberg-red font-bold">❌ Rule of 40 NIESPEŁNIONA — wzrost + FCF poniżej progu 40%</span>
+                  }
+                </div>
+              </div>
+            )
+          })()}
+
+          {/* ═══ FUNDAMENTAL ANALYSIS ═══ */}
+          {(() => {
+            const fa = computeFundamentalAnalysis(
+              st?.sector ?? null, st?.industry ?? null, st?.longBusinessSummary ?? null,
+              a.grossMargin, a.operatingMargin, a.revenueGrowth, a.fcfMargin, q.marketCap,
+              st?.fullTimeEmployees ?? null,
+            )
+            const moatColor = fa.moatRating === "Wide" ? "text-bloomberg-green" : fa.moatRating === "Narrow" ? "text-bloomberg-amber" : "text-bloomberg-red"
+            const moatBorder = fa.moatRating === "Wide" ? "border-bloomberg-green/30" : fa.moatRating === "Narrow" ? "border-bloomberg-amber/30" : "border-bloomberg-border"
+            const moatBg = fa.moatRating === "Wide" ? "bg-bloomberg-green/5" : fa.moatRating === "Narrow" ? "bg-bloomberg-amber/5" : "bg-bloomberg-bg"
+            const impactIcon = (i: string) => i === "positive" ? "🟢" : i === "negative" ? "🔴" : "🟡"
+            const strengthColor = (s: string) => s === "strong" ? "text-bloomberg-green" : s === "moderate" ? "text-bloomberg-amber" : s === "weak" ? "text-bloomberg-red/70" : "text-muted-foreground/40"
+            const strengthLabel = (s: string) => s === "strong" ? "SILNA" : s === "moderate" ? "UMIARKOWANA" : s === "weak" ? "SŁABA" : "BRAK"
+
+            return (
+              <div className="bg-bloomberg-card border border-bloomberg-border rounded p-4 space-y-4">
+                <div className="text-[11px] text-bloomberg-amber font-bold tracking-widest">📊 ANALIZA FUNDAMENTALNA — PRODUKT & STRATEGIA</div>
+
+                {/* 1. Product DNA */}
+                <div>
+                  <div className="text-[10px] text-bloomberg-green font-bold mb-2">1. CO SPÓŁKA SPRZEDAJE — DNA PRODUKTU</div>
+
+                  {/* Key metrics row */}
+                  <div className="grid grid-cols-2 md:grid-cols-5 gap-2 mb-3">
+                    <div className="bg-bloomberg-bg rounded p-2 border border-bloomberg-border/30">
+                      <div className="text-[7px] text-muted-foreground mb-0.5">TYP ROZWIĄZANIA</div>
+                      <div className="text-[10px] font-bold text-foreground">{fa.productType === "Painkiller" ? "💊 Painkiller" : fa.productType === "Platform" ? "🔗 Platforma" : fa.productType === "Infrastructure" ? "🏗️ Infrastruktura" : "💎 Vitamin"}</div>
+                    </div>
+                    <div className="bg-bloomberg-bg rounded p-2 border border-bloomberg-border/30">
+                      <div className="text-[7px] text-muted-foreground mb-0.5">MODEL PRZYCHODOWY</div>
+                      <div className="text-[10px] font-bold text-foreground">{fa.revenueModel}</div>
+                    </div>
+                    <div className="bg-bloomberg-bg rounded p-2 border border-bloomberg-border/30">
+                      <div className="text-[7px] text-muted-foreground mb-0.5">CYKL ŻYCIA</div>
+                      <div className={`text-[10px] font-bold ${fa.lifecycle === "Wzrost" ? "text-bloomberg-green" : fa.lifecycle === "Dojrzałość" ? "text-bloomberg-amber" : fa.lifecycle === "Schyłek" ? "text-bloomberg-red" : "text-purple-400"}`}>{fa.lifecycle}</div>
+                    </div>
+                    <div className="bg-bloomberg-bg rounded p-2 border border-bloomberg-border/30">
+                      <div className="text-[7px] text-muted-foreground mb-0.5">KLIENT DOCELOWY</div>
+                      <div className="text-[10px] font-bold text-foreground">{fa.targetCustomer}</div>
+                    </div>
+                    <div className="bg-bloomberg-bg rounded p-2 border border-bloomberg-border/30">
+                      <div className="text-[7px] text-muted-foreground mb-0.5">ZASIĘG</div>
+                      <div className="text-[9px] font-bold text-foreground">{fa.geographicReach}</div>
+                    </div>
+                  </div>
+
+                  {/* Products table */}
+                  {fa.mainProducts.length > 0 && (
+                    <div className="mb-3">
+                      <div className="text-[8px] text-bloomberg-amber font-bold mb-1.5">📦 GŁÓWNE PRODUKTY / USŁUGI</div>
+                      <div className="space-y-1">
+                        {fa.mainProducts.map((p, i) => (
+                          <div key={i} className="flex items-start gap-2 bg-bloomberg-bg/50 rounded p-1.5 border border-bloomberg-border/20">
+                            <span className="text-[8px] text-bloomberg-green font-bold shrink-0 mt-0.5">#{i+1}</span>
+                            <div>
+                              <span className="text-[9px] font-bold text-foreground">{p.name}</span>
+                              {p.description !== "—" && <span className="text-[8px] text-muted-foreground ml-1">— {p.description}</span>}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Customer segments */}
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-2">
+                    <div>
+                      <div className="text-[8px] text-bloomberg-amber font-bold mb-1">🎯 SEGMENTY KLIENTÓW</div>
+                      <div className="flex flex-wrap gap-1">
+                        {fa.customerSegments.map((s, i) => (
+                          <span key={i} className="text-[8px] px-1.5 py-0.5 bg-bloomberg-green/10 text-bloomberg-green rounded border border-bloomberg-green/20">{s}</span>
+                        ))}
+                      </div>
+                    </div>
+                    <div>
+                      <div className="text-[8px] text-bloomberg-amber font-bold mb-1">🏢 BRANŻA & SKALA</div>
+                      <div className="text-[9px] text-muted-foreground">
+                        <span className="text-foreground font-bold">{st?.industry ?? "—"}</span>
+                        {fa.employees && <span className="ml-2">| {fa.employees.toLocaleString()} pracowników</span>}
+                        <span className="ml-2">| MCap: {fmtBigValue(q.marketCap, q.currency)}</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Competitive position */}
+                  <div className="bg-bloomberg-bg/30 rounded p-2 border border-bloomberg-border/20">
+                    <div className="text-[8px] text-bloomberg-amber font-bold mb-1">⚔️ POZYCJA KONKURENCYJNA</div>
+                    <div className="text-[9px] text-foreground/80 leading-relaxed">{fa.competitivePosition}</div>
+                  </div>
+
+                  {/* USP */}
+                  <div className="mt-2 text-[9px] text-muted-foreground leading-relaxed">
+                    <span className="text-bloomberg-amber font-bold">USP:</span> {fa.usp}
+                  </div>
+                </div>
+
+                {/* 2. Porter's 5 Forces */}
+                <div>
+                  <div className="text-[10px] text-bloomberg-green font-bold mb-2">2. PORTER&apos;S 5 FORCES <span className="text-muted-foreground font-normal">(Średnia: {fa.porterAvg}/10)</span></div>
+                  <div className="space-y-1.5">
+                    {fa.porter.map((f, i) => (
+                      <div key={i} className="flex items-center gap-2">
+                        <div className="w-[140px] text-[8px] text-muted-foreground shrink-0">{f.namePL}</div>
+                        <div className="flex-1 h-3 bg-bloomberg-bg rounded-full overflow-hidden border border-bloomberg-border/30">
+                          <div
+                            className={`h-full rounded-full transition-all ${f.score >= 7 ? "bg-bloomberg-green/70" : f.score >= 5 ? "bg-bloomberg-amber/70" : "bg-bloomberg-red/70"}`}
+                            style={{ width: `${f.score * 10}%` }}
+                          />
+                        </div>
+                        <span className={`text-[10px] font-bold w-6 text-right ${f.score >= 7 ? "text-bloomberg-green" : f.score >= 5 ? "text-bloomberg-amber" : "text-bloomberg-red"}`}>{f.score}</span>
+                      </div>
+                    ))}
+                  </div>
+                  <div className="mt-2 grid grid-cols-1 md:grid-cols-2 gap-1">
+                    {fa.porter.map((f, i) => (
+                      <div key={i} className="text-[8px] text-muted-foreground/80">
+                        <span className="text-foreground font-bold">{f.namePL}:</span> {f.description}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                {/* 3. PESTEL */}
+                <div>
+                  <div className="text-[10px] text-bloomberg-green font-bold mb-2">3. ANALIZA PESTEL</div>
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-1.5">
+                    {fa.pestel.map((p, i) => (
+                      <div key={i} className="flex items-start gap-1.5 bg-bloomberg-bg rounded p-2 border border-bloomberg-border/30">
+                        <span className="text-[10px] shrink-0">{impactIcon(p.impact)}</span>
+                        <div>
+                          <div className="text-[8px] font-bold text-foreground">{p.code} — {p.name}</div>
+                          <div className="text-[8px] text-muted-foreground leading-snug">{p.description}</div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                {/* 4. Economic Moat */}
+                <div className={`rounded p-3 border ${moatBorder} ${moatBg}`}>
+                  <div className="flex items-center justify-between mb-2">
+                    <div className="text-[10px] text-bloomberg-green font-bold">4. FOSA EKONOMICZNA (ECONOMIC MOAT)</div>
+                    <div className="flex items-center gap-2">
+                      <span className={`text-lg font-black ${moatColor}`}>{fa.moatScore}</span>
+                      <span className="text-[8px] text-muted-foreground">/100</span>
+                      <span className={`text-[9px] font-bold border px-1.5 py-0.5 rounded ${moatColor} ${moatBorder}`}>
+                        {fa.moatRating === "Wide" ? "🏰 SZEROKA" : fa.moatRating === "Narrow" ? "🔶 WĄSKA" : "⚠️ BRAK"}
+                      </span>
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-2 mb-2">
+                    {fa.moatTypes.map((m, i) => (
+                      <div key={i} className="bg-bloomberg-bg/50 rounded p-2 border border-bloomberg-border/20">
+                        <div className="text-[8px] text-muted-foreground mb-0.5">{m.type}</div>
+                        <div className={`text-[9px] font-bold ${strengthColor(m.strength)}`}>{strengthLabel(m.strength)}</div>
+                      </div>
+                    ))}
+                  </div>
+                  <div className="text-[9px] text-foreground/80 leading-relaxed">{fa.verdict}</div>
+                </div>
+              </div>
+            )
+          })()}
 
           {/* ═══ QUOTE HEADER ═══ */}
           <div className="bg-bloomberg-card border border-bloomberg-border rounded p-4">
@@ -714,6 +952,15 @@ function ScenarioBar({
           {probability}%
         </span>
       </div>
+    </div>
+  )
+}
+
+function TranslatedSummary({ text }: { text: string }) {
+  const translated = useTranslatePL(text)
+  return (
+    <div className="text-[9px] text-muted-foreground leading-snug flex-1 line-clamp-2">
+      {translated}
     </div>
   )
 }

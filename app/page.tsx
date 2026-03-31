@@ -12,7 +12,6 @@ import EntryTiming from "@/components/modules/EntryTiming"
 import AnalystRecommendations from "@/components/modules/AnalystRecommendations"
 import SectorScreener from "@/components/modules/SectorScreener"
 import WorldNewsRadar from "@/components/modules/WorldNewsRadar"
-import SankeyModule from "@/components/modules/SankeyModule"
 import type { TabId } from "@/types"
 
 const TAB_TITLES: Record<TabId, string> = {
@@ -26,10 +25,9 @@ const TAB_TITLES: Record<TabId, string> = {
   analyst: "ANALYST RECOMMENDATIONS",
   sectors: "SECTORS",
   worldnews: "WORLD NEWS RADAR",
-  sankey: "SANKEY CHART",
 }
 
-const TAB_KEYS: TabId[] = ["analysis", "screener", "earnings", "risk", "compare", "portfolio", "entry", "analyst", "sectors", "worldnews", "sankey"]
+const TAB_KEYS: TabId[] = ["analysis", "screener", "earnings", "risk", "compare", "portfolio", "entry", "analyst", "sectors", "worldnews"]
 
 export default function Home() {
   const [activeTab, setActiveTab] = useState<TabId>("analysis")
@@ -53,7 +51,7 @@ export default function Home() {
   return (
     <div className="min-h-screen flex flex-col">
       <TerminalHeader activeTab={activeTab} onTabChange={setActiveTab} />
-      <main className={`flex-1 p-4 w-full mx-auto ${activeTab === "sankey" ? "max-w-7xl" : "max-w-5xl"}`}>
+      <main className="flex-1 p-4 w-full mx-auto max-w-5xl">
         <div className="flex items-center gap-2 mb-4">
           <div className="w-2 h-2 bg-bloomberg-green rounded-full" />
           <h1 className="text-sm text-bloomberg-amber font-bold tracking-wider">
@@ -71,7 +69,6 @@ export default function Home() {
         {activeTab === "analyst" && <AnalystRecommendations />}
         {activeTab === "sectors" && <SectorScreener />}
         {activeTab === "worldnews" && <WorldNewsRadar />}
-        {activeTab === "sankey" && <SankeyModule />}
       </main>
 
       <footer className="border-t border-bloomberg-border px-4 py-2 flex items-center justify-between text-xs text-muted-foreground">
