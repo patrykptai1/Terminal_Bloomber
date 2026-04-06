@@ -18,8 +18,8 @@ import {
 } from "recharts"
 
 // --- Colors ---
-const BLOOMBERG_BLUE = "oklch(0.65 0.15 250)"
-const BLOOMBERG_AMBER = "oklch(0.7 0.12 60)"
+const BLOOMBERG_BLUE = "#3399ff"
+const BLOOMBERG_AMBER = "#ff8c00"
 
 interface CompareData {
   quoteA: QuoteData
@@ -157,7 +157,7 @@ export default function StockCompare() {
                   <CompRow label="EV/EBITDA" a={fmtNum(aA.evEbitda)} b={fmtNum(aB.evEbitda)} symA={qA.symbol} symB={qB.symbol} winA={numVal(aA.evEbitda) < numVal(aB.evEbitda)} lowerBetter />
                   <CompRow label="Debt/EBITDA" a={fmtNum(aA.debtEbitda)} b={fmtNum(aB.debtEbitda)} symA={qA.symbol} symB={qB.symbol} winA={numVal(aA.debtEbitda) < numVal(aB.debtEbitda)} lowerBetter />
                   <CompRow label="ROE" a={fmtPctVal(aA.roe)} b={fmtPctVal(aB.roe)} symA={qA.symbol} symB={qB.symbol} winA={numVal(aA.roe) > numVal(aB.roe)} />
-                  <CompRow label="Dividend Yield" a={qA.dividendYield ? (qA.dividendYield * 100).toFixed(2) + "%" : "N/A"} b={qB.dividendYield ? (qB.dividendYield * 100).toFixed(2) + "%" : "N/A"} symA={qA.symbol} symB={qB.symbol} winA={numVal(qA.dividendYield) > numVal(qB.dividendYield)} />
+                  <CompRow label="Stopa dywidendy" a={qA.dividendYield ? qA.dividendYield.toFixed(2) + "%" : "N/A"} b={qB.dividendYield ? qB.dividendYield.toFixed(2) + "%" : "N/A"} symA={qA.symbol} symB={qB.symbol} winA={numVal(qA.dividendYield) > numVal(qB.dividendYield)} />
                   <CompRow label="52W Performance" a={fmtPctVal(aA.distanceFrom52Low)} b={fmtPctVal(aB.distanceFrom52Low)} symA={qA.symbol} symB={qB.symbol} winA={numVal(aA.distanceFrom52Low) > numVal(aB.distanceFrom52Low)} />
                   <CompRow label="Moat Rating" a={moatRating(aA)} b={moatRating(aB)} symA={qA.symbol} symB={qB.symbol} winA={moatScore(aA) > moatScore(aB)} />
                 </tbody>
@@ -297,17 +297,17 @@ function DualRadarChart({ symA, symB, aA, aB }: { symA: string; symB: string; aA
   return (
     <ResponsiveContainer width="100%" height={320}>
       <RechartsRadarChart cx="50%" cy="50%" outerRadius="75%" data={radarData}>
-        <PolarGrid stroke="oklch(0.25 0.01 240)" />
+        <PolarGrid stroke="#222244" />
         <PolarAngleAxis
           dataKey="metric"
-          tick={{ fill: "oklch(0.6 0.01 200)", fontSize: 11, fontFamily: "monospace" }}
+          tick={{ fill: "#888899", fontSize: 11, fontFamily: "monospace" }}
         />
         <PolarRadiusAxis
           angle={90}
           domain={[0, 100]}
-          tick={{ fill: "oklch(0.6 0.01 200)", fontSize: 10, fontFamily: "monospace" }}
+          tick={{ fill: "#888899", fontSize: 10, fontFamily: "monospace" }}
           axisLine={false}
-          stroke="oklch(0.25 0.01 240)"
+          stroke="#222244"
         />
         <Radar
           name={symA}
@@ -326,7 +326,7 @@ function DualRadarChart({ symA, symB, aA, aB }: { symA: string; symB: string; aA
           strokeWidth={2}
         />
         <Legend
-          wrapperStyle={{ fontFamily: "monospace", fontSize: 11, color: "oklch(0.6 0.01 200)" }}
+          wrapperStyle={{ fontFamily: "monospace", fontSize: 11, color: "#888899" }}
         />
       </RechartsRadarChart>
     </ResponsiveContainer>

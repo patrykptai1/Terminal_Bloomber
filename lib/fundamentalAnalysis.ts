@@ -50,6 +50,16 @@ export interface FundamentalReport {
   moatTypes: MoatType[]
   moatRating: "Wide" | "Narrow" | "None"
   moatScore: number // 0-100
+  // 5. Overall fundamental score (1-100)
+  fundamentalScore: number
+  scoreBreakdown: {
+    productDNA: number        // max 20
+    porterScore: number       // max 25
+    pestelScore: number       // max 15
+    moatComponent: number     // max 25
+    financialFit: number      // max 15
+  }
+  scoreTier: "Elita" | "Silna" | "Solidna" | "Przeciętna" | "Słaba"
   // Summary
   verdict: string
 }
@@ -81,22 +91,25 @@ function classifyProduct(industry: string, sector: string, summary: string): "Pa
 
 function classifyRevenueModel(industry: string, summary: string): string {
   const text = `${industry} ${summary}`.toLowerCase()
-  if (text.includes("subscri") || text.includes("saas") || text.includes("recurring") || text.includes("cloud")) return "Subskrypcja (SaaS/recurring)"
-  if (text.includes("licens")) return "Licencjonowanie"
-  if (text.includes("advertis") || text.includes("ad-based")) return "Reklama (ad-based)"
-  if (text.includes("transact") || text.includes("payment") || text.includes("processing")) return "Transakcyjny (per-transaction)"
-  if (text.includes("marketplace") || text.includes("commission")) return "Marketplace (prowizja)"
-  if (text.includes("hardware") || text.includes("device") || text.includes("equip")) return "Sprzedaż hardware/urządzeń"
-  if (text.includes("consult") || text.includes("services") || text.includes("professional")) return "Usługi profesjonalne"
-  return "Mieszany (multi-stream)"
+  if (text.includes("subscri") || text.includes("saas") || text.includes("recurring") || text.includes("cloud")) return "Subskrypcja (SaaS / przychody cykliczne)"
+  if (text.includes("licens")) return "Licencjonowanie IP / oprogramowania"
+  if (text.includes("advertis") || text.includes("ad-based")) return "Model reklamowy (ad-based)"
+  if (text.includes("transact") || text.includes("payment") || text.includes("processing")) return "Model transakcyjny (prowizja od transakcji)"
+  if (text.includes("marketplace") || text.includes("commission")) return "Marketplace (prowizja od sprzedaży)"
+  if (text.includes("hardware") || text.includes("device") || text.includes("equip")) return "Sprzedaż sprzętu / urządzeń"
+  if (text.includes("consult") || text.includes("services") || text.includes("professional")) return "Usługi profesjonalne / konsulting"
+  return "Model mieszany (wiele strumieni)"
 }
 
 function classifyLifecycle(revenueGrowth: number | null, grossMargin: number | null, marketCap: number): "Wprowadzenie" | "Wzrost" | "Dojrzałość" | "Schyłek" {
-  if (revenueGrowth == null) return "Dojrzałość"
+  // FIX #15: "Wprowadzenie" is now reachable for pre-revenue/early companies
+  // FIX #20: "Schyłek" requires significantly negative growth, not just -0.1%
+  if (revenueGrowth == null) return marketCap < 500e6 ? "Wprowadzenie" : "Dojrzałość"
+  if (marketCap < 1e9 && revenueGrowth > 50) return "Wprowadzenie"
   if (revenueGrowth > 30) return "Wzrost"
   if (revenueGrowth > 10) return marketCap < 10e9 ? "Wzrost" : "Dojrzałość"
-  if (revenueGrowth > 0) return "Dojrzałość"
-  return "Schyłek"
+  if (revenueGrowth > -5) return "Dojrzałość"  // -5% to 10% = mature, not decline
+  return "Schyłek"  // Only < -5% = true structural decline
 }
 
 // ── Porter's 5 Forces ──
@@ -114,10 +127,17 @@ function computePorter(
   const rg = revenueGrowth ?? 5
   const text = `${industry} ${summary}`.toLowerCase()
 
-  // 1. Rivalry
+  // FIX #16: Rivalry score uses multiple factors, not just gross margin
   const hasPatents = text.includes("patent") || text.includes("proprietary") || text.includes("ip ")
   const isNiche = marketCap < 20e9
-  let rivalry = Math.min(10, Math.round(gm / 10 + (hasPatents ? 2 : 0) + (isNiche ? 1 : 0)))
+  const highGrowth = rg > 15  // fast-growing market = less rivalry pressure
+  const concentrated = marketCap > 50e9  // large player = likely oligopoly
+  let rivalry = 3  // base: moderate
+  rivalry += gm > 60 ? 2 : gm > 40 ? 1 : 0  // margin as ONE factor (not sole)
+  rivalry += hasPatents ? 2 : 0
+  rivalry += isNiche ? 1 : 0
+  rivalry += highGrowth ? 1 : 0  // growing market reduces direct rivalry
+  rivalry += concentrated ? 1 : 0  // scale = competitive moat
   rivalry = Math.max(1, Math.min(10, rivalry))
 
   // 2. Barriers to entry
@@ -319,8 +339,10 @@ function computeMoat(
     score += 5
   }
 
-  // Porter bonus
-  score = Math.round(score * (0.7 + porterAvg / 30))
+  // FIX #17: Symmetric Porter adjustment — good Porter rewards as much as bad punishes
+  // porterAvg 5 = neutral (1.0x), porterAvg 1 = 0.8x, porterAvg 10 = 1.2x
+  const porterMultiplier = 0.8 + (porterAvg / 10) * 0.4  // range: 0.8 to 1.2
+  score = Math.round(score * porterMultiplier)
 
   const moatRating: "Wide" | "Narrow" | "None" = score >= 65 ? "Wide" : score >= 40 ? "Narrow" : "None"
 
@@ -331,47 +353,99 @@ function computeMoat(
 
 // ── Extract products from business summary ──
 
+// Translate common English product descriptions to Polish
+const EN_PL_PRODUCT: Record<string, string> = {
+  "platform": "platforma", "software": "oprogramowanie", "solution": "rozwiązanie",
+  "service": "usługa", "system": "system", "product": "produkt", "tool": "narzędzie",
+  "cloud": "chmura", "subscription": "subskrypcja", "marketplace": "rynek",
+  "analytics": "analityka", "automation": "automatyzacja", "security": "bezpieczeństwo",
+  "infrastructure": "infrastruktura", "database": "baza danych", "network": "sieć",
+  "hardware": "sprzęt", "device": "urządzenie", "chip": "procesor/chip",
+  "semiconductor": "półprzewodnik", "sensor": "czujnik", "module": "moduł",
+  "enterprise": "korporacyjny", "consumer": "konsumencki",
+}
+
+function translateProductDesc(engDesc: string): string {
+  if (!engDesc || engDesc === "—") return "—"
+  // Simple keyword-based translation for product type classification
+  const lower = engDesc.toLowerCase()
+  const parts: string[] = []
+
+  if (lower.includes("platform") || lower.includes("software")) parts.push("Platforma / oprogramowanie")
+  else if (lower.includes("service provider") || lower.includes("service")) parts.push("Usługa")
+  else if (lower.includes("hardware") || lower.includes("device") || lower.includes("equipment")) parts.push("Sprzęt / urządzenie")
+  else if (lower.includes("chip") || lower.includes("semiconductor") || lower.includes("processor")) parts.push("Półprzewodnik / chip")
+  else parts.push("Produkt / usługa")
+
+  if (lower.includes("ai") || lower.includes("artificial intelligence") || lower.includes("machine learn")) parts.push("AI")
+  if (lower.includes("cloud")) parts.push("chmura")
+  if (lower.includes("automat")) parts.push("automatyzacja")
+  if (lower.includes("security") || lower.includes("cyber")) parts.push("bezpieczeństwo")
+  if (lower.includes("data") || lower.includes("analytics")) parts.push("dane/analityka")
+  if (lower.includes("marketing") || lower.includes("advertising")) parts.push("marketing/reklama")
+  if (lower.includes("enterprise")) parts.push("dla przedsiębiorstw")
+  if (lower.includes("consumer")) parts.push("dla konsumentów")
+  if (lower.includes("healthcare") || lower.includes("medical")) parts.push("medycyna")
+  if (lower.includes("financial") || lower.includes("payment")) parts.push("finanse/płatności")
+
+  return parts.join(" — ")
+}
+
 function extractProducts(summary: string): ProductInfo[] {
   const products: ProductInfo[] = []
-  // Match patterns like "offers X, a/an ... that/which ..." or "provides X ... for ..."
-  // Also match "segment offers/includes/provides"
+  const seen = new Set<string>()
+
+  // Strategy: find branded product names (2-4 capitalized words before keywords)
+  // Pattern: "BrandName Product" or "Brand Name Platform"
+  const patterns = [
+    // "Company operates/offers ProductName, a/an ..."
+    /(?:operates?|offers?|provides?)\s+([A-Z][A-Za-z0-9]+(?:\s+[A-Z][A-Za-z0-9]+){0,2})\s*(?:platform|product|system|suite|service|solution)/gi,
+    // "ProductName, an/a ..."
+    /([A-Z][A-Za-z0-9]+(?:\s+[A-Z][A-Za-z0-9]+){1,3})\s*,\s+(?:a|an|the|its)\s/g,
+    // "The ProductName segment/division"
+    /(?:The|Its)\s+([A-Z][A-Za-z0-9]+(?:\s+[A-Za-z0-9]+){0,3})\s+(?:segment|division|business)/gi,
+  ]
+
   const sentences = summary.split(/\.\s+/)
 
-  for (const sent of sentences) {
-    // Look for product/platform/service names (capitalized phrases)
-    const productPatterns = [
-      /(?:offers?|provides?|operates?|includes?)\s+([A-Z][A-Za-z0-9\s&+\-]+?)(?:,\s+(?:a|an|which|that|the|its))/g,
-      /([A-Z][A-Za-z0-9]+(?:\s+[A-Z][a-z]+){0,3})\s+(?:platform|product|service|solution|system|suite|tool)/gi,
-      /(?:its|the)\s+([A-Z][A-Za-z0-9\s\-+&]+?)(?:\s+segment|\s+division|\s+business)/g,
-    ]
-
-    for (const pattern of productPatterns) {
+  for (const pattern of patterns) {
+    for (const sent of sentences) {
+      pattern.lastIndex = 0
       let match: RegExpExecArray | null
       while ((match = pattern.exec(sent)) !== null) {
-        const name = match[1].trim().replace(/\s+/g, " ")
-        if (name.length > 2 && name.length < 60 && !products.some(p => p.name === name)) {
-          // Get description: rest of sentence after product name
-          const idx = sent.indexOf(name)
-          const desc = sent.slice(idx + name.length).replace(/^[,\s]+/, "").slice(0, 150).trim()
-          products.push({ name, description: desc || "—" })
-        }
+        let name = match[1].trim().replace(/\s+/g, " ")
+        // Skip generic words, company name fragments, articles
+        if (name.length < 3 || name.length > 50) continue
+        if (/^(The|Its|This|That|These|Inc|Corp|Ltd|LLC|Company|Also|In addition)$/i.test(name)) continue
+        // Deduplicate
+        const key = name.toLowerCase()
+        if (seen.has(key)) continue
+        seen.add(key)
+
+        // Get context from sentence for Polish description
+        const desc = translateProductDesc(sent)
+        products.push({ name, description: desc })
       }
     }
   }
 
-  // Fallback: extract capitalized multi-word phrases that look like product names
+  // Fallback: if no products found, extract segment names
   if (products.length === 0) {
-    const brandPattern = /([A-Z][a-z]+(?:\s+[A-Z][a-z]+)+)\s+(?:platform|product|service|software|system|suite|tool|solution)/gi
+    const segPattern = /(?:segment|division)\s+(?:offers?|includes?|provides?)\s+(.+?)(?:\.|;)/gi
     let match: RegExpExecArray | null
-    while ((match = brandPattern.exec(summary)) !== null) {
-      const name = match[1].trim()
-      if (name.length > 3 && name.length < 50 && !products.some(p => p.name === name)) {
-        products.push({ name, description: "Kluczowy produkt/usługa spółki" })
-      }
+    while ((match = segPattern.exec(summary)) !== null) {
+      const desc = translateProductDesc(match[1])
+      products.push({ name: "Segment biznesowy", description: desc })
+      if (products.length >= 3) break
     }
   }
 
-  return products.slice(0, 6)
+  // If still nothing, create single entry from industry
+  if (products.length === 0) {
+    products.push({ name: "Główna działalność", description: translateProductDesc(summary.slice(0, 200)) })
+  }
+
+  return products.slice(0, 5)
 }
 
 function classifyTargetCustomer(summary: string, industry: string): string {
@@ -384,12 +458,12 @@ function classifyTargetCustomer(summary: string, industry: string): string {
   const b2c = b2cSignals.filter(s => text.includes(s)).length
   const gov = govSignals.filter(s => text.includes(s)).length
 
-  if (gov >= 2) return "B2G (Rząd/Obronność)"
-  if (b2b > b2c && b2b >= 2) return "B2B (Przedsiębiorstwa)"
-  if (b2c > b2b && b2c >= 2) return "B2C (Konsumenci)"
-  if (b2b > 0 && b2c > 0) return "B2B2C (Mieszany)"
-  if (b2b > 0) return "B2B (Przedsiębiorstwa)"
-  return "B2B/B2C (Mieszany)"
+  if (gov >= 2) return "🏛️ B2G (Rząd / Obronność)"
+  if (b2b > b2c && b2b >= 2) return "🏢 B2B (Przedsiębiorstwa)"
+  if (b2c > b2b && b2c >= 2) return "👤 B2C (Konsumenci)"
+  if (b2b > 0 && b2c > 0) return "🔄 B2B2C (Mieszany)"
+  if (b2b > 0) return "🏢 B2B (Przedsiębiorstwa)"
+  return "🔄 B2B/B2C (Mieszany)"
 }
 
 function extractCustomerSegments(summary: string, industry: string): string[] {
@@ -430,24 +504,26 @@ function extractCustomerSegments(summary: string, industry: string): string[] {
 
 function extractGeography(summary: string): string {
   const text = summary.toLowerCase()
-  if (text.includes("worldwide") || text.includes("globally")) return "Globalnie (cały świat)"
-  if (text.includes("united states") && text.includes("international")) return "USA + rynki międzynarodowe"
-  if (text.includes("united states") || text.includes("north america")) return "Głównie USA/Ameryka Północna"
-  if (text.includes("europe")) return "USA + Europa"
-  if (text.includes("asia")) return "USA + Azja"
-  return "Brak danych o zasięgu geograficznym"
+  if (text.includes("worldwide") || text.includes("globally")) return "🌍 Globalnie (cały świat)"
+  if (text.includes("united states") && text.includes("international")) return "🇺🇸🌍 USA + rynki międzynarodowe"
+  if (text.includes("united states") || text.includes("north america")) return "🇺🇸 Głównie USA / Ameryka Północna"
+  if (text.includes("europe")) return "🇺🇸🇪🇺 USA + Europa"
+  if (text.includes("asia")) return "🇺🇸🌏 USA + Azja"
+  if (text.includes("poland") || text.includes("polska")) return "🇵🇱 Polska"
+  return "Brak danych o zasięgu"
 }
 
-function buildCompetitivePosition(grossMargin: number | null, revenueGrowth: number | null, marketCap: number, industry: string): string {
-  const gm = grossMargin ?? 30
+function buildCompetitivePosition(grossMargin: number | null, revenueGrowth: number | null, marketCap: number, _industry: string): string {
+  const gm = grossMargin ?? 0
   const rg = revenueGrowth ?? 0
 
   if (marketCap > 200e9 && gm > 60) return "Dominujący lider rynku — skala, marża i rozpoznawalność marki tworzą trwałą przewagę."
-  if (marketCap > 50e9 && gm > 50) return "Silny gracz z ugruntowaną pozycją — wysoka marża świadczy o pricing power i lojalności klientów."
-  if (rg > 30 && gm > 50) return "Szybko rosnący challanger — dynamiczny wzrost przy zachowaniu wysokich marż. Potencjalny przyszły lider."
-  if (rg > 20 && marketCap < 20e9) return "Emerging player w fazie wzrostu — zdobywa udział w rynku, ale musi udowodnić skalowalność."
+  if (marketCap > 50e9 && gm > 50) return "Silny gracz z ugruntowaną pozycją — wysoka marża świadczy o sile cenowej i lojalności klientów."
+  if (rg > 30 && gm > 50) return "Szybko rosnący pretendent — dynamiczny wzrost przy zachowaniu wysokich marż. Potencjalny przyszły lider."
+  if (rg > 20 && marketCap < 20e9) return "Wschodzący gracz w fazie wzrostu — zdobywa udział w rynku, ale musi udowodnić skalowalność."
   if (gm > 40 && rg > 0) return "Stabilny gracz z dobrą pozycją — wzrost organiczny, ale bez dominacji rynkowej."
-  if (rg < 0) return "Spółka w defensywie — spadające przychody sygnalizują utratę udziałów w rynku lub cykliczny dołek."
+  if (rg < -5) return "Spółka w defensywie — spadające przychody sygnalizują utratę udziałów w rynku lub cykliczny dołek."
+  if (gm <= 0) return "Brak wystarczających danych do oceny pozycji konkurencyjnej."
   return "Pozycja umiarkowana — firma konkuruje ceną lub skalą, bez wyraźnej przewagi produktowej."
 }
 
@@ -477,13 +553,20 @@ export function computeFundamentalAnalysis(
   const geographicReach = extractGeography(sum)
   const competitivePosition = buildCompetitivePosition(grossMargin, revenueGrowth, marketCap, ind)
 
-  // USP
-  const gm = grossMargin ?? 30
+  // FIX #18: USP clearly states when data is unavailable instead of showing fake 30%
+  const gm = grossMargin ?? null
   let usp: string
-  if (gm > 70) usp = "Wyjątkowo wysoka marża brutto (>" + gm.toFixed(0) + "%) wskazuje na unikalny produkt z silnym pricing power. Klienci są skłonni płacić premium za wartość, której nie znajdą gdzie indziej."
-  else if (gm > 50) usp = "Dobra marża brutto (" + gm.toFixed(0) + "%) — produkt ma wartość trudną do zastąpienia. Silne pozycjonowanie cenowe i lojalna baza klientów."
-  else if (gm > 30) usp = "Umiarkowana marża (" + gm.toFixed(0) + "%) — konkurencja cenowa jest istotnym czynnikiem. Spółka musi inwestować w różnicowanie produktu."
-  else usp = "Niska marża brutto (" + gm.toFixed(0) + "%) — produkt jest towarem (commodity) z ograniczonym pricing power. Konkurencja oparta na skali i kosztach."
+  if (gm == null) {
+    usp = "Brak danych o marży brutto — nie można ocenić pricing power produktu."
+  } else if (gm > 70) {
+    usp = "Wyjątkowo wysoka marża brutto (" + gm.toFixed(0) + "%) wskazuje na unikalny produkt z silnym pricing power."
+  } else if (gm > 50) {
+    usp = "Dobra marża brutto (" + gm.toFixed(0) + "%) — produkt ma wartość trudną do zastąpienia."
+  } else if (gm > 30) {
+    usp = "Umiarkowana marża (" + gm.toFixed(0) + "%) — konkurencja cenowa jest istotnym czynnikiem."
+  } else {
+    usp = "Niska marża brutto (" + gm.toFixed(0) + "%) — produkt jest towarem (commodity) z ograniczonym pricing power."
+  }
 
   const porter = computePorter(grossMargin, profitMargin, revenueGrowth, marketCap, ind, sum)
   const porterAvg = Math.round(porter.reduce((acc, p) => acc + p.score, 0) / porter.length * 10) / 10
@@ -492,14 +575,62 @@ export function computeFundamentalAnalysis(
 
   const { moatTypes, moatRating, moatScore } = computeMoat(grossMargin, profitMargin, revenueGrowth, marketCap, ind, sum, porterAvg)
 
+  // ══════════════════════════════════════════════════════════
+  // 5. FUNDAMENTAL SCORE (1-100)
+  // ══════════════════════════════════════════════════════════
+  const rg = revenueGrowth ?? 0
+  const fm = fcfMargin ?? 0
+
+  // A) Product DNA Score (max 20)
+  let productDNA = 0
+  // Product type: Painkiller/Platform > Infrastructure > Vitamin
+  productDNA += productType === "Painkiller" ? 5 : productType === "Platform" ? 5 : productType === "Infrastructure" ? 4 : 2
+  // Revenue model: recurring > transactional > one-time
+  productDNA += revenueModel.includes("Subskrypcja") ? 5 : revenueModel.includes("Transakcyjny") || revenueModel.includes("Marketplace") ? 4 : revenueModel.includes("Licencj") ? 3 : 2
+  // Lifecycle: Growth best, Maturity ok, Decline bad
+  productDNA += lifecycle === "Wzrost" ? 5 : lifecycle === "Dojrzałość" ? 3 : lifecycle === "Wprowadzenie" ? 4 : 1
+  // Product count & diversity
+  productDNA += mainProducts.length >= 3 ? 5 : mainProducts.length >= 1 ? 3 : 1
+  productDNA = Math.min(20, productDNA)
+
+  // B) Porter Score (max 25) — rescale from avg 1-10 to 0-25
+  const porterScore = Math.round((porterAvg / 10) * 25)
+
+  // C) PESTEL Score (max 15)
+  const pestelPositive = pestel.filter(p => p.impact === "positive").length
+  const pestelNegative = pestel.filter(p => p.impact === "negative").length
+  const pestelScore = Math.min(15, Math.max(0, Math.round(7.5 + pestelPositive * 2.5 - pestelNegative * 2.5)))
+
+  // D) Moat Component (max 25) — rescale moatScore (0-100) to 0-25
+  const moatComponent = Math.round(moatScore / 4)
+
+  // E) Financial Fit (max 15) — how well financials support the product story
+  let financialFit = 0
+  // Gross margin fit
+  const gmVal = gm ?? 0
+  financialFit += gmVal > 70 ? 5 : gmVal > 50 ? 4 : gmVal > 30 ? 2 : 1
+  // Revenue growth
+  financialFit += rg > 25 ? 5 : rg > 10 ? 4 : rg > 0 ? 2 : 0
+  // FCF margin
+  financialFit += fm > 20 ? 5 : fm > 10 ? 4 : fm > 0 ? 2 : 0
+  financialFit = Math.min(15, financialFit)
+
+  const fundamentalScore = Math.max(1, Math.min(100, productDNA + porterScore + pestelScore + moatComponent + financialFit))
+
+  const scoreTier: "Elita" | "Silna" | "Solidna" | "Przeciętna" | "Słaba" =
+    fundamentalScore >= 80 ? "Elita" :
+    fundamentalScore >= 65 ? "Silna" :
+    fundamentalScore >= 50 ? "Solidna" :
+    fundamentalScore >= 35 ? "Przeciętna" : "Słaba"
+
   // Verdict
   let verdict: string
-  if (moatRating === "Wide") {
-    verdict = "Spółka posiada szeroką fosę ekonomiczną — silna pozycja konkurencyjna, wysokie bariery wejścia i trwała przewaga produktowa."
-  } else if (moatRating === "Narrow") {
-    verdict = "Spółka posiada wąską fosę ekonomiczną — pewna przewaga konkurencyjna, ale wymaga ciągłych inwestycji w produkt aby ją utrzymać."
+  if (moatRating === "Wide" && fundamentalScore >= 70) {
+    verdict = `Ocena ${fundamentalScore}/100 (${scoreTier}). Spółka posiada szeroką fosę ekonomiczną — silna pozycja konkurencyjna, wysokie bariery wejścia i trwała przewaga produktowa.`
+  } else if (moatRating === "Narrow" || fundamentalScore >= 50) {
+    verdict = `Ocena ${fundamentalScore}/100 (${scoreTier}). Spółka posiada wąską fosę ekonomiczną — pewna przewaga konkurencyjna, ale wymaga ciągłych inwestycji w produkt aby ją utrzymać.`
   } else {
-    verdict = "Brak istotnej fosy ekonomicznej — produkt narażony na presję konkurencyjną. Kluczowe jest tempo innowacji."
+    verdict = `Ocena ${fundamentalScore}/100 (${scoreTier}). Brak istotnej fosy ekonomicznej — produkt narażony na presję konkurencyjną. Kluczowe jest tempo innowacji.`
   }
 
   return {
@@ -519,6 +650,9 @@ export function computeFundamentalAnalysis(
     moatTypes,
     moatRating,
     moatScore,
+    fundamentalScore,
+    scoreBreakdown: { productDNA, porterScore, pestelScore, moatComponent, financialFit },
+    scoreTier,
     verdict,
   }
 }

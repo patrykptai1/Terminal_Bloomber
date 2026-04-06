@@ -37,14 +37,14 @@ const CATEGORY_BG: Record<string, string> = {
 }
 
 const CATEGORY_BAR_COLORS: Record<string, string> = {
-  geopolitical: "oklch(0.6 0.2 25)",
-  economic: "oklch(0.65 0.15 250)",
-  market: "oklch(0.75 0.15 145)",
-  energy: "oklch(0.7 0.12 60)",
-  tech: "oklch(0.7 0.1 300)",
-  crisis: "oklch(0.55 0.2 25)",
-  environment: "oklch(0.6 0.12 180)",
-  company: "oklch(0.65 0.12 200)",
+  geopolitical: "#ff3333",
+  economic: "#3399ff",
+  market: "#22bb44",
+  energy: "#ff8c00",
+  tech: "#cc66ff",
+  crisis: "#cc3322",
+  environment: "#339999",
+  company: "#5599aa",
 }
 
 const REGION_LABELS: Record<string, string> = {
@@ -57,9 +57,9 @@ const REGION_LABELS: Record<string, string> = {
 }
 
 const SENTIMENT_COLORS = {
-  positive: "oklch(0.75 0.15 145)",
-  neutral: "oklch(0.7 0.12 60)",
-  negative: "oklch(0.6 0.2 25)",
+  positive: "#22bb44",
+  neutral: "#ff8c00",
+  negative: "#ff3333",
 }
 
 function timeAgo(dateStr: string): string {
@@ -367,7 +367,7 @@ export default function WorldNewsRadar() {
                 .map(([cat, count]) => ({
                   label: cat.toUpperCase(),
                   value: count,
-                  color: CATEGORY_BAR_COLORS[cat] || "oklch(0.6 0.01 200)",
+                  color: CATEGORY_BAR_COLORS[cat] || "#888899",
                 }))}
             />
           </div>

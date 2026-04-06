@@ -2,11 +2,11 @@
 
 import { PieChart, Pie, Cell, ResponsiveContainer, Text } from "recharts";
 
-const BLOOMBERG_GREEN = "oklch(0.75 0.15 145)";
-const BLOOMBERG_AMBER = "oklch(0.7 0.12 60)";
-const BLOOMBERG_RED = "oklch(0.6 0.2 25)";
-const MUTED_FG = "oklch(0.6 0.01 200)";
-const FG = "oklch(0.93 0.01 200)";
+const BLOOMBERG_GREEN = "#22bb44";
+const BLOOMBERG_AMBER = "#ff8c00";
+const BLOOMBERG_RED = "#ff3333";
+const MUTED_FG = "#888899";
+const FG = "#e0e0e0";
 
 interface GaugeChartProps {
   value: number;
@@ -59,7 +59,7 @@ export default function GaugeChart({
             isAnimationActive={true}
           >
             <Cell fill={activeColor} />
-            <Cell fill="oklch(0.18 0.01 240)" />
+            <Cell fill="#111122" />
             <Cell fill="transparent" />
           </Pie>
           <Text

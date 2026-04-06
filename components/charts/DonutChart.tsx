@@ -9,19 +9,19 @@ import {
   Legend,
 } from "recharts";
 
-const BORDER = "oklch(0.25 0.01 240)";
-const MUTED_FG = "oklch(0.6 0.01 200)";
-const CARD_BG = "oklch(0.12 0.01 240)";
+const BORDER = "#222244";
+const MUTED_FG = "#888899";
+const CARD_BG = "#0a0a1a";
 
 const DEFAULT_COLORS = [
-  "oklch(0.75 0.15 145)", // bloomberg-green
-  "oklch(0.7 0.12 60)",   // bloomberg-amber
-  "oklch(0.65 0.15 250)", // bloomberg-blue
-  "oklch(0.6 0.2 25)",    // bloomberg-red
-  "oklch(0.7 0.1 300)",   // chart-5 purple
-  "oklch(0.6 0.12 180)",  // teal
-  "oklch(0.55 0.15 30)",  // rust
-  "oklch(0.8 0.1 100)",   // lime
+  "#22bb44", // bloomberg-green
+  "#ff8c00",   // bloomberg-amber
+  "#3399ff", // bloomberg-blue
+  "#ff3333",    // bloomberg-red
+  "#cc66ff",   // chart-5 purple
+  "#339999",  // teal
+  "#cc5533",  // rust
+  "#aacc44",   // lime
 ];
 
 interface DonutDataPoint {
@@ -80,7 +80,7 @@ export default function DonutChart({ data, size = 280 }: DonutChartProps) {
             outerRadius="80%"
             dataKey="value"
             nameKey="name"
-            stroke="oklch(0.12 0.01 240)"
+            stroke="#0a0a1a"
             strokeWidth={2}
             paddingAngle={2}
           >

@@ -11,11 +11,11 @@ import {
   ResponsiveContainer,
 } from "recharts";
 
-const BLOOMBERG_BLUE = "oklch(0.65 0.15 250)";
-const BLOOMBERG_AMBER = "oklch(0.7 0.12 60)";
-const BORDER = "oklch(0.25 0.01 240)";
-const MUTED_FG = "oklch(0.6 0.01 200)";
-const CARD_BG = "oklch(0.12 0.01 240)";
+const BLOOMBERG_BLUE = "#3399ff";
+const BLOOMBERG_AMBER = "#ff8c00";
+const BORDER = "#222244";
+const MUTED_FG = "#888899";
+const CARD_BG = "#0a0a1a";
 
 interface BarCompareDataPoint {
   name: string;

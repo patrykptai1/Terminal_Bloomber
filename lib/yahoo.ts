@@ -81,6 +81,7 @@ export interface KeyStatistics {
   industry: string | null
   longBusinessSummary: string | null
   fullTimeEmployees: number | null
+  grossMargins: number | null
   enterpriseValue: number | null
   forwardPE: number | null
   pegRatio: number | null
@@ -123,6 +124,7 @@ export async function fetchKeyStats(symbol: string): Promise<KeyStatistics> {
     industry: ap.industry ?? null,
     longBusinessSummary: ap.longBusinessSummary ?? null,
     fullTimeEmployees: ap.fullTimeEmployees ?? null,
+    grossMargins: num(fd.grossMargins),
     enterpriseValue: num(ks.enterpriseValue),
     forwardPE: num(ks.forwardPE),
     pegRatio: num(ks.pegRatio),
@@ -710,11 +712,11 @@ export interface HistoricalPrice {
 
 export async function fetchHistory(
   symbol: string,
-  period: "1mo" | "3mo" | "6mo" | "1y" | "5y" = "6mo"
+  period: "1mo" | "3mo" | "6mo" | "1y" | "3y" | "5y" = "6mo"
 ): Promise<HistoricalPrice[]> {
   const result: any = await yf.chart(symbol, {
     period1: periodToDate(period),
-    interval: period === "5y" ? "1wk" : period === "1y" ? "1wk" : "1d",
+    interval: (period === "5y" || period === "3y") ? "1wk" : period === "1y" ? "1wk" : "1d",
   })
 
   return (result.quotes ?? []).map((q: any) => ({
@@ -926,6 +928,7 @@ function periodToDate(period: string): Date {
     case "3mo": d.setMonth(d.getMonth() - 3); break
     case "6mo": d.setMonth(d.getMonth() - 6); break
     case "1y": d.setFullYear(d.getFullYear() - 1); break
+    case "3y": d.setFullYear(d.getFullYear() - 3); break
     case "5y": d.setFullYear(d.getFullYear() - 5); break
   }
   return d

@@ -302,7 +302,8 @@ function FinancialReport({ earnings: e, quote: q, currency }: { earnings: Earnin
     if (first.revenue && last.revenue) {
       const totalGrowth = ((last.revenue - first.revenue) / Math.abs(first.revenue)) * 100
       const years = ann.length - 1
-      const cagr = years > 0 ? ((Math.pow(last.revenue / first.revenue, 1 / years) - 1) * 100) : 0
+      const ratio = first.revenue !== 0 ? last.revenue / first.revenue : 0
+      const cagr = years > 0 && ratio > 0 ? ((Math.pow(ratio, 1 / years) - 1) * 100) : 0
       comments.push({
         text: `Przychody wzrosły z ${fmtV(first.revenue)} (${yearFromDate(first.date)}) do ${fmtV(last.revenue)} (${yearFromDate(last.date)}), CAGR: ${cagr.toFixed(1)}%.`,
         type: cagr > 15 ? "good" : cagr > 5 ? "neutral" : cagr > 0 ? "warn" : "bad"

@@ -9,13 +9,13 @@ import type { QuoteData, AnalystData, RecommendationPeriod, EarningsForecast, An
 
 // ── Colors ───────────────────────────────────────────────────
 
-const GREEN = "oklch(0.75 0.15 145)"
-const DARK_GREEN = "oklch(0.55 0.15 145)"
-const AMBER = "oklch(0.75 0.15 85)"
-const ORANGE = "oklch(0.65 0.15 55)"
-const RED = "oklch(0.55 0.2 25)"
-const BLUE = "oklch(0.65 0.15 250)"
-const GRAY = "oklch(0.5 0 0)"
+const GREEN = "#22bb44"
+const DARK_GREEN = "#22aa22"
+const AMBER = "#ffaa33"
+const ORANGE = "#ee7722"
+const RED = "#cc3322"
+const BLUE = "#3399ff"
+const GRAY = "#666666"
 
 // ── Helpers ──────────────────────────────────────────────────
 

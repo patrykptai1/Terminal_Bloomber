@@ -9,9 +9,9 @@ import {
   ResponsiveContainer,
 } from "recharts";
 
-const BLOOMBERG_GREEN = "oklch(0.75 0.15 145)";
-const MUTED_FG = "oklch(0.6 0.01 200)";
-const BORDER = "oklch(0.25 0.01 240)";
+const BLOOMBERG_GREEN = "#22bb44";
+const MUTED_FG = "#888899";
+const BORDER = "#222244";
 
 interface RadarDataPoint {
   metric: string;

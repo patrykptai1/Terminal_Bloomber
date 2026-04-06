@@ -63,7 +63,9 @@ export async function POST(req: NextRequest) {
         case "dividend":
           return (q.dividendYield ?? 0) > 0.02
         case "momentum":
-          return q.changePercent > 0 && q.price > q.low52 * 1.2
+          // FIX #10: True momentum = price well above 52w low AND above MA proxy (mid of 52w range)
+          // This approximates 6-12 month relative strength without needing full history
+          return q.price > q.low52 * 1.3 && q.price > (q.high52 + q.low52) / 2
         case "quality":
           return (s?.returnOnEquity ?? 0) > 0.15 && (s?.profitMargin ?? 0) > 0.1
         case "small-cap":
@@ -79,7 +81,12 @@ export async function POST(req: NextRequest) {
         case "growth": return (b.stats?.revenueGrowth ?? 0) - (a.stats?.revenueGrowth ?? 0)
         case "value": return (a.quote.peRatio ?? 999) - (b.quote.peRatio ?? 999)
         case "dividend": return (b.quote.dividendYield ?? 0) - (a.quote.dividendYield ?? 0)
-        case "momentum": return b.quote.changePercent - a.quote.changePercent
+        case "momentum": {
+          // Sort by distance from 52w low (higher = stronger momentum)
+          const aMom = a.quote.low52 > 0 ? (a.quote.price - a.quote.low52) / a.quote.low52 : 0
+          const bMom = b.quote.low52 > 0 ? (b.quote.price - b.quote.low52) / b.quote.low52 : 0
+          return bMom - aMom
+        }
         case "quality": return (b.stats?.returnOnEquity ?? 0) - (a.stats?.returnOnEquity ?? 0)
         default: return b.quote.marketCap - a.quote.marketCap
       }

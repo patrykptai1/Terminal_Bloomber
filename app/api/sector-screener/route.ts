@@ -249,16 +249,16 @@ export async function POST(req: NextRequest) {
           evEbitdaValuation = impliedEV - netDebt
           if (evEbitdaValuation < 0) evEbitdaValuation = null
         }
-        let premiumDiscount: string | null = null
-        if (stock.profitMargin != null && medMargin != null && medMargin > 0) {
-          const marginRatio = stock.profitMargin / medMargin
-          if (marginRatio > 1.2) premiumDiscount = "PREMIUM"
-          else if (marginRatio < 0.8) premiumDiscount = "DISCOUNT"
-          else premiumDiscount = "FAIR"
-        }
         const valuations = [peValuation, evEbitdaValuation].filter((v): v is number => v != null && v > 0)
         const avgValuation = valuations.length > 0 ? valuations.reduce((a, b) => a + b, 0) / valuations.length : null
         const upside = avgValuation && stock.marketCap > 0 ? ((avgValuation - stock.marketCap) / stock.marketCap) * 100 : null
+        // FIX #13: premiumDiscount based on valuation upside, not margin quality
+        let premiumDiscount: string | null = null
+        if (upside != null) {
+          if (upside < -15) premiumDiscount = "PREMIUM"    // overvalued vs peers
+          else if (upside > 15) premiumDiscount = "DISCOUNT" // undervalued vs peers
+          else premiumDiscount = "FAIR"
+        }
         stock.valuation = { peValuation, evEbitdaValuation, avgValuation, upside, premiumDiscount }
       }
 
@@ -369,15 +369,6 @@ export async function POST(req: NextRequest) {
         if (evEbitdaValuation < 0) evEbitdaValuation = null // Negative equity value = skip
       }
 
-      // Margin-based premium/discount
-      let premiumDiscount: string | null = null
-      if (stock.profitMargin != null && medMargin != null && medMargin > 0) {
-        const marginRatio = stock.profitMargin / medMargin
-        if (marginRatio > 1.2) premiumDiscount = "PREMIUM"
-        else if (marginRatio < 0.8) premiumDiscount = "DISCOUNT"
-        else premiumDiscount = "FAIR"
-      }
-
       // Average valuation
       const valuations = [peValuation, evEbitdaValuation].filter((v): v is number => v != null && v > 0)
       const avgValuation = valuations.length > 0
@@ -389,6 +380,13 @@ export async function POST(req: NextRequest) {
         ? ((avgValuation - stock.marketCap) / stock.marketCap) * 100
         : null
 
+      // FIX: premiumDiscount based on valuation upside (consistent with thematic mode)
+      let premiumDiscount: string | null = null
+      if (upside != null) {
+        if (upside < -15) premiumDiscount = "PREMIUM"
+        else if (upside > 15) premiumDiscount = "DISCOUNT"
+        else premiumDiscount = "FAIR"
+      }
       stock.valuation = { peValuation, evEbitdaValuation, avgValuation, upside, premiumDiscount }
     }
 

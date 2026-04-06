@@ -222,28 +222,37 @@ export default function StockAnalysis() {
               DECISION DASHBOARD
             </div>
 
-            {/* Company info: MCap + description */}
-            <div className="flex items-start gap-3 mb-4 pb-3 border-b border-bloomberg-border/30">
-              <div className="flex items-center gap-2 shrink-0">
-                <span className="text-[10px] text-muted-foreground">MCap:</span>
-                <span className="text-[11px] text-foreground font-bold">{fmtBigValue(q.marketCap, q.currency)}</span>
-                {st?.sector && (
-                  <>
-                    <span className="text-[10px] text-muted-foreground">|</span>
-                    <span className="text-[10px] text-bloomberg-amber">{st.sector}</span>
-                  </>
-                )}
-                {st?.industry && (
-                  <>
-                    <span className="text-[10px] text-muted-foreground">|</span>
-                    <span className="text-[10px] text-muted-foreground">{st.industry}</span>
-                  </>
-                )}
-              </div>
-              {st?.longBusinessSummary && (
-                <TranslatedSummary text={st.longBusinessSummary.slice(0, 300)} />
+            {/* Company info: MCap */}
+            <div className="flex items-center gap-2 mb-3">
+              <span className="text-[10px] text-muted-foreground">MCap:</span>
+              <span className="text-[11px] text-foreground font-bold">{fmtBigValue(q.marketCap, q.currency)}</span>
+              {st?.sector && (
+                <>
+                  <span className="text-[10px] text-muted-foreground">|</span>
+                  <span className="text-[10px] text-bloomberg-amber">{st.sector}</span>
+                </>
+              )}
+              {st?.industry && (
+                <>
+                  <span className="text-[10px] text-muted-foreground">|</span>
+                  <span className="text-[10px] text-muted-foreground">{st.industry}</span>
+                </>
+              )}
+              {st?.fullTimeEmployees && (
+                <>
+                  <span className="text-[10px] text-muted-foreground">|</span>
+                  <span className="text-[10px] text-muted-foreground">{st.fullTimeEmployees.toLocaleString()} pracowników</span>
+                </>
               )}
             </div>
+
+            {/* PROFIL SPÓŁKI — full business description in Polish */}
+            {st?.longBusinessSummary && (
+              <div className="mb-4 pb-3 border-b border-bloomberg-border/30">
+                <div className="text-[9px] text-bloomberg-amber font-bold mb-1.5 tracking-wider">📋 PROFIL SPÓŁKI</div>
+                <TranslatedSummary text={st.longBusinessSummary} full />
+              </div>
+            )}
 
             {/* Verdict + Thesis + Confidence */}
             <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4 mb-5">
@@ -308,7 +317,7 @@ export default function StockAnalysis() {
               <CheckItem label="Balance Sheet Healthy" value={a.checklist.balanceSheetHealthy} />
               <CheckItem label="Above MA50" value={a.checklist.aboveMA50} />
               <CheckItem label="Above MA200" value={a.checklist.aboveMA200} />
-              <CheckItem label="No Excess Premium" value={a.checklist.noExcessivePremium} />
+              <CheckItem label="FCF Yield > 2%" value={a.checklist.healthyFCFYield} />
               <CheckItem label="Sector Tailwind" value={a.checklist.sectorTailwind} />
             </div>
           </div>
@@ -400,9 +409,55 @@ export default function StockAnalysis() {
             const strengthColor = (s: string) => s === "strong" ? "text-bloomberg-green" : s === "moderate" ? "text-bloomberg-amber" : s === "weak" ? "text-bloomberg-red/70" : "text-muted-foreground/40"
             const strengthLabel = (s: string) => s === "strong" ? "SILNA" : s === "moderate" ? "UMIARKOWANA" : s === "weak" ? "SŁABA" : "BRAK"
 
+            const tierColor = fa.scoreTier === "Elita" ? "text-bloomberg-green" : fa.scoreTier === "Silna" ? "text-cyan-400" : fa.scoreTier === "Solidna" ? "text-bloomberg-amber" : fa.scoreTier === "Przeciętna" ? "text-orange-400" : "text-bloomberg-red"
+            const tierBorder = fa.scoreTier === "Elita" ? "border-bloomberg-green" : fa.scoreTier === "Silna" ? "border-cyan-400" : fa.scoreTier === "Solidna" ? "border-bloomberg-amber" : fa.scoreTier === "Przeciętna" ? "border-orange-400" : "border-bloomberg-red"
+            const scoreDeg = fa.fundamentalScore * 3.6
+            const scoreGrad = fa.fundamentalScore >= 75 ? "from-green-500 to-green-700" : fa.fundamentalScore >= 60 ? "from-cyan-400 to-cyan-600" : fa.fundamentalScore >= 45 ? "from-amber-400 to-amber-600" : "from-red-500 to-red-700"
+
             return (
               <div className="bg-bloomberg-card border border-bloomberg-border rounded p-4 space-y-4">
-                <div className="text-[11px] text-bloomberg-amber font-bold tracking-widest">📊 ANALIZA FUNDAMENTALNA — PRODUKT & STRATEGIA</div>
+                {/* Header with score */}
+                <div className="flex items-center justify-between">
+                  <div className="text-[11px] text-bloomberg-amber font-bold tracking-widest">📊 ANALIZA FUNDAMENTALNA — PRODUKT & STRATEGIA</div>
+                  <div className="flex items-center gap-3">
+                    {/* Score circle */}
+                    <div className="relative w-16 h-16">
+                      <svg className="w-16 h-16 -rotate-90" viewBox="0 0 64 64">
+                        <circle cx="32" cy="32" r="28" fill="none" stroke="currentColor" strokeWidth="4" className="text-bloomberg-border/30" />
+                        <circle cx="32" cy="32" r="28" fill="none" strokeWidth="4"
+                          className={tierColor}
+                          strokeDasharray={`${scoreDeg * 28 * Math.PI / 180} ${2 * Math.PI * 28}`}
+                          strokeLinecap="round"
+                        />
+                      </svg>
+                      <div className="absolute inset-0 flex flex-col items-center justify-center">
+                        <span className={`text-lg font-black ${tierColor}`}>{fa.fundamentalScore}</span>
+                      </div>
+                    </div>
+                    <div className="text-right">
+                      <div className={`text-[10px] font-bold ${tierColor}`}>{fa.scoreTier.toUpperCase()}</div>
+                      <div className="text-[7px] text-muted-foreground">/100</div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Score breakdown bar */}
+                <div className="space-y-1">
+                  <div className="flex h-3 rounded-full overflow-hidden border border-bloomberg-border/30">
+                    <div className="bg-purple-500/70" style={{ width: `${fa.scoreBreakdown.productDNA}%` }} title={`DNA Produktu: ${fa.scoreBreakdown.productDNA}/20`} />
+                    <div className="bg-blue-500/70" style={{ width: `${fa.scoreBreakdown.porterScore}%` }} title={`Porter: ${fa.scoreBreakdown.porterScore}/25`} />
+                    <div className="bg-cyan-500/70" style={{ width: `${fa.scoreBreakdown.pestelScore}%` }} title={`PESTEL: ${fa.scoreBreakdown.pestelScore}/15`} />
+                    <div className="bg-bloomberg-green/70" style={{ width: `${fa.scoreBreakdown.moatComponent}%` }} title={`Fosa: ${fa.scoreBreakdown.moatComponent}/25`} />
+                    <div className="bg-bloomberg-amber/70" style={{ width: `${fa.scoreBreakdown.financialFit}%` }} title={`Finanse: ${fa.scoreBreakdown.financialFit}/15`} />
+                  </div>
+                  <div className="flex justify-between text-[7px] text-muted-foreground">
+                    <span>🟣 Produkt {fa.scoreBreakdown.productDNA}/20</span>
+                    <span>🔵 Porter {fa.scoreBreakdown.porterScore}/25</span>
+                    <span>🔷 PESTEL {fa.scoreBreakdown.pestelScore}/15</span>
+                    <span>🟢 Fosa {fa.scoreBreakdown.moatComponent}/25</span>
+                    <span>🟡 Finanse {fa.scoreBreakdown.financialFit}/15</span>
+                  </div>
+                </div>
 
                 {/* 1. Product DNA */}
                 <div>
@@ -582,34 +637,86 @@ export default function StockAnalysis() {
             </div>
           </div>
 
-          {/* ═══ SECTION 2: PRICE CHART ═══ */}
-          {history.length > 0 && (
-            <div className="bg-bloomberg-card border border-bloomberg-border rounded p-4">
-              <div className="text-xs text-bloomberg-amber font-bold mb-3 tracking-widest">
-                PRICE CHART — 1Y
-                {a.ma50 != null && (
-                  <span className="text-muted-foreground font-normal ml-3">
-                    MA50: {fmtCurrencyPrice(a.ma50, q.currency)} ({fmtPct(a.distanceFromMA50Pct)})
+          {/* ═══ SECTION 2: PRICE CHART — 3Y WEEKLY ═══ */}
+          {history.length > 0 && (() => {
+            const chartData = computeChartData(history)
+            // Compute fair value zone from fundamentals
+            // Fair value = price where forward PE = sector PE
+            const fairPE = a.sectorPE
+            const eps = q.eps ?? (q.forwardPE && q.price ? q.price / q.forwardPE : null)
+            const fairValue = eps && fairPE ? eps * fairPE : null
+            const overvalued = fairValue ? fairValue * 1.3 : null  // 30% above fair = overvalued
+            const undervalued = fairValue ? fairValue * 0.7 : null  // 30% below fair = undervalued
+
+            // Determine current valuation status
+            const currentStatus = !fairValue ? null
+              : q.price > (overvalued ?? 0) ? "overvalued"
+              : q.price < (undervalued ?? 0) ? "undervalued"
+              : "fairvalue"
+            const statusLabel = currentStatus === "overvalued" ? "⚠️ PRZEWARTOŚCIOWANA"
+              : currentStatus === "undervalued" ? "💎 NIEDOWARTOŚCIOWANA"
+              : currentStatus === "fairvalue" ? "✅ WYCENA FAIR"
+              : ""
+            const statusColor = currentStatus === "overvalued" ? "text-bloomberg-red"
+              : currentStatus === "undervalued" ? "text-bloomberg-green"
+              : "text-bloomberg-amber"
+
+            return (
+              <div className="bg-bloomberg-card border border-bloomberg-border rounded p-4">
+                <div className="text-xs text-bloomberg-amber font-bold mb-1 tracking-widest">
+                  WYKRES CENOWY — 3 LATA (1W)
+                  {a.rsi != null && (
+                    <span className="text-muted-foreground font-normal ml-3">
+                      RSI: <span className={a.rsi > 70 ? "text-bloomberg-red" : a.rsi < 30 ? "text-bloomberg-green" : ""}>{a.rsi.toFixed(1)}</span>
+                    </span>
+                  )}
+                </div>
+                <div className="flex items-center gap-3 mb-3 text-[9px]">
+                  {a.ma50 != null && (
+                    <span className="text-muted-foreground">
+                      MA50: <span className="text-foreground">{fmtCurrencyPrice(a.ma50, q.currency)}</span> ({fmtPct(a.distanceFromMA50Pct)})
+                    </span>
+                  )}
+                  {a.ma200 != null && (
+                    <span className="text-muted-foreground">
+                      MA200: <span className="text-foreground">{fmtCurrencyPrice(a.ma200, q.currency)}</span> ({fmtPct(a.distanceFromMA200Pct)})
+                    </span>
+                  )}
+                  {fairValue && (
+                    <span className="text-muted-foreground">
+                      Fair Value: <span className="text-bloomberg-amber font-bold">{fmtCurrencyPrice(fairValue, q.currency)}</span>
+                    </span>
+                  )}
+                  {statusLabel && (
+                    <span className={`font-bold ${statusColor}`}>{statusLabel}</span>
+                  )}
+                </div>
+                <PriceChart
+                  data={chartData}
+                  fairValue={fairValue}
+                  overvalued={overvalued}
+                  undervalued={undervalued}
+                  supports={a.stopLoss ? [a.stopLoss] : []}
+                  resistances={a.target1 ? [a.target1] : []}
+                />
+                {/* Valuation legend */}
+                <div className="flex items-center gap-4 mt-2 text-[8px]">
+                  <span className="flex items-center gap-1">
+                    <span className="w-3 h-0.5 bg-bloomberg-red inline-block" /> Strefa przewartościowania {overvalued ? `(>${fmtCurrencyPrice(overvalued, q.currency)})` : ""}
                   </span>
-                )}
-                {a.ma200 != null && (
-                  <span className="text-muted-foreground font-normal ml-3">
-                    MA200: {fmtCurrencyPrice(a.ma200, q.currency)} ({fmtPct(a.distanceFromMA200Pct)})
+                  <span className="flex items-center gap-1">
+                    <span className="w-3 h-0.5 bg-bloomberg-green inline-block" /> Strefa niedowartościowania {undervalued ? `(<${fmtCurrencyPrice(undervalued, q.currency)})` : ""}
                   </span>
-                )}
-                {a.rsi != null && (
-                  <span className="text-muted-foreground font-normal ml-3">
-                    RSI: {a.rsi.toFixed(1)}
+                  <span className="flex items-center gap-1">
+                    <span className="w-3 h-0.5 bg-bloomberg-amber/50 inline-block border-dashed border-t border-bloomberg-amber" /> Fair Value {fairValue ? fmtCurrencyPrice(fairValue, q.currency) : ""}
                   </span>
-                )}
+                  <span className="text-muted-foreground ml-auto">
+                    Wycena: P/E sektorowe ({a.sectorPE.toFixed(1)}x) × EPS ({eps ? fmtCurrencyPrice(eps, q.currency) : "N/A"})
+                  </span>
+                </div>
               </div>
-              <PriceChart
-                data={computeChartData(history)}
-                supports={a.stopLoss ? [a.stopLoss] : []}
-                resistances={a.target1 ? [a.target1] : []}
-              />
-            </div>
-          )}
+            )
+          })()}
 
           {/* ═══ SECTION 3: VALUATION INFOGRAPHIC ═══ */}
           <div className="bg-bloomberg-card border border-bloomberg-border rounded p-4">
@@ -624,10 +731,10 @@ export default function StockAnalysis() {
                   benchmark: a.sectorPE,
                   color:
                     a.peFwd != null && a.peFwd > a.sectorPE * 1.5
-                      ? "oklch(0.6 0.2 25)"
+                      ? "#ff3333"
                       : a.peFwd != null && a.peFwd > a.sectorPE
-                        ? "oklch(0.7 0.12 60)"
-                        : "oklch(0.75 0.15 145)",
+                        ? "#ff8c00"
+                        : "#22bb44",
                 },
                 {
                   label: "EV/EBITDA",
@@ -635,8 +742,8 @@ export default function StockAnalysis() {
                   benchmark: 15,
                   color:
                     a.evEbitda != null && a.evEbitda > 20
-                      ? "oklch(0.6 0.2 25)"
-                      : "oklch(0.75 0.15 145)",
+                      ? "#ff3333"
+                      : "#22bb44",
                 },
                 {
                   label: "P/FCF",
@@ -644,8 +751,8 @@ export default function StockAnalysis() {
                   benchmark: 25,
                   color:
                     a.pfcf != null && a.pfcf > 30
-                      ? "oklch(0.6 0.2 25)"
-                      : "oklch(0.75 0.15 145)",
+                      ? "#ff3333"
+                      : "#22bb44",
                 },
               ]}
             />
@@ -956,8 +1063,15 @@ function ScenarioBar({
   )
 }
 
-function TranslatedSummary({ text }: { text: string }) {
+function TranslatedSummary({ text, full }: { text: string; full?: boolean }) {
   const translated = useTranslatePL(text)
+  if (full) {
+    return (
+      <div className="text-[10px] text-foreground/80 leading-relaxed">
+        {translated}
+      </div>
+    )
+  }
   return (
     <div className="text-[9px] text-muted-foreground leading-snug flex-1 line-clamp-2">
       {translated}

@@ -1,26 +1,25 @@
 "use client";
 
 import {
-  AreaChart,
-  Area,
   XAxis,
   YAxis,
   CartesianGrid,
   Tooltip,
   ReferenceLine,
+  ReferenceArea,
   ResponsiveContainer,
   Line,
   ComposedChart,
+  Area,
 } from "recharts";
 
-const BLOOMBERG_GREEN = "oklch(0.75 0.15 145)";
-const BLOOMBERG_AMBER = "oklch(0.7 0.12 60)";
-const BLOOMBERG_BLUE = "oklch(0.65 0.15 250)";
-const BLOOMBERG_RED = "oklch(0.6 0.2 25)";
-const BORDER = "oklch(0.25 0.01 240)";
-const MUTED_FG = "oklch(0.6 0.01 200)";
-const FG = "oklch(0.93 0.01 200)";
-const CARD_BG = "oklch(0.12 0.01 240)";
+const BLOOMBERG_GREEN = "#22bb44";
+const BLOOMBERG_AMBER = "#ff8c00";
+const BLOOMBERG_BLUE = "#3399ff";
+const BLOOMBERG_RED = "#ff3333";
+const BORDER = "#222244";
+const MUTED_FG = "#888899";
+const CARD_BG = "#0a0a1a";
 
 interface PriceDataPoint {
   date: string;
@@ -33,6 +32,9 @@ interface PriceChartProps {
   data: PriceDataPoint[];
   supports?: number[];
   resistances?: number[];
+  fairValue?: number | null;
+  overvalued?: number | null;
+  undervalued?: number | null;
 }
 
 interface TooltipPayloadEntry {
@@ -75,12 +77,26 @@ export default function PriceChart({
   data,
   supports = [],
   resistances = [],
+  fairValue,
+  overvalued,
+  undervalued,
 }: PriceChartProps) {
   const hasMA50 = data.some((d) => d.ma50 !== undefined);
   const hasMA200 = data.some((d) => d.ma200 !== undefined);
 
+  // Calculate Y domain to include valuation zones
+  const allCloses = data.map(d => d.close).filter(c => c > 0);
+  const minClose = Math.min(...allCloses);
+  const maxClose = Math.max(...allCloses);
+  const margin = (maxClose - minClose) * 0.1;
+
+  let yMin = minClose - margin;
+  let yMax = maxClose + margin;
+  if (undervalued && undervalued < yMin) yMin = undervalued * 0.95;
+  if (overvalued && overvalued > yMax) yMax = overvalued * 1.05;
+
   return (
-    <ResponsiveContainer width="100%" height={400}>
+    <ResponsiveContainer width="100%" height={450}>
       <ComposedChart data={data} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
         <defs>
           <linearGradient id="priceGradient" x1="0" y1="0" x2="0" y2="1">
@@ -91,28 +107,60 @@ export default function PriceChart({
         <CartesianGrid strokeDasharray="3 3" stroke={BORDER} opacity={0.5} />
         <XAxis
           dataKey="date"
-          tick={{ fill: MUTED_FG, fontSize: 10, fontFamily: "monospace" }}
+          tick={{ fill: MUTED_FG, fontSize: 9, fontFamily: "monospace" }}
           axisLine={{ stroke: BORDER }}
           tickLine={{ stroke: BORDER }}
+          interval={Math.max(1, Math.floor(data.length / 12))}
         />
         <YAxis
           tick={{ fill: MUTED_FG, fontSize: 10, fontFamily: "monospace" }}
           axisLine={{ stroke: BORDER }}
           tickLine={{ stroke: BORDER }}
-          domain={["auto", "auto"]}
+          domain={[yMin, yMax]}
         />
         <Tooltip content={<CustomTooltip />} />
 
+        {/* ── Valuation zones (colored background areas) ── */}
+        {overvalued != null && (
+          <ReferenceArea
+            y1={overvalued}
+            y2={yMax}
+            fill="#f4433620"
+            fillOpacity={1}
+            ifOverflow="hidden"
+          />
+        )}
+        {undervalued != null && (
+          <ReferenceArea
+            y1={yMin}
+            y2={undervalued}
+            fill="#00e67615"
+            fillOpacity={1}
+            ifOverflow="hidden"
+          />
+        )}
+        {fairValue != null && undervalued != null && overvalued != null && (
+          <ReferenceArea
+            y1={undervalued}
+            y2={overvalued}
+            fill="#ffeb3b08"
+            fillOpacity={1}
+            ifOverflow="hidden"
+          />
+        )}
+
+        {/* ── Price area ── */}
         <Area
           type="monotone"
           dataKey="close"
           stroke={BLOOMBERG_GREEN}
           fill="url(#priceGradient)"
           strokeWidth={2}
-          name="Price"
+          name="Cena"
           dot={false}
         />
 
+        {/* ── Moving averages ── */}
         {hasMA50 && (
           <Line
             type="monotone"
@@ -137,7 +185,57 @@ export default function PriceChart({
           />
         )}
 
-        {supports.map((level) => (
+        {/* ── Valuation reference lines ── */}
+        {fairValue != null && (
+          <ReferenceLine
+            y={fairValue}
+            stroke={BLOOMBERG_AMBER}
+            strokeDasharray="8 4"
+            strokeWidth={2}
+            label={{
+              value: `Fair Value ${fairValue.toFixed(0)}`,
+              fill: BLOOMBERG_AMBER,
+              fontSize: 10,
+              fontFamily: "monospace",
+              position: "right",
+            }}
+          />
+        )}
+
+        {overvalued != null && (
+          <ReferenceLine
+            y={overvalued}
+            stroke={BLOOMBERG_RED}
+            strokeDasharray="6 3"
+            strokeWidth={1.5}
+            label={{
+              value: `Przewartościowana ${overvalued.toFixed(0)}`,
+              fill: BLOOMBERG_RED,
+              fontSize: 9,
+              fontFamily: "monospace",
+              position: "right",
+            }}
+          />
+        )}
+
+        {undervalued != null && (
+          <ReferenceLine
+            y={undervalued}
+            stroke={BLOOMBERG_GREEN}
+            strokeDasharray="6 3"
+            strokeWidth={1.5}
+            label={{
+              value: `Niedowartościowana ${undervalued.toFixed(0)}`,
+              fill: BLOOMBERG_GREEN,
+              fontSize: 9,
+              fontFamily: "monospace",
+              position: "right",
+            }}
+          />
+        )}
+
+        {/* ── Support/Resistance lines (if no valuation data) ── */}
+        {!fairValue && supports.map((level) => (
           <ReferenceLine
             key={`s-${level}`}
             y={level}
@@ -145,7 +243,7 @@ export default function PriceChart({
             strokeDasharray="6 4"
             strokeWidth={1}
             label={{
-              value: `S ${level}`,
+              value: `S ${level.toFixed(0)}`,
               fill: BLOOMBERG_GREEN,
               fontSize: 10,
               fontFamily: "monospace",
@@ -154,7 +252,7 @@ export default function PriceChart({
           />
         ))}
 
-        {resistances.map((level) => (
+        {!fairValue && resistances.map((level) => (
           <ReferenceLine
             key={`r-${level}`}
             y={level}
@@ -162,7 +260,7 @@ export default function PriceChart({
             strokeDasharray="6 4"
             strokeWidth={1}
             label={{
-              value: `R ${level}`,
+              value: `R ${level.toFixed(0)}`,
               fill: BLOOMBERG_RED,
               fontSize: 10,
               fontFamily: "monospace",

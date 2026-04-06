@@ -9,10 +9,10 @@ import type { FullAnalysis } from "@/lib/analysis"
 import { fmtPrice as fmtCurrencyPrice, fmtBigValue } from "@/lib/currency"
 
 // ── Bloomberg Colors ─────────────────────────────────────────────
-const GREEN = "oklch(0.75 0.15 145)"
-const AMBER = "oklch(0.7 0.12 60)"
-const RED = "oklch(0.6 0.2 25)"
-const MUTED = "oklch(0.5 0.01 200)"
+const GREEN = "#22bb44"
+const AMBER = "#ff8c00"
+const RED = "#ff3333"
+const MUTED = "#666677"
 
 // ── Types ────────────────────────────────────────────────────────
 

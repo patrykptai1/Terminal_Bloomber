@@ -12,12 +12,12 @@ import {
   Cell,
 } from "recharts";
 
-const BLOOMBERG_GREEN = "oklch(0.75 0.15 145)";
-const BLOOMBERG_AMBER = "oklch(0.7 0.12 60)";
-const BORDER = "oklch(0.25 0.01 240)";
-const MUTED_FG = "oklch(0.6 0.01 200)";
-const CARD_BG = "oklch(0.12 0.01 240)";
-const FG = "oklch(0.93 0.01 200)";
+const BLOOMBERG_GREEN = "#22bb44";
+const BLOOMBERG_AMBER = "#ff8c00";
+const BORDER = "#222244";
+const MUTED_FG = "#888899";
+const CARD_BG = "#0a0a1a";
+const FG = "#e0e0e0";
 
 interface HorizontalBarDataPoint {
   label: string;
