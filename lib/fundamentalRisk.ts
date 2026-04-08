@@ -107,6 +107,55 @@ export function computeFundamentalRisk(
     }
   }
 
+  // Cash trend analysis — detect significant cash decline with cause diagnosis
+  if (earnings) {
+    const bsAnn = (earnings.balanceSheetAnnual ?? []).filter(b => b.cashAndEquivalents != null)
+    const cfAnn = earnings.cashFlowAnnual ?? []
+    if (bsAnn.length >= 2) {
+      const cashNow = bsAnn[bsAnn.length - 1].cashAndEquivalents!
+      const cashPrev = bsAnn[bsAnn.length - 2].cashAndEquivalents!
+      const cashChange = cashPrev > 0 ? ((cashNow - cashPrev) / cashPrev) * 100 : 0
+      const cashDelta = cashNow - cashPrev
+
+      if (cashChange < -30 && Math.abs(cashDelta) > 1e9) {
+        // Diagnose cause from cash flow data
+        const latestCf = cfAnn.length > 0 ? cfAnn[cfAnn.length - 1] : null
+        const capex = latestCf?.capitalExpenditure ? Math.abs(latestCf.capitalExpenditure) : 0
+        const ocf = latestCf?.operatingCashFlow ?? 0
+
+        // Check share changes (acquisition = share count increase)
+        const sharesAnn = (earnings.balanceSheetAnnual ?? []).filter(b => b.sharesOutstanding != null)
+        const sharesGrew = sharesAnn.length >= 2 && sharesAnn[sharesAnn.length - 1].sharesOutstanding! > sharesAnn[sharesAnn.length - 2].sharesOutstanding! * 1.05
+        const sharesShrunk = sharesAnn.length >= 2 && sharesAnn[sharesAnn.length - 1].sharesOutstanding! < sharesAnn[sharesAnn.length - 2].sharesOutstanding! * 0.97
+
+        // Determine cause
+        const causes: string[] = []
+        if (sharesGrew) causes.push("akwizycja (wzrost liczby akcji sugeruje przejęcie finansowane akcjami/gotówką)")
+        if (sharesShrunk) causes.push("buyback akcji (skup własnych akcji zużywa gotówkę)")
+        if (capex > Math.abs(cashDelta) * 0.3) causes.push(`wysoki CapEx (${(capex/1e9).toFixed(1)}B — inwestycje w rozwój/infrastrukturę)`)
+        if (ocf < 0) causes.push("ujemny cash flow operacyjny (spółka spala gotówkę z działalności)")
+        if (totalDebt != null && bsAnn.length >= 2) {
+          // Could be debt repayment — check if debt decreased
+          causes.push("możliwa spłata zadłużenia lub dywidendy")
+        }
+        if (causes.length === 0) causes.push("przyczyna wymaga głębszej analizy sprawozdania")
+
+        const severity = cashChange < -50 ? "high" as const : "medium" as const
+        financialItems.push({
+          category: "financial",
+          severity,
+          title: `Spadek gotówki ${cashChange.toFixed(0)}% YoY`,
+          description: `Gotówka spadła z ${(cashPrev/1e9).toFixed(1)}B do ${(cashNow/1e9).toFixed(1)}B (${(cashDelta/1e9).toFixed(1)}B). Zidentyfikowane przyczyny: ${causes.join("; ")}.`,
+          metric: `Cash: ${(cashPrev/1e9).toFixed(1)}B → ${(cashNow/1e9).toFixed(1)}B`,
+          trend: "worsening",
+        })
+        financialScore += severity === "high" ? 2 : 1
+      } else if (cashChange > 50 && Math.abs(cashDelta) > 1e9) {
+        positiveFactors.push(`Wzrost gotówki +${cashChange.toFixed(0)}% YoY (z ${(cashPrev/1e9).toFixed(1)}B do ${(cashNow/1e9).toFixed(1)}B)`)
+      }
+    }
+  }
+
   financialScore = clamp(financialScore, 1, 10)
 
   // ══════════════════════════════════════════════════════════
