@@ -44,6 +44,19 @@ export async function fetchQuote(symbol: string): Promise<QuoteData> {
   const q: any = await yf.quote(symbol)
   if (!q) throw new Error(`No data for ${symbol}`)
 
+  // Some tickers (e.g. LNG, certain energy/commodity stocks) don't return analyst
+  // data via yf.quote() but DO have it in quoteSummary.financialData.
+  // Fetch fallback when quote has no analyst data.
+  let analystFallback: any = null
+  if (q.targetMeanPrice == null && q.recommendationKey == null) {
+    try {
+      const summary: any = await yf.quoteSummary(symbol, { modules: ["financialData"] })
+      analystFallback = summary.financialData ?? null
+    } catch { /* ignore */ }
+  }
+
+  const af = analystFallback
+
   return {
     symbol: q.symbol ?? symbol,
     name: q.longName ?? q.shortName ?? symbol,
@@ -67,12 +80,12 @@ export async function fetchQuote(symbol: string): Promise<QuoteData> {
     exchange: q.fullExchangeName ?? q.exchange ?? "",
     currency: q.currency ?? "USD",
     beta: num(q.beta),
-    targetMeanPrice: num(q.targetMeanPrice),
-    targetHighPrice: num(q.targetHighPrice),
-    targetLowPrice: num(q.targetLowPrice),
-    recommendationMean: num(q.recommendationMean),
-    recommendationKey: q.recommendationKey ?? null,
-    numberOfAnalysts: num(q.numberOfAnalystOpinions),
+    targetMeanPrice: num(q.targetMeanPrice) ?? (af ? num(af.targetMeanPrice) : null),
+    targetHighPrice: num(q.targetHighPrice) ?? (af ? num(af.targetHighPrice) : null),
+    targetLowPrice: num(q.targetLowPrice) ?? (af ? num(af.targetLowPrice) : null),
+    recommendationMean: num(q.recommendationMean) ?? (af ? num(af.recommendationMean) : null),
+    recommendationKey: q.recommendationKey ?? (af ? af.recommendationKey ?? null : null),
+    numberOfAnalysts: num(q.numberOfAnalystOpinions) ?? (af ? num(af.numberOfAnalystOpinions) : null),
   }
 }
 
