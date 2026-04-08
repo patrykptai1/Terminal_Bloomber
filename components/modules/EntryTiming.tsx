@@ -194,10 +194,10 @@ export default function EntryTiming() {
     const avoidCond = avoidConditions.length > 0 ? avoidConditions.join(" or ") : "Major support breakdown"
 
     return [
-      { scenario: "Buy Now", price: fmtP(price, q.currency), condition: buyNowCond, color: "text-bloomberg-green", icon: <TrendingUp className="w-4 h-4" /> },
-      { scenario: "Wait for Dip", price: fmtP(dipPrice, q.currency), condition: dipCond, color: "text-bloomberg-amber", icon: <TrendingDown className="w-4 h-4" /> },
-      { scenario: "Aggressive Entry", price: fmtP(aggressivePrice, q.currency), condition: aggressiveCond, color: "text-blue-400", icon: <ArrowUp className="w-4 h-4" /> },
-      { scenario: "Avoid Entirely", price: "---", condition: avoidCond, color: "text-bloomberg-red", icon: <Shield className="w-4 h-4" /> },
+      { scenario: "Kup teraz", price: fmtP(price, q.currency), condition: buyNowCond, color: "text-bloomberg-green", icon: <TrendingUp className="w-4 h-4" /> },
+      { scenario: "Czekaj na korektę", price: fmtP(dipPrice, q.currency), condition: dipCond, color: "text-bloomberg-amber", icon: <TrendingDown className="w-4 h-4" /> },
+      { scenario: "Agresywne wejście", price: fmtP(aggressivePrice, q.currency), condition: aggressiveCond, color: "text-blue-400", icon: <ArrowUp className="w-4 h-4" /> },
+      { scenario: "Unikaj całkowicie", price: "---", condition: avoidCond, color: "text-bloomberg-red", icon: <Shield className="w-4 h-4" /> },
     ]
   }, [q, a, t])
 
@@ -256,7 +256,7 @@ export default function EntryTiming() {
         Entry timing — price chart with MA overlay, support/resistance, entry scenarios, valuation check (Yahoo Finance)
       </div>
       <TerminalInput
-        placeholder="Enter ticker (e.g. NVDA, AMZN, KGH.WA)"
+        placeholder="Wpisz ticker (np. NVDA, AMZN, KGH.WA)"
         onSubmit={handleAnalyze}
         loading={loading}
         label="ENTRY >"
@@ -402,7 +402,7 @@ export default function EntryTiming() {
                         {isPremium ? "+" : ""}{fmt(diff, 1)}%
                       </div>
                       <div className="text-xs text-muted-foreground mt-1">
-                        {isPremium ? "Premium" : "Discount"} to analyst mean
+                        {isPremium ? "Premia" : "Dyskonto"} to analyst mean
                       </div>
                       <div className="text-xs text-muted-foreground mt-1">
                         Target: {fmtP(q.targetMeanPrice, q.currency)}
@@ -422,8 +422,8 @@ export default function EntryTiming() {
                 </div>
                 <div className="text-xs text-muted-foreground mt-1">
                   {t.priceVsSma50 != null
-                    ? t.priceVsSma50 > 5 ? "Overbought zone" : t.priceVsSma50 < -5 ? "Oversold zone" : "Neutral"
-                    : "Insufficient data"}
+                    ? t.priceVsSma50 > 5 ? "Strefa wykupienia" : t.priceVsSma50 < -5 ? "Strefa wyprzedania" : "Neutral"
+                    : "Niewystarczające dane"}
                 </div>
                 {t.sma50 != null && (
                   <div className="text-[12px] text-muted-foreground mt-1">MA50: {fmtP(t.sma50, q.currency)}</div>
@@ -438,8 +438,8 @@ export default function EntryTiming() {
                 </div>
                 <div className="text-xs text-muted-foreground mt-1">
                   {t.priceVsSma200 != null
-                    ? t.priceVsSma200 > 0 ? "Long-term UPTREND" : "Long-term DOWNTREND"
-                    : "Insufficient data"}
+                    ? t.priceVsSma200 > 0 ? "Długoterminowy TREND WZROSTOWY" : "Długoterminowy TREND SPADKOWY"
+                    : "Niewystarczające dane"}
                 </div>
                 {t.sma200 != null && (
                   <div className="text-[12px] text-muted-foreground mt-1">MA200: {fmtP(t.sma200, q.currency)}</div>

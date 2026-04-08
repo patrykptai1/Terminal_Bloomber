@@ -48,12 +48,12 @@ const CATEGORY_BAR_COLORS: Record<string, string> = {
 }
 
 const REGION_LABELS: Record<string, string> = {
-  americas: "Americas",
-  europe: "Europe",
-  asia: "Asia-Pacific",
-  middle_east: "Middle East",
-  africa: "Africa",
-  global: "Global",
+  americas: "Ameryki",
+  europe: "Europa",
+  asia: "Azja-Pacyfik",
+  middle_east: "Bliski Wschód",
+  africa: "Afryka",
+  global: "Globalny",
 }
 
 const SENTIMENT_COLORS = {
@@ -65,7 +65,7 @@ const SENTIMENT_COLORS = {
 function timeAgo(dateStr: string): string {
   const diff = Date.now() - new Date(dateStr).getTime()
   const mins = Math.floor(diff / 60000)
-  if (mins < 1) return "just now"
+  if (mins < 1) return "teraz"
   if (mins < 60) return `${mins}m ago`
   const hrs = Math.floor(mins / 60)
   if (hrs < 24) return `${hrs}h ago`
@@ -148,7 +148,7 @@ export default function WorldNewsRadar() {
             <span className="text-xs text-muted-foreground">
               {categoryFilter === "company" && companyTicker
                 ? `COMPANY INTEL: ${companyTicker}`
-                : "MULTI-SOURCE OSINT FEED"}
+                : "WIELOŹRÓDŁOWY KANAŁ OSINT"}
             </span>
           </div>
           <div className="flex items-center gap-3">
@@ -162,7 +162,7 @@ export default function WorldNewsRadar() {
               disabled={loading}
               className="text-xs px-3 py-1 border border-bloomberg-border hover:border-bloomberg-green hover:text-bloomberg-green text-muted-foreground transition-colors disabled:opacity-50"
             >
-              {loading ? "LOADING..." : "REFRESH"}
+              {loading ? "ŁADOWANIE..." : "ODŚWIEŻ"}
             </button>
           </div>
         </div>
@@ -195,9 +195,9 @@ export default function WorldNewsRadar() {
             </div>
             <DonutChart
               data={[
-                { name: "Positive", value: stats.bySentiment.positive || 0, color: SENTIMENT_COLORS.positive },
-                { name: "Neutral", value: stats.bySentiment.neutral || 0, color: SENTIMENT_COLORS.neutral },
-                { name: "Negative", value: stats.bySentiment.negative || 0, color: SENTIMENT_COLORS.negative },
+                { name: "Pozytywny", value: stats.bySentiment.positive || 0, color: SENTIMENT_COLORS.positive },
+                { name: "Neutralny", value: stats.bySentiment.neutral || 0, color: SENTIMENT_COLORS.neutral },
+                { name: "Negatywny", value: stats.bySentiment.negative || 0, color: SENTIMENT_COLORS.negative },
               ]}
               size={120}
             />
@@ -398,14 +398,14 @@ export default function WorldNewsRadar() {
             <h3 className="text-xs text-bloomberg-amber font-bold tracking-wider mb-2">SENTIMENT OVERVIEW</h3>
             <DonutChart
               data={[
-                { name: "Positive", value: stats.bySentiment.positive || 0, color: SENTIMENT_COLORS.positive },
-                { name: "Neutral", value: stats.bySentiment.neutral || 0, color: SENTIMENT_COLORS.neutral },
-                { name: "Negative", value: stats.bySentiment.negative || 0, color: SENTIMENT_COLORS.negative },
+                { name: "Pozytywny", value: stats.bySentiment.positive || 0, color: SENTIMENT_COLORS.positive },
+                { name: "Neutralny", value: stats.bySentiment.neutral || 0, color: SENTIMENT_COLORS.neutral },
+                { name: "Negatywny", value: stats.bySentiment.negative || 0, color: SENTIMENT_COLORS.negative },
               ]}
               size={180}
             />
             <p className="text-xs text-muted-foreground text-center mt-2">
-              Market sentiment is predominantly{" "}
+              Sentyment rynkowy jest głównie{" "}
               <span className={
                 (stats.bySentiment.negative || 0) > (stats.bySentiment.positive || 0)
                   ? "text-bloomberg-red"

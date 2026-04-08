@@ -15,16 +15,16 @@ import WorldNewsRadar from "@/components/modules/WorldNewsRadar"
 import type { TabId } from "@/types"
 
 const TAB_TITLES: Record<TabId, string> = {
-  analysis: "FULL STOCK ANALYSIS",
-  screener: "STOCK SCREENER",
-  earnings: "EARNINGS REPORT",
-  risk: "RISK ASSESSMENT",
-  compare: "HEAD-TO-HEAD COMPARE",
-  portfolio: "PORTFOLIO BUILDER",
-  entry: "ENTRY TIMING",
-  analyst: "ANALYST RECOMMENDATIONS",
+  analysis: "PEŁNA ANALIZA SPÓŁKI",
+  screener: "SCREENER SPÓŁEK",
+  earnings: "RAPORT WYNIKOWY",
+  risk: "OCENA RYZYKA",
+  compare: "PORÓWNANIE SPÓŁEK",
+  portfolio: "PORTFEL",
+  entry: "TIMING WEJŚCIA",
+  analyst: "REKOMENDACJE ANALITYKÓW",
   sectors: "SECTORS",
-  worldnews: "WORLD NEWS RADAR",
+  worldnews: "RADAR WIADOMOŚCI",
 }
 
 const TAB_KEYS: TabId[] = ["analysis", "screener", "earnings", "risk", "compare", "portfolio", "entry", "analyst", "sectors", "worldnews"]
@@ -76,7 +76,7 @@ export default function Home() {
         <span>US + GPW | AI-Powered Analysis</span>
         <span className="flex items-center gap-1">
           <span className="w-1.5 h-1.5 bg-bloomberg-green rounded-full animate-pulse" />
-          CONNECTED
+          POŁĄCZONO
         </span>
       </footer>
     </div>

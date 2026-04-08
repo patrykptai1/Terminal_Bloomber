@@ -14,6 +14,8 @@ import type { NewsItem } from "@/lib/news"
 import { fmtPrice as fmtCurrencyPrice, fmtBigValue, currencySymbol } from "@/lib/currency"
 import { computeFundamentalAnalysis } from "@/lib/fundamentalAnalysis"
 import type { FundamentalReport } from "@/lib/fundamentalAnalysis"
+import { isQuantumStock, computeQuantumValuation } from "@/lib/quantumValuation"
+import type { QuantumValuation } from "@/lib/quantumValuation"
 
 // ── Helpers ──────────────────────────────────────────────────
 
@@ -199,7 +201,7 @@ export default function StockAnalysis() {
         Full stock analysis with decision dashboard, charts, risk matrix and probability scenarios
       </div>
       <TerminalInput
-        placeholder="Enter ticker (e.g. AAPL, MSFT, NVDA, TSLA)"
+        placeholder="Wpisz ticker (np. AAPL, MSFT, NVDA, TSLA)"
         onSubmit={handleAnalyze}
         loading={loading}
         label="ANALYZE >"
@@ -216,10 +218,10 @@ export default function StockAnalysis() {
       {q && a && (
         <div className="space-y-4">
 
-          {/* ═══ SECTION 1: DECISION DASHBOARD ═══ */}
+          {/* ═══ SECTION 1: DASHBOARD DECYZYJNY ═══ */}
           <div className={`border rounded p-5 ${verdictBg(a.verdict)}`}>
             <div className="text-xs text-bloomberg-amber font-bold mb-2 tracking-widest">
-              DECISION DASHBOARD
+              DASHBOARD DECYZYJNY
             </div>
 
             {/* Company info: MCap */}
@@ -308,19 +310,144 @@ export default function StockAnalysis() {
 
             {/* Checklist */}
             <div className="text-xs text-muted-foreground font-bold mb-2 tracking-wider">
-              INVESTMENT CHECKLIST
+              LISTA KONTROLNA INWESTYCJI
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-1.5 text-xs">
-              <CheckItem label="Valuation Reasonable" value={a.checklist.valuationReasonable} />
-              <CheckItem label="Revenue Growth > 0" value={a.checklist.revenueGrowthPositive} />
-              <CheckItem label="Margins Stable" value={a.checklist.marginsStable} />
-              <CheckItem label="Balance Sheet Healthy" value={a.checklist.balanceSheetHealthy} />
-              <CheckItem label="Above MA50" value={a.checklist.aboveMA50} />
-              <CheckItem label="Above MA200" value={a.checklist.aboveMA200} />
-              <CheckItem label="FCF Yield > 2%" value={a.checklist.healthyFCFYield} />
-              <CheckItem label="Sector Tailwind" value={a.checklist.sectorTailwind} />
+              <CheckItem label="Wycena rozsądna" value={a.checklist.valuationReasonable} />
+              <CheckItem label="Wzrost przychodów > 0" value={a.checklist.revenueGrowthPositive} />
+              <CheckItem label="Marże stabilne" value={a.checklist.marginsStable} />
+              <CheckItem label="Bilans zdrowy" value={a.checklist.balanceSheetHealthy} />
+              <CheckItem label="Powyżej MA50" value={a.checklist.aboveMA50} />
+              <CheckItem label="Powyżej MA200" value={a.checklist.aboveMA200} />
+              <CheckItem label="FCF Yield > 1.5%" value={a.checklist.healthyFCFYield} />
+              <CheckItem label="Wiatr sektorowy" value={a.checklist.sectorTailwind} />
             </div>
           </div>
+
+          {/* ═══ QUANTUM VALUATION (quantum stocks only) ═══ */}
+          {isQuantumStock(q.symbol, st?.industry, st?.longBusinessSummary) && (() => {
+            const qv = computeQuantumValuation(q, st ?? null, null)
+            const scoreColor = qv.overallScore >= 60 ? "text-bloomberg-green" : qv.overallScore >= 35 ? "text-bloomberg-amber" : "text-bloomberg-red"
+            return (
+              <div className="bg-bloomberg-card border border-purple-500/30 p-4 space-y-4">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <span className="text-lg">⚛️</span>
+                    <div>
+                      <div className="text-[13px] text-purple-400 font-bold tracking-wider">QUANTUM VALUATION — WYCENA SCENARIUSZOWA</div>
+                      <div className="text-[11px] text-muted-foreground">Architektura: {qv.profile.architecturePL} | TRL: {qv.trlScore}/9 | {qv.profile.stackType}</div>
+                    </div>
+                  </div>
+                  <div className="text-right">
+                    <div className={`text-2xl font-black ${scoreColor}`}>{qv.overallScore}</div>
+                    <div className={`text-[11px] font-bold ${scoreColor}`}>{qv.riskLevel}</div>
+                  </div>
+                </div>
+
+                {/* TRL + Architecture */}
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="bg-bloomberg-bg p-2.5 border border-bloomberg-border/30">
+                    <div className="text-[11px] text-purple-400 font-bold mb-1">🔬 TECHNOLOGIA</div>
+                    <div className="text-[11px] text-foreground/80">{qv.trlDescription}</div>
+                    <div className="text-[11px] text-muted-foreground mt-1">Ryzyko architektury: {qv.architectureRisk}</div>
+                  </div>
+                  <div className="bg-bloomberg-bg p-2.5 border border-bloomberg-border/30">
+                    <div className="text-[11px] text-purple-400 font-bold mb-1">💰 PRZEŻYWALNOŚĆ</div>
+                    <div className={`text-[13px] font-bold ${qv.runwayStatus === "comfortable" ? "text-bloomberg-green" : qv.runwayStatus === "warning" ? "text-bloomberg-amber" : qv.runwayStatus === "critical" ? "text-bloomberg-red" : ""}`}>
+                      {qv.cashRunwayQuarters != null ? (qv.cashRunwayQuarters >= 99 ? "Cash flow dodatni" : `${qv.cashRunwayQuarters} kwartałów runway`) : "Brak danych"}
+                    </div>
+                    {qv.quarterlyBurn != null && <div className="text-[11px] text-muted-foreground">Burn: ${(qv.quarterlyBurn/1e6).toFixed(0)}M/kwartał</div>}
+                    <div className="text-[11px] text-muted-foreground mt-1">{qv.dilutionRisk}</div>
+                  </div>
+                </div>
+
+                {/* Revenue quality */}
+                <div className="text-[11px] text-muted-foreground bg-bloomberg-bg p-2 border border-bloomberg-border/30">
+                  <span className="text-purple-400 font-bold">Przychody: </span>{qv.revenueQuality}
+                </div>
+
+                {/* Scenario table */}
+                <div>
+                  <div className="text-[12px] text-purple-400 font-bold mb-2">📊 SCENARIUSZE WYCENY</div>
+                  <table className="w-full text-[11px]">
+                    <thead>
+                      <tr className="border-b border-bloomberg-border text-muted-foreground">
+                        <th className="text-left py-1.5">Scenariusz</th>
+                        <th className="text-center py-1.5">P-stwo</th>
+                        <th className="text-right py-1.5">Revenue</th>
+                        <th className="text-right py-1.5">Mnożnik</th>
+                        <th className="text-right py-1.5">Wartość/akcję</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {qv.scenarios.map((sc, i) => (
+                        <tr key={i} className="border-b border-bloomberg-border/30">
+                          <td className="py-1.5 font-bold text-foreground">{sc.name}</td>
+                          <td className={`py-1.5 text-center font-bold ${sc.probability > 25 ? "text-bloomberg-green" : sc.probability > 10 ? "text-bloomberg-amber" : "text-bloomberg-red"}`}>{sc.probability}%</td>
+                          <td className="py-1.5 text-right text-muted-foreground">{sc.exitRevenue}</td>
+                          <td className="py-1.5 text-right text-muted-foreground">{sc.exitMultiple}</td>
+                          <td className="py-1.5 text-right font-bold">${sc.impliedValue.toFixed(2)}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                  <div className="mt-2 flex items-center justify-between border-t border-purple-500/30 pt-2">
+                    <span className="text-[12px] text-purple-400 font-bold">Ważona wartość godziwa:</span>
+                    <span className="text-[15px] font-black text-purple-400">${qv.weightedFairValue.toFixed(2)}</span>
+                  </div>
+                  <div className="flex items-center justify-between text-[11px]">
+                    <span className="text-muted-foreground">Aktualna cena: ${q.price.toFixed(2)}</span>
+                    <span className={`font-bold ${qv.currentVsWeighted > 20 ? "text-bloomberg-red" : qv.currentVsWeighted < -10 ? "text-bloomberg-green" : "text-bloomberg-amber"}`}>
+                      {qv.currentVsWeighted > 0 ? "+" : ""}{qv.currentVsWeighted.toFixed(0)}% vs fair value
+                    </span>
+                  </div>
+                  <div className="text-[11px] text-muted-foreground mt-1">
+                    Implikowane prawdopodobieństwo pełnego sukcesu: <span className="text-foreground font-bold">{qv.impliedSuccessProbability}%</span>
+                  </div>
+                </div>
+
+                {/* Moat factors */}
+                <div>
+                  <div className="text-[12px] text-purple-400 font-bold mb-2">🏰 FOSA TECHNOLOGICZNA</div>
+                  <div className="space-y-1.5">
+                    {qv.moatFactors.map((m, i) => (
+                      <div key={i} className="flex items-center gap-2">
+                        <span className="text-[11px] text-muted-foreground w-[160px] shrink-0">{m.name}</span>
+                        <div className="flex-1 h-2.5 bg-bloomberg-bg border border-bloomberg-border/30 overflow-hidden">
+                          <div className={`h-full ${m.score >= 7 ? "bg-purple-500/60" : m.score >= 4 ? "bg-bloomberg-amber/60" : "bg-bloomberg-red/60"}`} style={{ width: `${m.score*10}%` }} />
+                        </div>
+                        <span className={`text-[12px] font-bold w-6 text-right ${m.score >= 7 ? "text-purple-400" : m.score >= 4 ? "text-bloomberg-amber" : "text-bloomberg-red"}`}>{m.score}</span>
+                      </div>
+                    ))}
+                  </div>
+                  <div className="text-[11px] text-muted-foreground mt-2">{qv.competitivePosition}</div>
+                </div>
+
+                {/* Red flags */}
+                {qv.redFlags.length > 0 && (
+                  <div>
+                    <div className="text-[12px] text-bloomberg-red font-bold mb-2">🚩 CZERWONE FLAGI</div>
+                    <div className="space-y-1.5">
+                      {qv.redFlags.map((f, i) => (
+                        <div key={i} className={`p-2 border ${f.severity === "critical" ? "bg-bloomberg-red/10 border-bloomberg-red/30" : f.severity === "high" ? "bg-bloomberg-red/5 border-bloomberg-red/20" : "bg-bloomberg-amber/5 border-bloomberg-amber/20"}`}>
+                          <div className="flex items-center justify-between">
+                            <span className="text-[11px] font-bold text-foreground">{f.title}</span>
+                            {f.metric && <span className="text-[11px] text-muted-foreground font-mono">{f.metric}</span>}
+                          </div>
+                          <div className="text-[11px] text-muted-foreground">{f.description}</div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Verdict */}
+                <div className="bg-purple-500/10 border border-purple-500/20 p-3">
+                  <div className="text-[12px] text-foreground/80 leading-relaxed">{qv.verdict}</div>
+                </div>
+              </div>
+            )
+          })()}
 
           {/* ═══ RULE OF 40 (Tech only) ═══ */}
           {(() => {
@@ -637,7 +764,7 @@ export default function StockAnalysis() {
             </div>
           </div>
 
-          {/* ═══ SECTION 2: PRICE CHART — 3Y WEEKLY ═══ */}
+          {/* ═══ SECTION 2: WYKRES CENOWY — 3Y WEEKLY ═══ */}
           {history.length > 0 && (() => {
             const chartData = computeChartData(history)
             // Compute fair value zone from fundamentals
@@ -721,7 +848,7 @@ export default function StockAnalysis() {
           {/* ═══ SECTION 3: VALUATION INFOGRAPHIC ═══ */}
           <div className="bg-bloomberg-card border border-bloomberg-border rounded p-4">
             <div className="text-xs text-bloomberg-amber font-bold mb-3 tracking-widest">
-              VALUATION vs SECTOR ({a.sector})
+              WYCENA vs SEKTOR ({a.sector})
             </div>
             <HorizontalBar
               data={[
@@ -758,7 +885,7 @@ export default function StockAnalysis() {
             />
             {a.premiumToSectorPE != null && (
               <div className="text-xs text-muted-foreground mt-2">
-                Premium to sector P/E:{" "}
+                Premia do P/E sektora:{" "}
                 <span
                   className={
                     a.premiumToSectorPE > 50
@@ -771,37 +898,37 @@ export default function StockAnalysis() {
                   {a.premiumToSectorPE > 0 ? "+" : ""}
                   {a.premiumToSectorPE.toFixed(1)}%
                 </span>
-                <span className="ml-2">(Amber line = sector/benchmark avg)</span>
+                <span className="ml-2">(Pomarańczowa linia = średnia sektora)</span>
               </div>
             )}
           </div>
 
-          {/* ═══ SECTION 4: FINANCIAL HEALTH RADAR ═══ */}
+          {/* ═══ SECTION 4: ZDROWIE FINANSOWE RADAR ═══ */}
           <div className="bg-bloomberg-card border border-bloomberg-border rounded p-4">
             <div className="text-xs text-bloomberg-amber font-bold mb-3 tracking-widest">
-              FINANCIAL HEALTH
+              ZDROWIE FINANSOWE
             </div>
             <div className="flex flex-col md:flex-row items-center gap-4">
               <div className="w-full md:w-1/2">
                 <RadarChart
                   data={[
                     {
-                      metric: "Rev Growth",
+                      metric: "Wzr. przych.",
                       value: normalizeMetric(a.revenueGrowth, 30),
                       fullMark: 100,
                     },
                     {
-                      metric: "Gross Margin",
+                      metric: "Marża brutto",
                       value: normalizeMetric(a.grossMargin, 50),
                       fullMark: 100,
                     },
                     {
-                      metric: "Op Margin",
+                      metric: "Marża op.",
                       value: normalizeMetric(a.operatingMargin, 30),
                       fullMark: 100,
                     },
                     {
-                      metric: "FCF Margin",
+                      metric: "Marża FCF",
                       value: normalizeMetric(a.fcfMargin, 25),
                       fullMark: 100,
                     },
@@ -814,12 +941,12 @@ export default function StockAnalysis() {
                 />
               </div>
               <div className="w-full md:w-1/2 grid grid-cols-2 gap-3 text-xs">
-                <MetricRow label="Revenue Growth" value={fmtPct(a.revenueGrowth)} positive={a.revenueGrowth != null && a.revenueGrowth > 0} />
-                <MetricRow label="Gross Margin" value={fmtPct(a.grossMargin)} positive={a.grossMargin != null && a.grossMargin > 15} />
-                <MetricRow label="Operating Margin" value={fmtPct(a.operatingMargin)} positive={a.operatingMargin != null && a.operatingMargin > 10} />
-                <MetricRow label="FCF Margin" value={fmtPct(a.fcfMargin)} positive={a.fcfMargin != null && a.fcfMargin > 5} />
+                <MetricRow label="Wzrost przychodów" value={fmtPct(a.revenueGrowth)} positive={a.revenueGrowth != null && a.revenueGrowth > 0} />
+                <MetricRow label="Marża brutto" value={fmtPct(a.grossMargin)} positive={a.grossMargin != null && a.grossMargin > 15} />
+                <MetricRow label="Marża operacyjna" value={fmtPct(a.operatingMargin)} positive={a.operatingMargin != null && a.operatingMargin > 10} />
+                <MetricRow label="Marża FCF" value={fmtPct(a.fcfMargin)} positive={a.fcfMargin != null && a.fcfMargin > 5} />
                 <MetricRow label="ROE" value={fmtPct(a.roe)} positive={a.roe != null && a.roe > 10} />
-                <MetricRow label="Debt/EBITDA" value={fmt(a.debtEbitda)} positive={a.debtEbitda != null && a.debtEbitda < 4} />
+                <MetricRow label="Dług/EBITDA" value={fmt(a.debtEbitda)} positive={a.debtEbitda != null && a.debtEbitda < 4} />
               </div>
             </div>
           </div>
@@ -827,7 +954,7 @@ export default function StockAnalysis() {
           {/* ═══ SECTION 5: RISK GAUGE ═══ */}
           <div className="bg-bloomberg-card border border-bloomberg-border rounded p-4">
             <div className="text-xs text-bloomberg-amber font-bold mb-3 tracking-widest">
-              OVERALL RISK SCORE
+              OGÓLNY WYNIK RYZYKA
             </div>
             <div className="flex justify-center">
               <GaugeChart
@@ -839,10 +966,10 @@ export default function StockAnalysis() {
             </div>
           </div>
 
-          {/* ═══ SECTION 6: RISK MATRIX ═══ */}
+          {/* ═══ SECTION 6: MATRYCA RYZYKA ═══ */}
           <div className="bg-bloomberg-card border border-bloomberg-border rounded p-4">
             <div className="text-xs text-bloomberg-amber font-bold mb-3 tracking-widest">
-              RISK MATRIX
+              MATRYCA RYZYKA
             </div>
             <div className="overflow-x-auto">
               <table className="w-full text-xs">
@@ -917,7 +1044,7 @@ export default function StockAnalysis() {
               />
             </div>
             <div className="mt-3 pt-3 border-t border-bloomberg-border flex justify-between text-xs">
-              <span className="text-muted-foreground">Weighted Expected Return</span>
+              <span className="text-muted-foreground">Oczekiwany zwrot ważony</span>
               <span className={`font-bold ${a.expectedReturn >= 0 ? "text-bloomberg-green" : "text-bloomberg-red"}`}>
                 {a.expectedReturn >= 0 ? "+" : ""}{a.expectedReturn.toFixed(2)}%
               </span>
@@ -928,7 +1055,7 @@ export default function StockAnalysis() {
           {news.length > 0 && (
             <div className="bg-bloomberg-card border border-bloomberg-border rounded p-4">
               <div className="text-xs text-bloomberg-amber font-bold mb-3 tracking-widest">
-                RECENT NEWS
+                OSTATNIE WIADOMOŚCI
               </div>
               <div className="space-y-2">
                 {news.map((n, i) => (
@@ -959,7 +1086,7 @@ export default function StockAnalysis() {
             <ShieldAlert className="w-5 h-5 text-bloomberg-red shrink-0 mt-0.5" />
             <div>
               <div className="text-xs text-bloomberg-red font-bold tracking-widest mb-1">
-                PRIMARY RISK
+                GŁÓWNE RYZYKO
               </div>
               <div className="text-sm text-foreground">{a.mainRisk}</div>
             </div>

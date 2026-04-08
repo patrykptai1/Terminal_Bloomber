@@ -3,16 +3,16 @@
 import type { TabId } from "@/types"
 
 const TABS: { id: TabId; label: string; shortcut: string }[] = [
-  { id: "analysis", label: "ANALYSIS", shortcut: "F1" },
+  { id: "analysis", label: "ANALIZA", shortcut: "F1" },
   { id: "screener", label: "SCREENER", shortcut: "F2" },
-  { id: "earnings", label: "EARNINGS", shortcut: "F3" },
-  { id: "risk", label: "RISK", shortcut: "F4" },
-  { id: "compare", label: "COMPARE", shortcut: "F5" },
-  { id: "portfolio", label: "PORTFOLIO", shortcut: "F6" },
-  { id: "entry", label: "ENTRY", shortcut: "F7" },
-  { id: "analyst", label: "ANALYST", shortcut: "F8" },
-  { id: "sectors", label: "SECTORS", shortcut: "F9" },
-  { id: "worldnews", label: "WORLD NEWS", shortcut: "F10" },
+  { id: "earnings", label: "WYNIKI", shortcut: "F3" },
+  { id: "risk", label: "RYZYKO", shortcut: "F4" },
+  { id: "compare", label: "PORÓWNANIE", shortcut: "F5" },
+  { id: "portfolio", label: "PORTFEL", shortcut: "F6" },
+  { id: "entry", label: "WEJŚCIE", shortcut: "F7" },
+  { id: "analyst", label: "ANALITYCY", shortcut: "F8" },
+  { id: "sectors", label: "SEKTORY", shortcut: "F9" },
+  { id: "worldnews", label: "WORLD WIADOMOŚCI", shortcut: "F10" },
 ]
 
 export default function TerminalHeader({

@@ -102,7 +102,7 @@ export default function StockScreener() {
           disabled={loading}
           className="px-6 py-2 bg-bloomberg-green/20 text-bloomberg-green border border-bloomberg-green/30 rounded text-xs font-bold hover:bg-bloomberg-green/30 disabled:opacity-40 transition-colors"
         >
-          {loading ? "SCANNING..." : "RUN SCREENER"}
+          {loading ? "SKANOWANIE..." : "URUCHOM SCREENER"}
         </button>
         {loading && <div className="text-xs text-muted-foreground">Fetching data for 60+ stocks... this may take 15-30 seconds</div>}
       </div>

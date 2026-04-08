@@ -71,10 +71,10 @@ function actionColor(action: string): string {
 
 function actionLabel(action: string): string {
   const a = action.toLowerCase()
-  if (a === "up") return "Upgrade"
-  if (a === "down") return "Downgrade"
-  if (a === "main" || a === "reit") return "Maintain"
-  if (a === "init") return "Initiate"
+  if (a === "up") return "Podwyższenie"
+  if (a === "down") return "Obniżenie"
+  if (a === "main" || a === "reit") return "Utrzymanie"
+  if (a === "init") return "Rozpoczęcie"
   return action
 }
 
@@ -132,7 +132,7 @@ export default function AnalystRecommendations() {
   return (
     <div className="space-y-4">
       <TerminalInput
-        placeholder="Enter ticker symbol (e.g. NVDA, AAPL, MSFT)"
+        placeholder="Wpisz ticker (np. NVDA, AAPL, MSFT)"
         onSubmit={handleSearch}
         loading={loading}
         label="ANALYST>"
@@ -402,11 +402,11 @@ function RecommendationDistribution({ recs }: { recs: RecommendationPeriod[] }) 
   if (total === 0) return null
 
   const segments = [
-    { label: "Strong Buy", value: current.strongBuy, color: DARK_GREEN },
+    { label: "Silne Kupno", value: current.strongBuy, color: DARK_GREEN },
     { label: "Buy", value: current.buy, color: GREEN },
     { label: "Hold", value: current.hold, color: AMBER },
     { label: "Sell", value: current.sell, color: ORANGE },
-    { label: "Strong Sell", value: current.strongSell, color: RED },
+    { label: "Silna Sprzedaż", value: current.strongSell, color: RED },
   ].filter(s => s.value > 0)
 
   return (
@@ -477,11 +477,11 @@ function RecommendationTrend({ recs }: { recs: RecommendationPeriod[] }) {
               contentStyle={{ backgroundColor: "#1a1a2e", border: "1px solid #333", fontSize: 11 }}
               labelStyle={{ color: "#888" }}
             />
-            <Bar dataKey="strongBuy" stackId="a" fill={DARK_GREEN} name="Strong Buy" />
+            <Bar dataKey="strongBuy" stackId="a" fill={DARK_GREEN} name="Silne Kupno" />
             <Bar dataKey="buy" stackId="a" fill={GREEN} name="Buy" />
             <Bar dataKey="hold" stackId="a" fill={AMBER} name="Hold" />
             <Bar dataKey="sell" stackId="a" fill={ORANGE} name="Sell" />
-            <Bar dataKey="strongSell" stackId="a" fill={RED} name="Strong Sell" />
+            <Bar dataKey="strongSell" stackId="a" fill={RED} name="Silna Sprzedaż" />
           </BarChart>
         </ResponsiveContainer>
       </div>
@@ -739,7 +739,7 @@ function PriceTargetDistribution({ upgrades, currentPrice, currency }: { upgrade
               axisLine={{ stroke: "#333" }}
               tickLine={false}
               domain={["dataMin - 10", "dataMax + 10"]}
-              name="Price Target"
+              name="Cel cenowy"
             />
             <YAxis
               type="number"

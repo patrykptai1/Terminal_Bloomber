@@ -9,6 +9,8 @@ import type { FullAnalysis } from "@/lib/analysis"
 import { fmtBigValue } from "@/lib/currency"
 import { computeFundamentalRisk } from "@/lib/fundamentalRisk"
 import type { FundamentalRiskReport, RiskItem, RiskCategory } from "@/lib/fundamentalRisk"
+import { isQuantumStock, computeQuantumValuation } from "@/lib/quantumValuation"
+import type { QuantumValuation } from "@/lib/quantumValuation"
 import { useTranslatePL } from "@/hooks/useTranslate"
 
 // ── Helpers ──
@@ -132,7 +134,102 @@ export default function RiskAssessment() {
         </div>
       )}
 
-      {q && risk && (
+      {/* ── QUANTUM-SPECIFIC RISK (replaces standard for quantum stocks) ── */}
+      {q && isQuantumStock(q.symbol, s?.industry, s?.longBusinessSummary) && (() => {
+        const qv = computeQuantumValuation(q, s ?? null, e ?? null)
+        const scoreColor = qv.overallScore >= 60 ? "text-bloomberg-green" : qv.overallScore >= 35 ? "text-bloomberg-amber" : "text-bloomberg-red"
+        return (
+          <div className="space-y-4">
+            <div className="bg-bloomberg-card border border-purple-500/30 p-4">
+              <div className="flex items-center justify-between mb-3">
+                <div>
+                  <div className="text-xl font-bold text-purple-400">{q.symbol} <span className="text-[12px] text-muted-foreground font-normal">{q.name}</span></div>
+                  <div className="text-[11px] text-muted-foreground">⚛️ Quantum | {qv.profile.architecturePL} | TRL {qv.trlScore}/9</div>
+                </div>
+                <div className="text-right">
+                  <div className={`text-3xl font-black ${scoreColor}`}>{qv.overallScore}</div>
+                  <div className={`text-[11px] font-bold ${scoreColor}`}>{qv.riskLevel}</div>
+                </div>
+              </div>
+              <div className="text-[11px] text-foreground/80 leading-relaxed bg-purple-500/5 border border-purple-500/20 p-3">{qv.verdict}</div>
+            </div>
+
+            {/* Survival */}
+            <div className="bg-bloomberg-card border border-bloomberg-border p-4">
+              <div className="text-[12px] text-purple-400 font-bold mb-2">💰 ANALIZA PRZEŻYWALNOŚCI</div>
+              <div className="grid grid-cols-3 gap-3">
+                <div className="bg-bloomberg-bg p-2.5 border border-bloomberg-border/30">
+                  <div className="text-[11px] text-muted-foreground">Cash Runway</div>
+                  <div className={`text-[15px] font-bold ${qv.runwayStatus === "comfortable" ? "text-bloomberg-green" : qv.runwayStatus === "warning" ? "text-bloomberg-amber" : "text-bloomberg-red"}`}>
+                    {qv.cashRunwayQuarters != null ? (qv.cashRunwayQuarters >= 99 ? "∞" : `${qv.cashRunwayQuarters}Q`) : "N/A"}
+                  </div>
+                </div>
+                <div className="bg-bloomberg-bg p-2.5 border border-bloomberg-border/30">
+                  <div className="text-[11px] text-muted-foreground">Kwartalny burn</div>
+                  <div className="text-[15px] font-bold text-foreground">{qv.quarterlyBurn ? `$${(qv.quarterlyBurn/1e6).toFixed(0)}M` : "N/A"}</div>
+                </div>
+                <div className="bg-bloomberg-bg p-2.5 border border-bloomberg-border/30">
+                  <div className="text-[11px] text-muted-foreground">Implikowany sukces</div>
+                  <div className="text-[15px] font-bold text-purple-400">{qv.impliedSuccessProbability}%</div>
+                </div>
+              </div>
+              <div className="mt-2 text-[11px] text-muted-foreground">{qv.dilutionRisk}</div>
+            </div>
+
+            {/* Red flags */}
+            {qv.redFlags.length > 0 && (
+              <div className="bg-bloomberg-card border border-bloomberg-border p-4">
+                <div className="text-[12px] text-bloomberg-red font-bold mb-2">🚩 CZERWONE FLAGI QUANTUM</div>
+                <div className="space-y-1.5">
+                  {qv.redFlags.map((f, i) => (
+                    <div key={i} className={`p-2 border ${f.severity === "critical" ? "bg-bloomberg-red/10 border-bloomberg-red/30" : f.severity === "high" ? "bg-bloomberg-red/5 border-bloomberg-red/20" : "bg-bloomberg-amber/5 border-bloomberg-amber/20"}`}>
+                      <div className="flex items-center justify-between">
+                        <span className="text-[11px] font-bold text-foreground">{f.title}</span>
+                        {f.metric && <span className="text-[11px] text-muted-foreground font-mono">{f.metric}</span>}
+                      </div>
+                      <div className="text-[11px] text-muted-foreground">{f.description}</div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Scenario risk */}
+            <div className="bg-bloomberg-card border border-bloomberg-border p-4">
+              <div className="text-[12px] text-purple-400 font-bold mb-2">📊 RYZYKO SCENARIUSZOWE</div>
+              <div className="space-y-1.5">
+                {qv.scenarios.map((sc, i) => (
+                  <div key={i} className="flex items-center gap-2">
+                    <span className="text-[11px] text-muted-foreground w-[180px] shrink-0">{sc.name}</span>
+                    <div className="flex-1 h-3 bg-bloomberg-bg border border-bloomberg-border/30 overflow-hidden">
+                      <div className={`h-full ${i === 0 ? "bg-bloomberg-green/60" : i === qv.scenarios.length-1 ? "bg-bloomberg-red/60" : "bg-bloomberg-amber/60"}`} style={{ width: `${sc.probability}%` }} />
+                    </div>
+                    <span className="text-[12px] font-bold w-10 text-right">{sc.probability}%</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* Technology moat */}
+            <div className="bg-bloomberg-card border border-bloomberg-border p-4">
+              <div className="text-[12px] text-purple-400 font-bold mb-2">🏰 FOSA TECHNOLOGICZNA</div>
+              {qv.moatFactors.map((m, i) => (
+                <div key={i} className="flex items-center gap-2 mb-1">
+                  <span className="text-[11px] text-muted-foreground w-[160px] shrink-0">{m.name}</span>
+                  <div className="flex-1 h-2.5 bg-bloomberg-bg border border-bloomberg-border/30 overflow-hidden">
+                    <div className={`h-full ${m.score >= 7 ? "bg-purple-500/60" : "bg-bloomberg-amber/60"}`} style={{ width: `${m.score*10}%` }} />
+                  </div>
+                  <span className="text-[12px] font-bold w-6 text-right">{m.score}</span>
+                </div>
+              ))}
+              <div className="text-[11px] text-muted-foreground mt-2">{qv.competitivePosition}</div>
+              <div className="text-[11px] text-muted-foreground mt-1">{qv.architectureRisk}</div>
+            </div>
+          </div>
+        )
+      })()}
+
+      {q && risk && !isQuantumStock(q.symbol, s?.industry, s?.longBusinessSummary) && (
         <div className="space-y-4">
 
           {/* ── HEADER: Company + Overall Score ── */}

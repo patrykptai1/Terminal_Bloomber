@@ -116,7 +116,7 @@ export default function StockCompare() {
           disabled={loading || !tickerA || !tickerB}
           className="px-6 py-2 bg-bloomberg-green/20 text-bloomberg-green border border-bloomberg-green/30 rounded text-xs font-bold hover:bg-bloomberg-green/30 disabled:opacity-40 transition-colors"
         >
-          {loading ? "COMPARING..." : "COMPARE"}
+          {loading ? "PORÓWNUJĘ..." : "PORÓWNAJ"}
         </button>
       </div>
 
@@ -158,8 +158,8 @@ export default function StockCompare() {
                   <CompRow label="Debt/EBITDA" a={fmtNum(aA.debtEbitda)} b={fmtNum(aB.debtEbitda)} symA={qA.symbol} symB={qB.symbol} winA={numVal(aA.debtEbitda) < numVal(aB.debtEbitda)} lowerBetter />
                   <CompRow label="ROE" a={fmtPctVal(aA.roe)} b={fmtPctVal(aB.roe)} symA={qA.symbol} symB={qB.symbol} winA={numVal(aA.roe) > numVal(aB.roe)} />
                   <CompRow label="Stopa dywidendy" a={qA.dividendYield ? qA.dividendYield.toFixed(2) + "%" : "N/A"} b={qB.dividendYield ? qB.dividendYield.toFixed(2) + "%" : "N/A"} symA={qA.symbol} symB={qB.symbol} winA={numVal(qA.dividendYield) > numVal(qB.dividendYield)} />
-                  <CompRow label="52W Performance" a={fmtPctVal(aA.distanceFrom52Low)} b={fmtPctVal(aB.distanceFrom52Low)} symA={qA.symbol} symB={qB.symbol} winA={numVal(aA.distanceFrom52Low) > numVal(aB.distanceFrom52Low)} />
-                  <CompRow label="Moat Rating" a={moatRating(aA)} b={moatRating(aB)} symA={qA.symbol} symB={qB.symbol} winA={moatScore(aA) > moatScore(aB)} />
+                  <CompRow label="Wynik 52W" a={fmtPctVal(aA.distanceFrom52Low)} b={fmtPctVal(aB.distanceFrom52Low)} symA={qA.symbol} symB={qB.symbol} winA={numVal(aA.distanceFrom52Low) > numVal(aB.distanceFrom52Low)} />
+                  <CompRow label="Ocena fosy" a={moatRating(aA)} b={moatRating(aB)} symA={qA.symbol} symB={qB.symbol} winA={moatScore(aA) > moatScore(aB)} />
                 </tbody>
               </table>
             </div>

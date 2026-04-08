@@ -113,7 +113,7 @@ function TTMTable({ title, ttmData, annualData, forwardAnnual, currency }: {
 }
 
 /* ══════════════════════════════════════════════════════════════
-   EARNINGS SNAPSHOT
+   PRZEGLĄD WYNIKÓW
    ══════════════════════════════════════════════════════════════ */
 
 interface SnapshotItem { icon: string; text: string; level: "good" | "warn" | "bad" }
@@ -815,7 +815,7 @@ export default function EarningsReport() {
   return (
     <div className="space-y-4">
       <div className="text-xs text-muted-foreground mb-2">Earnings report — EPS, Revenue, EBITDA, FCF & Net Income with TTM analysis (Yahoo Finance)</div>
-      <TerminalInput placeholder="Enter ticker (e.g. AAPL, GOOGL, TSLA)" onSubmit={handleAnalyze} loading={loading} label="EARNINGS >" defaultValue={lastTicker} />
+      <TerminalInput placeholder="Wpisz ticker (np. AAPL, GOOGL, TSLA)" onSubmit={handleAnalyze} loading={loading} label="EARNINGS >" defaultValue={lastTicker} />
       {error && <div className="flex items-center gap-2 text-bloomberg-red text-sm p-3 bg-bloomberg-red/10 border border-bloomberg-red/20 rounded"><AlertTriangle className="w-4 h-4" />{error}</div>}
 
       {q && e && (
@@ -944,10 +944,10 @@ export default function EarningsReport() {
           {/* ═══ RAPORT FINANSOWY ═══ */}
           <FinancialReport earnings={e} quote={q} currency={q.currency} />
 
-          {/* ═══ EARNINGS SNAPSHOT ═══ */}
+          {/* ═══ PRZEGLĄD WYNIKÓW ═══ */}
           {snapshotItems.length > 0 && (
             <div className="bg-bloomberg-card border border-bloomberg-border rounded p-4">
-              <div className="text-xs text-bloomberg-amber font-bold mb-3">EARNINGS SNAPSHOT</div>
+              <div className="text-xs text-bloomberg-amber font-bold mb-3">PRZEGLĄD WYNIKÓW</div>
               <div className="space-y-1.5">
                 {snapshotItems.map((item, i) => (
                   <div key={i} className="flex items-start gap-2 text-xs">
@@ -962,8 +962,8 @@ export default function EarningsReport() {
           {/* ═══ REVENUE TTM ═══ */}
           {(revenueTTM.length > 0 || annualRevenue.some((a) => a.value != null)) && (<>
             <div className="border-t border-bloomberg-border pt-4 mt-2" />
-            <TTMBarSection title="REVENUE TTM TREND" ttmData={revenueTTM} annualData={annualRevenue} forwardAnnual={fwdAnnualRev} currency={q.currency} color="bg-bloomberg-blue" />
-            <TTMTable title="REVENUE TTM TABLE" ttmData={revenueTTM} annualData={annualRevenue} forwardAnnual={fwdAnnualRev} currency={q.currency} />
+            <TTMBarSection title="PRZYCHODY TTM TREND" ttmData={revenueTTM} annualData={annualRevenue} forwardAnnual={fwdAnnualRev} currency={q.currency} color="bg-bloomberg-blue" />
+            <TTMTable title="PRZYCHODY TTM TABELA" ttmData={revenueTTM} annualData={annualRevenue} forwardAnnual={fwdAnnualRev} currency={q.currency} />
 
             {/* REVENUE QUARTERLY */}
             {(e.incomeStatements ?? []).filter((s) => s.revenue != null).length > 0 && (
@@ -1048,8 +1048,8 @@ export default function EarningsReport() {
           {/* ═══ EBITDA TTM (Normalized/Adjusted) ═══ */}
           {(ebitdaTTM.length > 0 || annualEbitdaNorm.some((a) => a.value != null)) && (<>
             <div className="border-t border-bloomberg-border pt-4 mt-2" />
-            <TTMBarSection title="EBITDA TTM TREND (NORMALIZED)" ttmData={ebitdaTTM} annualData={annualEbitdaNorm} currency={q.currency} color="bg-bloomberg-purple" explainer="EBITDA = Operating Income + D&A. Adjusted EBITDA wyklucza koszty jednorazowe (restructuring, SBC)." />
-            <TTMTable title="EBITDA TTM TABLE (NORMALIZED)" ttmData={ebitdaTTM} annualData={annualEbitdaNorm} currency={q.currency} />
+            <TTMBarSection title="EBITDA TTM TREND (ZNORMALIZOWANA)" ttmData={ebitdaTTM} annualData={annualEbitdaNorm} currency={q.currency} color="bg-bloomberg-purple" explainer="EBITDA = Operating Income + D&A. Adjusted EBITDA wyklucza koszty jednorazowe (restructuring, SBC)." />
+            <TTMTable title="EBITDA TTM TABELA (ZNORMALIZOWANA)" ttmData={ebitdaTTM} annualData={annualEbitdaNorm} currency={q.currency} />
 
             {/* EBITDA QUARTERLY */}
             {(e.incomeStatements ?? []).filter((s) => (s.ebitdaNormalized ?? s.ebitda) != null).length > 0 && (
@@ -1105,7 +1105,7 @@ export default function EarningsReport() {
               const latFcf = fcfTTM[fcfTTM.length - 1].value
               const mc = q.marketCap
               const fcfYield = mc > 0 ? (latFcf / mc) * 100 : null
-              const label = fcfYield == null ? "N/A" : fcfYield < 0 ? "Negative FCF" : fcfYield < 2 ? "Expensive" : fcfYield <= 5 ? "Fair" : "Attractive"
+              const label = fcfYield == null ? "N/A" : fcfYield < 0 ? "Negative FCF" : fcfYield < 2 ? "Drogo" : fcfYield <= 5 ? "W normie" : "Atrakcyjnie"
               const color = fcfYield == null ? "text-muted-foreground" : fcfYield >= 5 ? "text-bloomberg-green" : fcfYield >= 2 ? "text-bloomberg-amber" : "text-bloomberg-red"
               return (
                 <div className="bg-bloomberg-card border border-bloomberg-border rounded p-4">

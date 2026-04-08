@@ -1,9 +1,8 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import { translateToPL } from "@/lib/translatePL"
 
-// In-memory cache shared across all hook instances
+// In-memory cache shared across all hook instances (client-side)
 const translationCache = new Map<string, string>()
 
 export function useTranslatePL(text: string | undefined | null): string {
@@ -12,19 +11,36 @@ export function useTranslatePL(text: string | undefined | null): string {
   useEffect(() => {
     if (!text) { setTranslated(""); return }
 
-    // Check cache first
+    // Check client cache first
     const cached = translationCache.get(text)
     if (cached) { setTranslated(cached); return }
 
+    // Set loading state — show "Tłumaczenie..." briefly
+    setTranslated("")
+
     let cancelled = false
-    translateToPL(text).then(result => {
-      if (!cancelled) {
-        translationCache.set(text, result)
-        setTranslated(result)
-      }
+
+    // Use our server-side translation endpoint (no CORS issues, server-side caching)
+    fetch("/api/translate", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ text }),
     })
+      .then(res => res.json())
+      .then(data => {
+        if (!cancelled && data.translated) {
+          translationCache.set(text, data.translated)
+          setTranslated(data.translated)
+        }
+      })
+      .catch(() => {
+        // On error, show original text
+        if (!cancelled) setTranslated(text)
+      })
+
     return () => { cancelled = true }
   }, [text])
 
-  return translated || text || ""
+  // While loading, show "Tłumaczenie..." then original, then translated
+  return translated || (text ? "Tłumaczenie..." : "")
 }
