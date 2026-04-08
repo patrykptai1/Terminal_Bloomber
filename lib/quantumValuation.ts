@@ -270,53 +270,70 @@ export function computeQuantumValuation(
   const mcap = q.marketCap
   const sharesOut = stats?.sharesOutstanding ?? (mcap / q.price)
   const currentPPS = q.price
+  const currentRev = totalRev ?? 0
 
-  // Discount rate based on TRL
+  // Discount rate based on TRL (per Krok 6 methodology)
   const discountRate = trl >= 7 ? 0.22 : trl >= 5 ? 0.30 : 0.40
   const years = trl >= 7 ? 5 : trl >= 5 ? 8 : 12
   const discountFactor = Math.pow(1 + discountRate, years)
 
-  // Scale scenarios by current MCap size
-  const isLarge = mcap > 5e9
-  const isMid = mcap > 1e9
+  // FIX #6: Scale exit revenues relative to CURRENT revenue (not arbitrary)
+  // If company already has $130M rev, "niche success" at $100M is regression
+  const exitRevFullSuccess = Math.max(currentRev * 8, 500e6)   // at least 8x current or $500M
+  const exitRevNiche = Math.max(currentRev * 3, 200e6)          // at least 3x current or $200M
+  const exitRevPivot = Math.max(currentRev * 1.5, 50e6)         // at least 1.5x current or $50M
+
+  // FIX #7: Bankruptcy probability adjusted by ACTUAL runway
+  const bankruptcyBase = trl < 5 ? 25 : 15
+  let bankruptcyProb: number
+  if (cashRunwayQuarters != null) {
+    if (cashRunwayQuarters >= 20) bankruptcyProb = Math.max(5, bankruptcyBase - 10)  // 20+ quarters = very safe
+    else if (cashRunwayQuarters >= 12) bankruptcyProb = Math.max(8, bankruptcyBase - 5)
+    else if (cashRunwayQuarters >= 6) bankruptcyProb = bankruptcyBase
+    else bankruptcyProb = 35 // < 6 quarters = danger
+  } else if (runwayStatus === "comfortable") {
+    bankruptcyProb = Math.max(5, bankruptcyBase - 10)
+  } else {
+    bankruptcyProb = bankruptcyBase
+  }
 
   const scenarios: QuantumScenario[] = [
     {
       name: "Pełny sukces komercyjny",
       probability: trl >= 7 ? 15 : trl >= 5 ? 10 : 5,
-      description: "Spółka osiąga quantum advantage, staje się platformą enterprise. Revenue $500M-$2B.",
-      exitRevenue: "$500M–$2B",
+      description: `Quantum advantage w kluczowych verticalach. Revenue ${(exitRevFullSuccess/1e9).toFixed(1)}B. Stopa dyskontowa ${(discountRate*100).toFixed(0)}%, horyzont ${years} lat.`,
+      exitRevenue: `$${(exitRevFullSuccess/1e6).toFixed(0)}M–$${(exitRevFullSuccess*2/1e6).toFixed(0)}M`,
       exitMultiple: "15–25x",
-      impliedValue: ((isLarge ? 2e9 : isMid ? 1e9 : 500e6) * 20 / discountFactor) / sharesOut,
+      impliedValue: (exitRevFullSuccess * 20 / discountFactor) / sharesOut,
     },
     {
       name: "Sukces niszowy",
       probability: trl >= 7 ? 30 : trl >= 5 ? 25 : 15,
-      description: "Spółka zajmuje konkretny vertical (pharma, crypto, optimization). Revenue $100-300M.",
-      exitRevenue: "$100–$300M",
+      description: `Dominacja w 1-2 verticalach (pharma, crypto, optimization). Revenue ${(exitRevNiche/1e6).toFixed(0)}M. Dyskonto ${(discountRate*100).toFixed(0)}%/${years}lat.`,
+      exitRevenue: `$${(exitRevNiche/1e6).toFixed(0)}M–$${(exitRevNiche*1.5/1e6).toFixed(0)}M`,
       exitMultiple: "8–12x",
-      impliedValue: ((isLarge ? 300e6 : isMid ? 200e6 : 100e6) * 10 / discountFactor) / sharesOut,
+      impliedValue: (exitRevNiche * 10 / discountFactor) / sharesOut,
     },
     {
       name: "Akwizycja przez BigTech",
       probability: 25,
-      description: "IBM, Google, MSFT lub Amazon przejmuje spółkę dla IP i talentu. Exit 1-3x zainwestowanego kapitału.",
+      description: "IBM, Google, MSFT lub Amazon przejmuje spółkę dla IP i talentu. Exit 1.5-3x obecnej kapitalizacji zdyskontowany.",
       exitRevenue: "N/A (akwizycja)",
-      exitMultiple: "1–3x kapitału",
-      impliedValue: (mcap * 1.5 / discountFactor) / sharesOut,
+      exitMultiple: "1.5–3x MCap",
+      impliedValue: (mcap * 2.0 / discountFactor) / sharesOut,
     },
     {
       name: "Pivot do pokrewnej tech",
       probability: trl >= 7 ? 15 : 10,
-      description: "Quantum nie dojrzewa w czasie — spółka pivotuje do HPC, AI accelerators lub sensing.",
-      exitRevenue: "$50–$100M",
+      description: "Quantum nie dojrzewa — pivot do HPC, AI accelerators lub sensing. Ograniczony upside.",
+      exitRevenue: `$${(exitRevPivot/1e6).toFixed(0)}M`,
       exitMultiple: "5–8x",
-      impliedValue: ((isMid ? 100e6 : 50e6) * 6 / discountFactor) / sharesOut,
+      impliedValue: (exitRevPivot * 6 / discountFactor) / sharesOut,
     },
     {
       name: "Upadłość / likwidacja",
-      probability: runwayStatus === "critical" ? 35 : runwayStatus === "warning" ? 25 : trl < 5 ? 25 : 15,
-      description: "Gotówka się kończy, technologia nie dojrzewa. Wartość dla akcjonariuszy: $0.",
+      probability: bankruptcyProb,
+      description: `Gotówka się kończy lub technologia nie dojrzewa. Runway: ${cashRunwayQuarters ?? "?"} kwartałów. Wartość: $0.`,
       exitRevenue: "$0",
       exitMultiple: "0x",
       impliedValue: 0,
@@ -330,24 +347,43 @@ export function computeQuantumValuation(
   const weightedFairValue = scenarios.reduce((s, sc) => s + (sc.probability / 100) * sc.impliedValue, 0)
   const currentVsWeighted = weightedFairValue > 0 ? ((currentPPS - weightedFairValue) / weightedFairValue) * 100 : 0
 
-  // Implied success probability — what prob of full success does market price imply?
-  const fullSuccessValue = scenarios[0].impliedValue
-  const failValue = 0
-  const impliedSuccessProbability = fullSuccessValue > 0
-    ? Math.max(0, Math.min(100, Math.round(((currentPPS - failValue) / (fullSuccessValue - failValue)) * 100)))
-    : 0
+  // FIX #1: Correct implied success probability
+  // What probability of "full success + niche" does current price imply?
+  // Group positive scenarios (full + niche + acquisition) vs negative (pivot + bankruptcy)
+  const positiveScenarios = scenarios.slice(0, 3)  // full, niche, acquisition
+  const avgPositiveValue = positiveScenarios.reduce((s, sc) => s + sc.impliedValue, 0) / positiveScenarios.length
+  const avgNegativeValue = scenarios.slice(3).reduce((s, sc) => s + sc.impliedValue, 0) / Math.max(1, scenarios.slice(3).length)
+
+  // Solve: price = P(positive) * avgPositive + (1-P(positive)) * avgNegative
+  let impliedSuccessProbability = 0
+  if (avgPositiveValue > avgNegativeValue) {
+    const rawImplied = ((currentPPS - avgNegativeValue) / (avgPositiveValue - avgNegativeValue)) * 100
+    impliedSuccessProbability = Math.max(0, Math.min(100, Math.round(rawImplied)))
+    // If implied > 100%, it means market prices ABOVE even the optimistic scenario
+    // Show capped at 99% with note that market is more optimistic than model
+  }
 
   // ═══ MOAT FACTORS (Quantum-specific) ═══
+  // FIX #4: Quantum has EXTREMELY HIGH barriers to entry (capital, talent, physics PhDs, exotic materials)
   const moatFactors = [
+    {
+      name: "Bariery wejścia",
+      score: profile.stackType === "full-stack" ? 9 : profile.stackType === "hardware" ? 8 : profile.stackType === "components" ? 7 : 5,
+      description: profile.stackType === "full-stack"
+        ? "Ekstremalnie wysokie: setki milionów $ capexu, laboratorium kriogeniczne, fizycy z PhD (MIT/Caltech/Oxford), lata R&D, egzotyczne materiały."
+        : profile.stackType === "components"
+        ? "Wysokie: specjalistyczny sprzęt wymaga głębokiej wiedzy domenowej i certyfikacji."
+        : "Umiarkowane: software/encryption wymaga mniej capexu ale głębokiej wiedzy matematycznej.",
+    },
     {
       name: "Własność IP / Patenty",
       score: profile.stackType === "full-stack" ? 7 : profile.stackType === "components" ? 8 : 5,
-      description: profile.stackType === "full-stack" ? "Pełny stack = silna ochrona IP, trudny do replikacji." : "Komponenty/software — umiarkowana ochrona IP.",
+      description: "Patenty na architekturę qubitów, algorytmy korekcji błędów i metody kalibracji stanowią kluczową ochronę IP.",
     },
     {
       name: "Partnerstwa BigTech/Rząd",
-      score: sym === "IONQ" ? 8 : sym === "QBTS" ? 7 : sym === "RGTI" ? 6 : 4,
-      description: "Kontrakty z AWS/Azure/GCP lub DoD/DARPA walidują technologię i dają stable revenue.",
+      score: sym === "IONQ" ? 8 : sym === "QBTS" ? 7 : sym === "RGTI" ? 6 : sym === "INFQ" ? 6 : 4,
+      description: "Kontrakty z AWS/Azure/GCP walidują technologię komercyjnie. Kontrakty DoD/DARPA de-riskują runway.",
     },
     {
       name: "Architektura i skalowanie",
@@ -355,9 +391,14 @@ export function computeQuantumValuation(
       description: `TRL ${trl}/9 — ${profile.architecturePL}. ${profile.keyMetric ?? ""}`,
     },
     {
-      name: "Full-stack vs single-layer",
-      score: profile.stackType === "full-stack" ? 8 : profile.stackType === "components" ? 6 : 4,
-      description: profile.stackType === "full-stack" ? "Full-stack: wyższa marża, kontrola nad ekosystemem." : "Single-layer: zależność od partnerów, niższe capex.",
+      name: "Model biznesowy",
+      // FIX #5: Quantum hardware is NOT asset-light — it requires cryo labs, vacuum chambers, precision lasers
+      score: profile.stackType === "full-stack" ? 7 : profile.stackType === "hardware" ? 6 : profile.stackType === "components" ? 7 : 5,
+      description: profile.stackType === "full-stack"
+        ? "Full-stack hardware: komory próżniowe, lasery precyzyjne, systemy izolacji drgań, chipy fotoniczne. Wysokie capex, ale pełna kontrola nad ekosystemem."
+        : profile.stackType === "components"
+        ? "Dostawca komponentów: picks-and-shovels model. Niższe ryzyko bo agnostyczny wobec architektury."
+        : "Software/cloud: niższy capex, ale zależność od hardware partnerów.",
     },
   ]
 
@@ -402,11 +443,15 @@ export function computeQuantumValuation(
 
   const riskLevel = overallScore >= 70 ? "Umiarkowane (dla quantum)" : overallScore >= 45 ? "Podwyższone" : overallScore >= 25 ? "Wysokie" : "Krytyczne"
 
-  const verdict = currentVsWeighted > 50
-    ? `${q.name} jest wyceniana ${currentVsWeighted.toFixed(0)}% powyżej ważonej wartości scenariuszowej. Rynek implikuje ${impliedSuccessProbability}% prawdopodobieństwo pełnego sukcesu — to agresywne założenie.`
+  const evRevMultiple = totalRev && totalRev > 0 ? Math.round(mcap / totalRev) : null
+
+  const verdict = currentVsWeighted > 200
+    ? `${q.name} jest wyceniana ${currentVsWeighted.toFixed(0)}% powyżej ważonej wartości scenariuszowej${evRevMultiple ? ` (EV/Revenue: ${evRevMultiple}x)` : ""}. Rynek implikuje ${impliedSuccessProbability}% prawdopodobieństwo pozytywnego scenariusza. Wycena opiera się na narracji, nie na fundamentach — typowe dla spółek quantum w fazie hype.`
+    : currentVsWeighted > 50
+    ? `${q.name} handluje z premią ${currentVsWeighted.toFixed(0)}% vs model scenariuszowy. Rynek jest optymistyczny (${impliedSuccessProbability}% implied success). Stopa dyskontowa ${(discountRate*100).toFixed(0)}%/${years}lat.`
     : currentVsWeighted < -20
     ? `${q.name} handluje ${Math.abs(currentVsWeighted).toFixed(0)}% poniżej ważonej wartości scenariuszowej. Potencjalnie niedowartościowana jeśli timing komercjalizacji się potwierdzi.`
-    : `${q.name} jest wyceniona zbliżenie do ważonej wartości scenariuszowej. Rynek implikuje ${impliedSuccessProbability}% szans na pełny sukces.`
+    : `${q.name} jest wyceniona blisko ważonej wartości scenariuszowej ($${weightedFairValue.toFixed(2)}). Rynek implikuje ${impliedSuccessProbability}% szans na pozytywny scenariusz.`
 
   return {
     profile,
