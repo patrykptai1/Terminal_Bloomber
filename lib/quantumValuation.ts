@@ -363,42 +363,66 @@ export function computeQuantumValuation(
     // Show capped at 99% with note that market is more optimistic than model
   }
 
-  // ═══ MOAT FACTORS (Quantum-specific) ═══
-  // FIX #4: Quantum has EXTREMELY HIGH barriers to entry (capital, talent, physics PhDs, exotic materials)
+  // ═══ MOAT FACTORS — WYŁĄCZNIE z danych Yahoo Finance ═══
+  // Każdy score jest obliczany z realnych metryk, NIE hardcoded
+  const industry = stats?.industry ?? ""
+  const summary = stats?.longBusinessSummary ?? ""
+  const employees = stats?.fullTimeEmployees ?? null
+  const beta = q.beta ?? null
+  const shortPctFloat = stats?.shortPercentOfFloat ?? null
+  const instHeld = stats?.heldByInstitutions ?? null
+  const insiderHeld = stats?.heldByInsiders ?? null
+  const analystCount = q.numberOfAnalysts ?? 0
+  const analystTarget = q.targetMeanPrice ?? null
+  const cr = stats?.currentRatio ?? null
+
   const moatFactors = [
     {
-      name: "Bariery wejścia",
-      score: profile.stackType === "full-stack" ? 9 : profile.stackType === "hardware" ? 8 : profile.stackType === "components" ? 7 : 5,
-      description: profile.stackType === "full-stack"
-        ? "Ekstremalnie wysokie: setki milionów $ capexu, laboratorium kriogeniczne, fizycy z PhD (MIT/Caltech/Oxford), lata R&D, egzotyczne materiały."
-        : profile.stackType === "components"
-        ? "Wysokie: specjalistyczny sprzęt wymaga głębokiej wiedzy domenowej i certyfikacji."
-        : "Umiarkowane: software/encryption wymaga mniej capexu ale głębokiej wiedzy matematycznej.",
+      // Wsparcie instytucjonalne — mierzalne: % held by institutions
+      name: "Wsparcie instytucjonalne",
+      score: instHeld != null ? Math.min(10, Math.round(instHeld * 12)) : 5,
+      description: instHeld != null
+        ? `${(instHeld*100).toFixed(1)}% akcji w rękach instytucji. ${instHeld > 0.5 ? "Silne wsparcie instytucjonalne — walidacja przez smart money." : instHeld > 0.2 ? "Umiarkowane wsparcie instytucjonalne." : "Niskie zainteresowanie instytucji — większe ryzyko."}`
+        : "Brak danych o strukturze właścicielskiej.",
     },
     {
-      name: "Własność IP / Patenty",
-      score: profile.stackType === "full-stack" ? 7 : profile.stackType === "components" ? 8 : 5,
-      description: "Patenty na architekturę qubitów, algorytmy korekcji błędów i metody kalibracji stanowią kluczową ochronę IP.",
+      // Pokrycie analityków — mierzalne: liczba analityków + upside do targetu
+      name: "Pokrycie analityków",
+      score: Math.min(10, Math.round(analystCount * 0.7)),
+      description: analystCount > 0
+        ? `${analystCount} analityków pokrywa spółkę. Konsensus: ${q.recommendationKey ?? "N/A"}. Target: $${analystTarget?.toFixed(0) ?? "N/A"} (${analystTarget && currentPPS > 0 ? ((analystTarget - currentPPS) / currentPPS * 100).toFixed(0) + "% upside" : "N/A"}).`
+        : "Brak pokrycia analityków — wyższe ryzyko informacyjne.",
     },
     {
-      name: "Partnerstwa BigTech/Rząd",
-      score: sym === "IONQ" ? 8 : sym === "QBTS" ? 7 : sym === "RGTI" ? 6 : sym === "INFQ" ? 6 : 4,
-      description: "Kontrakty z AWS/Azure/GCP walidują technologię komercyjnie. Kontrakty DoD/DARPA de-riskują runway.",
+      // Płynność / Cash buffer — mierzalne: current ratio
+      name: "Bufor gotówkowy",
+      score: cr != null ? Math.min(10, Math.round(Math.min(cr, 10) * 1)) : 3,
+      description: cr != null
+        ? `Current Ratio: ${cr.toFixed(1)}x. Gotówka: $${totalCash ? (totalCash/1e9).toFixed(1) + "B" : "N/A"}. ${cr > 5 ? "Bardzo silny bufor — wieloletni runway." : cr > 2 ? "Solidna pozycja gotówkowa." : cr > 1 ? "Adekwatna płynność." : "Niska płynność — ryzyko."}`
+        : "Brak danych o płynności.",
     },
     {
-      name: "Architektura i skalowanie",
-      score: Math.min(10, trl + 1),
-      description: `TRL ${trl}/9 — ${profile.architecturePL}. ${profile.keyMetric ?? ""}`,
+      // Skala zatrudnienia — mierzalne: employees (proxy dla zdolności R&D)
+      name: "Skala R&D (pracownicy)",
+      score: employees != null ? Math.min(10, Math.round(Math.log10(Math.max(employees, 10)) * 2.5)) : 3,
+      description: employees != null
+        ? `${employees.toLocaleString()} pracowników. ${employees > 1000 ? "Duży zespół — zdolność do równoległego R&D i komercjalizacji." : employees > 200 ? "Średni zespół — fokus na kluczowych projektach." : "Mały zespół — ryzyko key-man dependency."}`
+        : "Brak danych o zatrudnieniu.",
     },
     {
-      name: "Model biznesowy",
-      // FIX #5: Quantum hardware is NOT asset-light — it requires cryo labs, vacuum chambers, precision lasers
-      score: profile.stackType === "full-stack" ? 7 : profile.stackType === "hardware" ? 6 : profile.stackType === "components" ? 7 : 5,
-      description: profile.stackType === "full-stack"
-        ? "Full-stack hardware: komory próżniowe, lasery precyzyjne, systemy izolacji drgań, chipy fotoniczne. Wysokie capex, ale pełna kontrola nad ekosystemem."
-        : profile.stackType === "components"
-        ? "Dostawca komponentów: picks-and-shovels model. Niższe ryzyko bo agnostyczny wobec architektury."
-        : "Software/cloud: niższy capex, ale zależność od hardware partnerów.",
+      // Sentyment rynkowy — mierzalne: short interest + beta
+      name: "Sentyment rynkowy",
+      score: (() => {
+        let s = 5
+        if (shortPctFloat != null) s += shortPctFloat > 0.15 ? -2 : shortPctFloat > 0.05 ? -1 : 1
+        if (beta != null) s += beta > 2 ? -1 : beta > 1 ? 0 : 1
+        return Math.max(1, Math.min(10, s))
+      })(),
+      description: `${shortPctFloat != null ? `Short: ${(shortPctFloat*100).toFixed(1)}% float.` : ""} ${beta != null ? `Beta: ${beta.toFixed(2)}.` : ""} ${
+        shortPctFloat != null && shortPctFloat > 0.15 ? "Wysoki short interest — rynek sceptyczny." :
+        shortPctFloat != null && shortPctFloat > 0.05 ? "Umiarkowany short." :
+        "Niski short — brak agresywnej gry na spadki."
+      }`,
     },
   ]
 
