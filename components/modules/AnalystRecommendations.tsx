@@ -149,6 +149,7 @@ export default function AnalystRecommendations() {
         <div className="space-y-4">
           <QuoteHeader quote={quote} />
           <ConsensusOverview analyst={analyst} currency={quote.currency} />
+          <AnalystThesis analyst={analyst} quote={quote} />
           <RecommendationDistribution recs={analyst.recommendations} />
           <RecommendationTrend recs={analyst.recommendations} />
           <AnalystActionsTable upgrades={analyst.upgrades} currency={quote.currency} />
@@ -246,7 +247,7 @@ function ConsensusOverview({ analyst, currency }: { analyst: AnalystData; curren
             className="absolute top-0 bottom-0 w-0.5 bg-bloomberg-amber z-10"
             style={{ left: `${currentPct}%` }}
           >
-            <div className="absolute -top-5 -translate-x-1/2 text-[10px] text-bloomberg-amber whitespace-nowrap">
+            <div className="absolute -top-5 -translate-x-1/2 text-[12px] text-bloomberg-amber whitespace-nowrap">
               Current: {fmtPrice(currentPrice, currency)}
             </div>
           </div>
@@ -257,16 +258,135 @@ function ConsensusOverview({ analyst, currency }: { analyst: AnalystData; curren
               className="absolute top-0 bottom-0 w-0.5 bg-bloomberg-green z-10"
               style={{ left: `${meanPct}%` }}
             >
-              <div className="absolute -bottom-5 -translate-x-1/2 text-[10px] text-bloomberg-green whitespace-nowrap">
+              <div className="absolute -bottom-5 -translate-x-1/2 text-[12px] text-bloomberg-green whitespace-nowrap">
                 Mean: {fmtPrice(targetMean, currency)}
               </div>
             </div>
           )}
         </div>
-        <div className="flex justify-between text-[10px] text-muted-foreground mt-1">
+        <div className="flex justify-between text-[12px] text-muted-foreground mt-1">
           <span>Low: {targetLow != null ? fmtPrice(targetLow, currency) : "N/A"}</span>
           <span>High: {targetHigh != null ? fmtPrice(targetHigh, currency) : "N/A"}</span>
         </div>
+      </div>
+    </div>
+  )
+}
+
+// ── Section 2B: Analyst Thesis — WHY analysts are bullish/bearish ──
+
+function AnalystThesis({ analyst, quote }: { analyst: AnalystData; quote: QuoteData }) {
+  const { upgrades, forecasts, targetMean, targetHigh, targetLow, currentPrice, numberOfAnalysts, recommendationKey } = analyst
+  if (numberOfAnalysts === 0) return null
+
+  const points: { icon: string; text: string; type: "bullish" | "bearish" | "neutral" }[] = []
+
+  // 1. Upside to target
+  if (targetMean != null && currentPrice > 0) {
+    const upside = ((targetMean - currentPrice) / currentPrice) * 100
+    if (upside > 10) {
+      points.push({ icon: "🎯", text: `Średni target analityków ($${targetMean.toFixed(0)}) implikuje ${upside.toFixed(0)}% upside od obecnej ceny. ${numberOfAnalysts} analityków widzi znaczny potencjał wzrostu.`, type: "bullish" })
+    } else if (upside > 0) {
+      points.push({ icon: "🎯", text: `Średni target ($${targetMean.toFixed(0)}) sugeruje ${upside.toFixed(0)}% upside — ograniczony potencjał wzrostu wg konsensusu.`, type: "neutral" })
+    } else {
+      points.push({ icon: "⚠️", text: `Średni target ($${targetMean.toFixed(0)}) jest ${Math.abs(upside).toFixed(0)}% PONIŻEJ obecnej ceny — rynek wycenia powyżej konsensusu.`, type: "bearish" })
+    }
+  }
+
+  // 2. Target spread — how much analysts agree
+  if (targetLow != null && targetHigh != null && targetLow > 0) {
+    const spread = ((targetHigh - targetLow) / targetLow) * 100
+    if (spread > 50) {
+      points.push({ icon: "📊", text: `Duży rozstrzał targetów: $${targetLow.toFixed(0)} — $${targetHigh.toFixed(0)} (±${(spread/2).toFixed(0)}%). Analitycy NIE są zgodni co do wartości — wysoka niepewność.`, type: "bearish" })
+    } else if (spread < 20) {
+      points.push({ icon: "📊", text: `Wąski rozstrzał targetów: $${targetLow.toFixed(0)} — $${targetHigh.toFixed(0)} (±${(spread/2).toFixed(0)}%). Wysoka zgoda analityków — silny sygnał.`, type: "bullish" })
+    } else {
+      points.push({ icon: "📊", text: `Zakres targetów: $${targetLow.toFixed(0)} — $${targetHigh.toFixed(0)}. Umiarkowany rozstrzał opinii.`, type: "neutral" })
+    }
+  }
+
+  // 3. Forward earnings growth — THE key argument
+  const fy0 = forecasts.find(f => f.period === "0y")
+  const fy1 = forecasts.find(f => f.period === "+1y")
+  if (fy0 && fy0.growth != null) {
+    const g = fy0.growth * 100
+    if (g > 20) {
+      points.push({ icon: "📈", text: `Analitycy prognozują ${g.toFixed(0)}% wzrost EPS w bieżącym roku fiskalnym (est. $${fy0.epsAvg?.toFixed(2) ?? "N/A"}). Silny wzrost zysków uzasadnia premium wycenę.`, type: "bullish" })
+    } else if (g > 0) {
+      points.push({ icon: "📈", text: `Prognozowany wzrost EPS: ${g.toFixed(0)}% w bieżącym FY (est. $${fy0.epsAvg?.toFixed(2) ?? "N/A"}). Umiarkowany wzrost.`, type: "neutral" })
+    } else {
+      points.push({ icon: "📉", text: `Prognozowany SPADEK EPS: ${g.toFixed(0)}% w bieżącym FY. Pogarszające się perspektywy zysków.`, type: "bearish" })
+    }
+  }
+
+  // 4. Revenue growth forecast
+  if (fy0 && fy0.revGrowth != null) {
+    const rg = fy0.revGrowth * 100
+    if (rg > 15) {
+      points.push({ icon: "💰", text: `Oczekiwany wzrost przychodów ${rg.toFixed(0)}% YoY do $${fy0.revAvg ? (fy0.revAvg/1e9).toFixed(1) : "?"}B. Szybko rosnący top-line wspiera tezę wzrostową.`, type: "bullish" })
+    } else if (rg < -5) {
+      points.push({ icon: "💰", text: `Prognoza: spadek przychodów ${rg.toFixed(0)}% YoY. Kurczący się biznes — negatywny sygnał.`, type: "bearish" })
+    }
+  }
+
+  // 5. Next year acceleration/deceleration
+  if (fy0 && fy1 && fy0.epsAvg != null && fy1.epsAvg != null && fy0.epsAvg > 0) {
+    const epsGrowthNextYear = ((fy1.epsAvg - fy0.epsAvg) / Math.abs(fy0.epsAvg)) * 100
+    if (epsGrowthNextYear > 15) {
+      points.push({ icon: "🚀", text: `EPS przyspieszający: analitycy oczekują dalszego wzrostu ${epsGrowthNextYear.toFixed(0)}% w następnym FY ($${fy0.epsAvg.toFixed(2)} → $${fy1.epsAvg.toFixed(2)}). Wieloletni trend wzrostowy.`, type: "bullish" })
+    } else if (epsGrowthNextYear < -10) {
+      points.push({ icon: "⚠️", text: `EPS spowalniający: prognoza na kolejny FY to spadek o ${Math.abs(epsGrowthNextYear).toFixed(0)}% ($${fy0.epsAvg.toFixed(2)} → $${fy1.epsAvg.toFixed(2)}). Rynek może zacząć de-ratingować.`, type: "bearish" })
+    }
+  }
+
+  // 6. Recent upgrades/downgrades
+  const recentUpgrades = upgrades.filter(u => u.action === "up" || u.action === "init").slice(0, 5)
+  const recentDowngrades = upgrades.filter(u => u.action === "down").slice(0, 5)
+  if (recentUpgrades.length > recentDowngrades.length + 1) {
+    const firms = recentUpgrades.slice(0, 3).map(u => u.firm).join(", ")
+    points.push({ icon: "⬆️", text: `Ostatnie podwyższenia od: ${firms}. Dominujący trend: upgrady (${recentUpgrades.length}) vs downgrady (${recentDowngrades.length}).`, type: "bullish" })
+  } else if (recentDowngrades.length > recentUpgrades.length + 1) {
+    const firms = recentDowngrades.slice(0, 3).map(u => u.firm).join(", ")
+    points.push({ icon: "⬇️", text: `Ostatnie obniżenia od: ${firms}. Dominujący trend: downgrady (${recentDowngrades.length}) vs upgrady (${recentUpgrades.length}).`, type: "bearish" })
+  }
+
+  // 7. EPS revisions momentum
+  if (fy0) {
+    const up30 = fy0.epsRevisions.upLast30d
+    const dn30 = fy0.epsRevisions.downLast30d
+    if (up30 > dn30 + 2) {
+      points.push({ icon: "✏️", text: `Rewizje EPS w górę: ${up30} podwyżek vs ${dn30} obniżek w ostatnich 30 dniach. Pozytywny momentum estymacji.`, type: "bullish" })
+    } else if (dn30 > up30 + 2) {
+      points.push({ icon: "✏️", text: `Rewizje EPS w dół: ${dn30} obniżek vs ${up30} podwyżek w ostatnich 30 dniach. Negatywny momentum estymacji.`, type: "bearish" })
+    }
+  }
+
+  if (points.length === 0) return null
+
+  const bullishCount = points.filter(p => p.type === "bullish").length
+  const bearishCount = points.filter(p => p.type === "bearish").length
+
+  return (
+    <div className="bg-bloomberg-card border border-bloomberg-border p-4">
+      <div className="flex items-center justify-between mb-3">
+        <div className="text-xs font-bold text-bloomberg-amber tracking-wider">ARGUMENTACJA ANALITYKÓW — DLACZEGO {(recommendationKey ?? "").replace(/_/g, " ").toUpperCase()}?</div>
+        <div className="flex gap-2 text-[13px]">
+          <span className="text-bloomberg-green font-bold">{bullishCount} za</span>
+          <span className="text-muted-foreground">|</span>
+          <span className="text-bloomberg-red font-bold">{bearishCount} przeciw</span>
+        </div>
+      </div>
+      <div className="space-y-2">
+        {points.map((p, i) => (
+          <div key={i} className={`flex items-start gap-2 p-2 border ${
+            p.type === "bullish" ? "bg-bloomberg-green/5 border-bloomberg-green/20" :
+            p.type === "bearish" ? "bg-bloomberg-red/5 border-bloomberg-red/20" :
+            "bg-bloomberg-amber/5 border-bloomberg-amber/20"
+          }`}>
+            <span className="text-sm shrink-0">{p.icon}</span>
+            <span className="text-[12px] text-foreground/80 leading-relaxed">{p.text}</span>
+          </div>
+        ))}
       </div>
     </div>
   )
@@ -374,9 +494,25 @@ function RecommendationTrend({ recs }: { recs: RecommendationPeriod[] }) {
 function AnalystActionsTable({ upgrades, currency }: { upgrades: AnalystUpgrade[]; currency: string }) {
   if (upgrades.length === 0) return null
 
+  // Detect stale data — warn if newest upgrade is >6 months old
+  const newestDate = upgrades[0]?.date
+  const isStale = newestDate ? (Date.now() - new Date(newestDate).getTime()) > 180 * 24 * 60 * 60 * 1000 : false
+
   return (
     <div className="p-4 bg-bloomberg-card border border-bloomberg-border rounded">
-      <div className="text-xs text-bloomberg-amber font-bold tracking-wider mb-3">RECENT ANALYST ACTIONS</div>
+      <div className="flex items-center justify-between mb-3">
+        <div className="text-xs text-bloomberg-amber font-bold tracking-wider">OSTATNIE AKCJE ANALITYKÓW</div>
+        {newestDate && (
+          <span className={`text-[13px] ${isStale ? "text-bloomberg-red" : "text-muted-foreground"}`}>
+            Ostatnia: {newestDate} {isStale ? "⚠️ STALE DATA — Yahoo nie aktualizuje historii dla tej spółki" : ""}
+          </span>
+        )}
+      </div>
+      {isStale && (
+        <div className="mb-3 p-2 bg-bloomberg-red/10 border border-bloomberg-red/20 text-[13px] text-bloomberg-red">
+          ⚠️ Uwaga: Yahoo Finance nie aktualizuje historii rekomendacji dla tej spółki. Ostatnia dostępna data: {newestDate}. Aktualne konsensus i targety cenowe (powyżej) SĄ aktualne — tylko tabela poniżej jest nieaktualna.
+        </div>
+      )}
       <div className="overflow-x-auto">
         <table className="w-full text-xs">
           <thead>
@@ -400,7 +536,7 @@ function AnalystActionsTable({ upgrades, currency }: { upgrades: AnalystUpgrade[
                   <td className="py-1.5 pr-3 text-foreground">{u.firm}</td>
                   <td className="py-1.5 pr-3">
                     <span
-                      className="px-1.5 py-0.5 rounded text-[10px] font-bold"
+                      className="px-1.5 py-0.5 rounded text-[12px] font-bold"
                       style={{ backgroundColor: actionColor(u.action) + "33", color: actionColor(u.action) }}
                     >
                       {actionLabel(u.action)}
@@ -523,7 +659,7 @@ function EpsRevisionTrend({ forecasts }: { forecasts: EarningsForecast[] }) {
               </div>
 
               {/* EPS trend values */}
-              <div className="grid grid-cols-5 gap-1 text-[10px] mb-2">
+              <div className="grid grid-cols-5 gap-1 text-[12px] mb-2">
                 {[
                   { label: "90d", val: trend.d90 },
                   { label: "60d", val: trend.d60 },
@@ -539,7 +675,7 @@ function EpsRevisionTrend({ forecasts }: { forecasts: EarningsForecast[] }) {
               </div>
 
               {/* Revision counts */}
-              <div className="flex gap-3 text-[10px]">
+              <div className="flex gap-3 text-[12px]">
                 <span className="text-muted-foreground">Revisions (30d):</span>
                 <span className="px-1.5 py-0.5 rounded bg-bloomberg-green/20 text-bloomberg-green font-bold">
                   {rev.upLast30d} Up

@@ -73,9 +73,9 @@ function StatusBadge({ type }: { type: BadgeType }) {
 function Metric({ label, value, sub }: { label: string; value: string; sub?: string }) {
   return (
     <div>
-      <div className="text-[11px] text-gray-400 uppercase tracking-wider">{label}</div>
+      <div className="text-[13px] text-gray-400 uppercase tracking-wider">{label}</div>
       <div className="text-sm font-semibold text-gray-800">{value}</div>
-      {sub && <div className="text-[10px] text-gray-400">{sub}</div>}
+      {sub && <div className="text-[12px] text-gray-400">{sub}</div>}
     </div>
   )
 }
@@ -357,7 +357,7 @@ export default function BarryStrategy() {
                   {result.step3.data.kols.length > 0 && (
                     <div className="flex flex-wrap gap-1.5">
                       {result.step3.data.kols.map((kol, i) => (
-                        <span key={i} className="text-[11px] bg-blue-50 text-blue-600 border border-blue-200 px-2 py-0.5 rounded-full">{kol}</span>
+                        <span key={i} className="text-[13px] bg-blue-50 text-blue-600 border border-blue-200 px-2 py-0.5 rounded-full">{kol}</span>
                       ))}
                     </div>
                   )}

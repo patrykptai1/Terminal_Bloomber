@@ -303,26 +303,26 @@ export default function EntryTiming() {
             {/* Entry Price Row */}
             <div className="grid grid-cols-2 sm:grid-cols-5 gap-3 mt-4 pt-4 border-t border-white/10">
               <div>
-                <div className="text-[10px] text-muted-foreground tracking-wider">ENTRY PRICE</div>
+                <div className="text-[12px] text-muted-foreground tracking-wider">ENTRY PRICE</div>
                 <div className="text-2xl font-bold text-foreground">{fmtP(a.entry, q.currency)}</div>
               </div>
               <div>
-                <div className="text-[10px] text-muted-foreground tracking-wider">STOP LOSS</div>
+                <div className="text-[12px] text-muted-foreground tracking-wider">STOP LOSS</div>
                 <div className="text-lg font-bold text-bloomberg-red">{fmtP(a.stopLoss, q.currency)}</div>
-                <div className="text-[10px] text-bloomberg-red">{fmtPct(a.stopLossPct)}</div>
+                <div className="text-[12px] text-bloomberg-red">{fmtPct(a.stopLossPct)}</div>
               </div>
               <div>
-                <div className="text-[10px] text-muted-foreground tracking-wider">TARGET 1</div>
+                <div className="text-[12px] text-muted-foreground tracking-wider">TARGET 1</div>
                 <div className="text-lg font-bold text-bloomberg-green">{fmtP(a.target1, q.currency)}</div>
-                <div className="text-[10px] text-bloomberg-green">{fmtPct(a.target1Pct)}</div>
+                <div className="text-[12px] text-bloomberg-green">{fmtPct(a.target1Pct)}</div>
               </div>
               <div>
-                <div className="text-[10px] text-muted-foreground tracking-wider">TARGET 2</div>
+                <div className="text-[12px] text-muted-foreground tracking-wider">TARGET 2</div>
                 <div className="text-lg font-bold text-bloomberg-green">{fmtP(a.target2, q.currency)}</div>
-                <div className="text-[10px] text-bloomberg-green">{fmtPct(a.target2Pct)}</div>
+                <div className="text-[12px] text-bloomberg-green">{fmtPct(a.target2Pct)}</div>
               </div>
               <div>
-                <div className="text-[10px] text-muted-foreground tracking-wider">RISK / REWARD</div>
+                <div className="text-[12px] text-muted-foreground tracking-wider">RISK / REWARD</div>
                 <div className={`text-lg font-bold ${a.riskReward >= 2 ? "text-bloomberg-green" : a.riskReward >= 1 ? "text-bloomberg-amber" : "text-bloomberg-red"}`}>
                   1:{fmt(a.riskReward, 1)}
                 </div>
@@ -338,7 +338,7 @@ export default function EntryTiming() {
               <div className="flex items-center gap-2 mb-3">
                 <BarChart3 className="w-4 h-4 text-bloomberg-amber" />
                 <span className="text-xs text-bloomberg-amber font-bold tracking-wider">PRICE CHART — 1 YEAR</span>
-                <span className="text-[10px] text-muted-foreground ml-2">MA50 (amber) / MA200 (blue) / S&R levels</span>
+                <span className="text-[12px] text-muted-foreground ml-2">MA50 (amber) / MA200 (blue) / S&R levels</span>
               </div>
               <PriceChart
                 data={chartData}
@@ -360,7 +360,7 @@ export default function EntryTiming() {
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
               {/* 52W Range position */}
               <div className="bg-bloomberg-bg rounded p-3">
-                <div className="text-[10px] text-muted-foreground tracking-wider mb-2">52-WEEK RANGE</div>
+                <div className="text-[12px] text-muted-foreground tracking-wider mb-2">52-WEEK RANGE</div>
                 <div className="flex justify-between text-xs mb-1">
                   <span className="text-muted-foreground">From High</span>
                   <span className={`font-bold ${t.pctFrom52High > 20 ? "text-bloomberg-red" : t.pctFrom52High < 5 ? "text-bloomberg-green" : "text-bloomberg-amber"}`}>
@@ -384,7 +384,7 @@ export default function EntryTiming() {
                     style={{ left: `${q.high52 > q.low52 ? ((q.price - q.low52) / (q.high52 - q.low52)) * 100 : 50}%` }}
                   />
                 </div>
-                <div className="flex justify-between text-[9px] text-muted-foreground mt-1">
+                <div className="flex justify-between text-[13px] text-muted-foreground mt-1">
                   <span>{fmtP(q.low52, q.currency)}</span>
                   <span>{fmtP(q.high52, q.currency)}</span>
                 </div>
@@ -392,7 +392,7 @@ export default function EntryTiming() {
 
               {/* Fair value premium/discount */}
               <div className="bg-bloomberg-bg rounded p-3">
-                <div className="text-[10px] text-muted-foreground tracking-wider mb-2">VS FAIR VALUE</div>
+                <div className="text-[12px] text-muted-foreground tracking-wider mb-2">VS FAIR VALUE</div>
                 {q.targetMeanPrice ? (() => {
                   const diff = ((q.price - q.targetMeanPrice) / q.targetMeanPrice) * 100
                   const isPremium = diff > 0
@@ -416,7 +416,7 @@ export default function EntryTiming() {
 
               {/* Distance from MA50 */}
               <div className="bg-bloomberg-bg rounded p-3">
-                <div className="text-[10px] text-muted-foreground tracking-wider mb-2">vs MA50</div>
+                <div className="text-[12px] text-muted-foreground tracking-wider mb-2">vs MA50</div>
                 <div className={`text-xl font-bold ${signalColor(t.priceVsSma50)}`}>
                   {fmtPct(t.priceVsSma50)}
                 </div>
@@ -426,13 +426,13 @@ export default function EntryTiming() {
                     : "Insufficient data"}
                 </div>
                 {t.sma50 != null && (
-                  <div className="text-[10px] text-muted-foreground mt-1">MA50: {fmtP(t.sma50, q.currency)}</div>
+                  <div className="text-[12px] text-muted-foreground mt-1">MA50: {fmtP(t.sma50, q.currency)}</div>
                 )}
               </div>
 
               {/* Distance from MA200 */}
               <div className="bg-bloomberg-bg rounded p-3">
-                <div className="text-[10px] text-muted-foreground tracking-wider mb-2">vs MA200 (TREND)</div>
+                <div className="text-[12px] text-muted-foreground tracking-wider mb-2">vs MA200 (TREND)</div>
                 <div className={`text-xl font-bold ${signalColor(t.priceVsSma200)}`}>
                   {fmtPct(t.priceVsSma200)}
                 </div>
@@ -442,7 +442,7 @@ export default function EntryTiming() {
                     : "Insufficient data"}
                 </div>
                 {t.sma200 != null && (
-                  <div className="text-[10px] text-muted-foreground mt-1">MA200: {fmtP(t.sma200, q.currency)}</div>
+                  <div className="text-[12px] text-muted-foreground mt-1">MA200: {fmtP(t.sma200, q.currency)}</div>
                 )}
               </div>
             </div>
@@ -460,9 +460,9 @@ export default function EntryTiming() {
               <table className="w-full text-sm">
                 <thead>
                   <tr className="border-b border-bloomberg-border">
-                    <th className="text-left text-[10px] text-muted-foreground tracking-wider py-2 pr-4">SCENARIO</th>
-                    <th className="text-right text-[10px] text-muted-foreground tracking-wider py-2 px-4">PRICE</th>
-                    <th className="text-left text-[10px] text-muted-foreground tracking-wider py-2 pl-4">CONDITION</th>
+                    <th className="text-left text-[12px] text-muted-foreground tracking-wider py-2 pr-4">SCENARIO</th>
+                    <th className="text-right text-[12px] text-muted-foreground tracking-wider py-2 px-4">PRICE</th>
+                    <th className="text-left text-[12px] text-muted-foreground tracking-wider py-2 pl-4">CONDITION</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -523,7 +523,7 @@ export default function EntryTiming() {
                     {signalIcon[s.signal as keyof typeof signalIcon]}
                     <div className="flex-1 min-w-0">
                       <div className="text-xs font-bold">{s.name}</div>
-                      <div className="text-[10px] text-muted-foreground truncate">{s.detail}</div>
+                      <div className="text-[12px] text-muted-foreground truncate">{s.detail}</div>
                     </div>
                     <div className={`text-xs font-bold shrink-0 ${
                       s.signal === "bullish" ? "text-bloomberg-green" :
@@ -551,7 +551,7 @@ export default function EntryTiming() {
                 return (
                   <div key={i} className="flex items-center justify-between text-sm py-2 border-b border-bloomberg-border/30 last:border-0">
                     <div className="flex items-center gap-2">
-                      <span className="text-[10px] text-muted-foreground font-mono w-5">S{i + 1}</span>
+                      <span className="text-[12px] text-muted-foreground font-mono w-5">S{i + 1}</span>
                       <span className="text-bloomberg-green font-bold font-mono">{fmtP(s, q.currency)}</span>
                     </div>
                     <div className="flex items-center gap-2">
@@ -580,7 +580,7 @@ export default function EntryTiming() {
                 return (
                   <div key={i} className="flex items-center justify-between text-sm py-2 border-b border-bloomberg-border/30 last:border-0">
                     <div className="flex items-center gap-2">
-                      <span className="text-[10px] text-muted-foreground font-mono w-5">R{i + 1}</span>
+                      <span className="text-[12px] text-muted-foreground font-mono w-5">R{i + 1}</span>
                       <span className="text-bloomberg-red font-bold font-mono">{fmtP(r, q.currency)}</span>
                     </div>
                     <div className="flex items-center gap-2">
@@ -609,14 +609,14 @@ export default function EntryTiming() {
                 <BarChart3 className="w-4 h-4 text-bloomberg-amber" />
                 <span className="text-xs text-bloomberg-amber font-bold tracking-wider">ANALYST PRICE TARGETS</span>
                 {q.numberOfAnalysts != null && (
-                  <span className="text-[10px] text-muted-foreground ml-2">({q.numberOfAnalysts} analysts)</span>
+                  <span className="text-[12px] text-muted-foreground ml-2">({q.numberOfAnalysts} analysts)</span>
                 )}
               </div>
 
               <div className="grid grid-cols-3 gap-4">
                 {/* LOW */}
                 <div className="bg-bloomberg-bg rounded p-3 text-center">
-                  <div className="text-[10px] text-muted-foreground tracking-wider mb-1">LOW</div>
+                  <div className="text-[12px] text-muted-foreground tracking-wider mb-1">LOW</div>
                   <div className="text-xl font-bold text-bloomberg-red font-mono">
                     {fmtP(q.targetLowPrice, q.currency)}
                   </div>
@@ -629,7 +629,7 @@ export default function EntryTiming() {
 
                 {/* MEAN */}
                 <div className="bg-bloomberg-bg rounded p-3 text-center border border-bloomberg-amber/20">
-                  <div className="text-[10px] text-bloomberg-amber tracking-wider mb-1">MEAN</div>
+                  <div className="text-[12px] text-bloomberg-amber tracking-wider mb-1">MEAN</div>
                   <div className="text-xl font-bold text-bloomberg-amber font-mono">
                     {fmtP(q.targetMeanPrice, q.currency)}
                   </div>
@@ -640,7 +640,7 @@ export default function EntryTiming() {
 
                 {/* HIGH */}
                 <div className="bg-bloomberg-bg rounded p-3 text-center">
-                  <div className="text-[10px] text-muted-foreground tracking-wider mb-1">HIGH</div>
+                  <div className="text-[12px] text-muted-foreground tracking-wider mb-1">HIGH</div>
                   <div className="text-xl font-bold text-bloomberg-green font-mono">
                     {fmtP(q.targetHighPrice, q.currency)}
                   </div>
@@ -672,7 +672,7 @@ export default function EntryTiming() {
                       }}
                     />
                   </div>
-                  <div className="flex justify-between text-[9px] text-muted-foreground mt-1">
+                  <div className="flex justify-between text-[13px] text-muted-foreground mt-1">
                     <span>Low: {fmtP(q.targetLowPrice, q.currency)}</span>
                     <span className="text-foreground font-bold">Current: {fmtP(q.price, q.currency)}</span>
                     <span>High: {fmtP(q.targetHighPrice, q.currency)}</span>

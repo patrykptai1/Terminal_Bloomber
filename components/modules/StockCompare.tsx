@@ -231,12 +231,12 @@ function DecisionDashboard({ q, a, color, borderColor }: { q: QuoteData; a: Full
         <div className="bg-bloomberg-bg rounded p-2">
           <div className="text-muted-foreground">Target</div>
           <div className="font-bold text-bloomberg-green">{fmtCurrencyPrice(a.target1, q.currency)}</div>
-          <div className="text-bloomberg-green text-[10px]">+{a.target1Pct.toFixed(1)}%</div>
+          <div className="text-bloomberg-green text-[12px]">+{a.target1Pct.toFixed(1)}%</div>
         </div>
         <div className="bg-bloomberg-bg rounded p-2">
           <div className="text-muted-foreground">Stop</div>
           <div className="font-bold text-bloomberg-red">{fmtCurrencyPrice(a.stopLoss, q.currency)}</div>
-          <div className="text-bloomberg-red text-[10px]">{a.stopLossPct.toFixed(1)}%</div>
+          <div className="text-bloomberg-red text-[12px]">{a.stopLossPct.toFixed(1)}%</div>
         </div>
       </div>
 
@@ -660,7 +660,7 @@ function CompRow({ label, a, b, symA, symB, winA, lowerBetter }: {
   const winner = tie ? "" : aNA ? symB : bNA ? symA : winA ? symA : symB
   return (
     <tr className="border-b border-bloomberg-border/50">
-      <td className="py-2 text-muted-foreground">{label} {lowerBetter ? <span className="text-[10px]">(lower=better)</span> : ""}</td>
+      <td className="py-2 text-muted-foreground">{label} {lowerBetter ? <span className="text-[12px]">(lower=better)</span> : ""}</td>
       <td className={`py-2 text-right font-bold ${winner === symA ? "text-bloomberg-green" : ""}`}>{a}</td>
       <td className={`py-2 text-right font-bold ${winner === symB ? "text-bloomberg-green" : ""}`}>{b}</td>
       <td className="py-2 text-center text-bloomberg-green font-bold">{winner || "---"}</td>

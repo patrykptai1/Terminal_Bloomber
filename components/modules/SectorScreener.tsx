@@ -378,9 +378,9 @@ export default function SectorScreener() {
       {/* SECTOR SELECTOR */}
       <div className="bg-bloomberg-card border border-bloomberg-border rounded p-3">
         <div className="flex items-center gap-2 mb-2">
-          <span className="text-[9px] text-bloomberg-amber font-bold tracking-wider">WYBIERZ SEKTOR GICS</span>
+          <span className="text-[13px] text-bloomberg-amber font-bold tracking-wider">WYBIERZ SEKTOR GICS</span>
           {data?.indexInfo && (
-            <span className="text-[8px] text-muted-foreground ml-auto">
+            <span className="text-[12px] text-muted-foreground ml-auto">
               S&P 500: {data.indexInfo.sp500} | NASDAQ: {data.indexInfo.nasdaq}
             </span>
           )}
@@ -388,7 +388,7 @@ export default function SectorScreener() {
         <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-6 gap-1.5">
           <button
             onClick={() => handleSectorSelect("ALL")}
-            className={`flex items-center gap-1.5 px-2 py-1.5 rounded text-[9px] font-bold border transition-colors ${
+            className={`flex items-center gap-1.5 px-2 py-1.5 rounded text-[13px] font-bold border transition-colors ${
               selectedSector === "ALL" && !selectedThematic
                 ? "bg-bloomberg-amber/20 text-bloomberg-amber border-bloomberg-amber/50"
                 : "border-bloomberg-border/50 text-muted-foreground hover:border-bloomberg-amber/30 hover:text-bloomberg-amber/70"
@@ -397,7 +397,7 @@ export default function SectorScreener() {
             <span>🌐</span>
             <span>WSZYSTKIE</span>
             {data?.total != null && selectedSector === "ALL" && (
-              <span className="text-[7px] opacity-60">({data.total})</span>
+              <span className="text-[13px] opacity-60">({data.total})</span>
             )}
           </button>
           {GICS_SECTORS.map(s => {
@@ -406,7 +406,7 @@ export default function SectorScreener() {
               <button
                 key={s.key}
                 onClick={() => handleSectorSelect(s.key)}
-                className={`flex items-center gap-1.5 px-2 py-1.5 rounded text-[9px] font-bold border transition-colors ${
+                className={`flex items-center gap-1.5 px-2 py-1.5 rounded text-[13px] font-bold border transition-colors ${
                   selectedSector === s.key
                     ? "bg-bloomberg-amber/20 text-bloomberg-amber border-bloomberg-amber/50"
                     : "border-bloomberg-border/50 text-muted-foreground hover:border-bloomberg-amber/30 hover:text-bloomberg-amber/70"
@@ -414,7 +414,7 @@ export default function SectorScreener() {
               >
                 <span className="text-xs">{s.icon}</span>
                 <span className="truncate">{s.label.split(" (")[0]}</span>
-                {count != null && <span className="text-[7px] opacity-50">({count})</span>}
+                {count != null && <span className="text-[13px] opacity-50">({count})</span>}
               </button>
             )
           })}
@@ -423,14 +423,14 @@ export default function SectorScreener() {
         {/* THEMATIC SECTORS */}
         <div className="mt-2 pt-2 border-t border-bloomberg-border/30">
           <div className="flex items-center gap-2 mb-1.5">
-            <span className="text-[9px] text-purple-400 font-bold tracking-wider">SEKTORY TEMATYCZNE</span>
+            <span className="text-[13px] text-purple-400 font-bold tracking-wider">SEKTORY TEMATYCZNE</span>
           </div>
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-1.5">
             {THEMATIC_SECTORS.map(s => (
               <button
                 key={s.key}
                 onClick={() => handleThematicSelect(s.key)}
-                className={`flex items-center gap-1.5 px-2 py-1.5 rounded text-[9px] font-bold border transition-colors ${
+                className={`flex items-center gap-1.5 px-2 py-1.5 rounded text-[13px] font-bold border transition-colors ${
                   selectedThematic === s.key
                     ? "bg-purple-500/20 text-purple-300 border-purple-500/50"
                     : "border-purple-500/20 text-muted-foreground hover:border-purple-500/40 hover:text-purple-300/70"
@@ -439,7 +439,7 @@ export default function SectorScreener() {
                 <span className="text-xs">{s.icon}</span>
                 <span className="truncate">{s.label}</span>
                 {selectedThematic === s.key && data?.total != null && (
-                  <span className="text-[7px] opacity-60">({data.total})</span>
+                  <span className="text-[13px] opacity-60">({data.total})</span>
                 )}
               </button>
             ))}
@@ -451,8 +451,8 @@ export default function SectorScreener() {
       <div className="bg-bloomberg-card border border-bloomberg-border rounded p-3">
         <div className="flex items-center gap-2 mb-2">
           <Search className="w-3.5 h-3.5 text-bloomberg-amber" />
-          <span className="text-[9px] text-bloomberg-amber font-bold tracking-wider">SZUKAJ SPOLKI PO SLOWIE KLUCZOWYM</span>
-          <span className="text-[8px] text-muted-foreground/60 ml-1">np. AI, quantum, solar, blockchain, cybersecurity</span>
+          <span className="text-[13px] text-bloomberg-amber font-bold tracking-wider">SZUKAJ SPOLKI PO SLOWIE KLUCZOWYM</span>
+          <span className="text-[12px] text-muted-foreground/60 ml-1">np. AI, quantum, solar, blockchain, cybersecurity</span>
         </div>
         <div className="flex items-center gap-2">
           <div className="relative flex-1">
@@ -463,7 +463,7 @@ export default function SectorScreener() {
               value={keywordQuery}
               onChange={e => setKeywordQuery(e.target.value)}
               onKeyDown={e => { if (e.key === "Enter") handleKeywordSearch() }}
-              className="w-full bg-bloomberg-bg border border-bloomberg-border rounded px-3 py-1.5 text-[10px] text-foreground placeholder:text-muted-foreground/40 focus:border-bloomberg-amber/50 focus:outline-none"
+              className="w-full bg-bloomberg-bg border border-bloomberg-border rounded px-3 py-1.5 text-[12px] text-foreground placeholder:text-muted-foreground/40 focus:border-bloomberg-amber/50 focus:outline-none"
             />
             {keywordQuery && (
               <button
@@ -477,7 +477,7 @@ export default function SectorScreener() {
           <button
             onClick={() => handleKeywordSearch()}
             disabled={keywordLoading || keywordQuery.trim().length < 2}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded text-[10px] font-bold bg-bloomberg-amber/20 text-bloomberg-amber border border-bloomberg-amber/50 hover:bg-bloomberg-amber/30 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded text-[12px] font-bold bg-bloomberg-amber/20 text-bloomberg-amber border border-bloomberg-amber/50 hover:bg-bloomberg-amber/30 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
           >
             {keywordLoading ? <Loader2 className="w-3 h-3 animate-spin" /> : <Search className="w-3 h-3" />}
             {keywordLoading ? "SZUKAM..." : "SZUKAJ"}
@@ -485,7 +485,7 @@ export default function SectorScreener() {
           {keywordResults && (
             <button
               onClick={clearKeywordSearch}
-              className="flex items-center gap-1 px-2 py-1.5 rounded text-[9px] border border-bloomberg-border/50 text-muted-foreground hover:border-bloomberg-red/30 hover:text-bloomberg-red transition-colors"
+              className="flex items-center gap-1 px-2 py-1.5 rounded text-[13px] border border-bloomberg-border/50 text-muted-foreground hover:border-bloomberg-red/30 hover:text-bloomberg-red transition-colors"
             >
               <X className="w-3 h-3" />
               WYCZYSC
@@ -493,10 +493,10 @@ export default function SectorScreener() {
           )}
         </div>
         {keywordError && (
-          <div className="mt-2 text-[9px] text-bloomberg-red">{keywordError}</div>
+          <div className="mt-2 text-[13px] text-bloomberg-red">{keywordError}</div>
         )}
         {keywordInfo && !keywordLoading && (
-          <div className="mt-2 text-[9px] text-muted-foreground">
+          <div className="mt-2 text-[13px] text-muted-foreground">
             Wynik: <span className="text-bloomberg-amber font-bold">{keywordInfo}</span>
           </div>
         )}
@@ -507,21 +507,21 @@ export default function SectorScreener() {
         <div className="bg-bloomberg-card border border-bloomberg-amber/30 rounded overflow-hidden">
           <div className="px-3 py-1.5 border-b border-bloomberg-border flex items-center gap-2">
             <Search className="w-3 h-3 text-bloomberg-amber" />
-            <span className="text-[9px] text-bloomberg-amber font-bold">
+            <span className="text-[13px] text-bloomberg-amber font-bold">
               WYNIKI WYSZUKIWANIA
             </span>
-            <span className="text-[8px] text-muted-foreground">
+            <span className="text-[12px] text-muted-foreground">
               {keywordResults.length} spółek
             </span>
           </div>
 
           {keywordResults.length === 0 ? (
-            <div className="px-4 py-6 text-center text-muted-foreground text-[10px]">
+            <div className="px-4 py-6 text-center text-muted-foreground text-[12px]">
               Nie znaleziono spółek dla tego słowa kluczowego.
             </div>
           ) : (
             <div className="overflow-x-auto">
-              <table className="w-full text-[9px]">
+              <table className="w-full text-[13px]">
                 <thead>
                   <tr className="border-b border-bloomberg-border bg-bloomberg-bg/50">
                     <th className="text-left px-2 py-1.5 sticky left-0 bg-bloomberg-bg/90 z-10 text-muted-foreground">TICKER</th>
@@ -551,12 +551,12 @@ export default function SectorScreener() {
       <div className="flex items-center gap-2 flex-wrap">
         {/* Market selector */}
         <div className="flex items-center gap-1">
-          <span className="text-[8px] text-muted-foreground font-bold mr-1">RYNEK:</span>
+          <span className="text-[12px] text-muted-foreground font-bold mr-1">RYNEK:</span>
           {MARKETS.map(m => (
             <button
               key={m.key}
               onClick={() => handleMarketSelect(m.key)}
-              className={`px-2 py-1 rounded text-[9px] font-bold border transition-colors ${
+              className={`px-2 py-1 rounded text-[13px] font-bold border transition-colors ${
                 selectedMarket === m.key
                   ? "bg-bloomberg-green/20 text-bloomberg-green border-bloomberg-green/50"
                   : "border-bloomberg-border/50 text-muted-foreground hover:border-bloomberg-green/30"
@@ -571,14 +571,14 @@ export default function SectorScreener() {
         {(selectedMarket === "US" || selectedMarket === "ALL") && (
           <button
             onClick={handleNasdaqToggle}
-            className={`flex items-center gap-1 px-2 py-1 rounded text-[9px] font-bold border transition-colors ${
+            className={`flex items-center gap-1 px-2 py-1 rounded text-[13px] font-bold border transition-colors ${
               includeNasdaq
                 ? "bg-blue-500/20 text-blue-400 border-blue-500/50"
                 : "border-bloomberg-border/50 text-muted-foreground hover:border-blue-500/30"
             }`}
           >
             + NASDAQ
-            <span className="text-[7px] font-normal opacity-70">(poza S&P 500)</span>
+            <span className="text-[13px] font-normal opacity-70">(poza S&P 500)</span>
           </button>
         )}
 
@@ -587,7 +587,7 @@ export default function SectorScreener() {
         {/* Filter toggle */}
         <button
           onClick={() => setShowFilters(!showFilters)}
-          className={`flex items-center gap-1 px-2 py-1 rounded text-[9px] border transition-colors ${
+          className={`flex items-center gap-1 px-2 py-1 rounded text-[13px] border transition-colors ${
             showFilters || Object.values(rangeFilters).some(r => r.min || r.max)
               ? "bg-purple-500/20 text-purple-400 border-purple-500/50"
               : "border-bloomberg-border/50 text-muted-foreground hover:border-purple-500/30"
@@ -596,7 +596,7 @@ export default function SectorScreener() {
           <Filter className="w-3 h-3" />
           <span>FILTRY</span>
           {Object.values(rangeFilters).filter(r => r.min || r.max).length > 0 && (
-            <span className="text-[7px] bg-purple-500 text-white rounded-full w-3.5 h-3.5 flex items-center justify-center">
+            <span className="text-[13px] bg-purple-500 text-white rounded-full w-3.5 h-3.5 flex items-center justify-center">
               {Object.values(rangeFilters).filter(r => r.min || r.max).length}
             </span>
           )}
@@ -605,7 +605,7 @@ export default function SectorScreener() {
         {/* Reset */}
         <button
           onClick={resetFilters}
-          className="flex items-center gap-1 px-2 py-1 rounded text-[9px] border border-bloomberg-border/50 text-muted-foreground hover:border-bloomberg-red/30 hover:text-bloomberg-red transition-colors"
+          className="flex items-center gap-1 px-2 py-1 rounded text-[13px] border border-bloomberg-border/50 text-muted-foreground hover:border-bloomberg-red/30 hover:text-bloomberg-red transition-colors"
         >
           <RotateCcw className="w-3 h-3" />
           <span>RESET</span>
@@ -615,7 +615,7 @@ export default function SectorScreener() {
         {!data && !loading && (
           <button
             onClick={() => fetchSector(selectedSector, selectedMarket)}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded text-[10px] font-bold bg-bloomberg-green/20 text-bloomberg-green border border-bloomberg-green/50 hover:bg-bloomberg-green/30 transition-colors"
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded text-[12px] font-bold bg-bloomberg-green/20 text-bloomberg-green border border-bloomberg-green/50 hover:bg-bloomberg-green/30 transition-colors"
           >
             SKANUJ
           </button>
@@ -625,31 +625,31 @@ export default function SectorScreener() {
       {/* RANGE FILTERS PANEL */}
       {showFilters && (
         <div className="bg-bloomberg-card border border-purple-500/30 rounded p-3">
-          <div className="text-[9px] text-purple-400 font-bold tracking-wider mb-2">FILTRY ZAKRESOWE</div>
+          <div className="text-[13px] text-purple-400 font-bold tracking-wider mb-2">FILTRY ZAKRESOWE</div>
           <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-2">
             {/* Market cap in millions */}
             <div className="space-y-1">
-              <div className="text-[8px] text-muted-foreground font-bold">MCap (mln)</div>
+              <div className="text-[12px] text-muted-foreground font-bold">MCap (mln)</div>
               <div className="flex gap-1">
                 <input
                   type="number"
                   placeholder="od"
                   value={rangeFilters.marketCap?.min ?? ""}
                   onChange={e => updateRange("marketCap", "min", e.target.value)}
-                  className="w-full bg-bloomberg-bg border border-bloomberg-border rounded px-1.5 py-0.5 text-[9px] text-foreground placeholder:text-muted-foreground/40"
+                  className="w-full bg-bloomberg-bg border border-bloomberg-border rounded px-1.5 py-0.5 text-[13px] text-foreground placeholder:text-muted-foreground/40"
                 />
                 <input
                   type="number"
                   placeholder="do"
                   value={rangeFilters.marketCap?.max ?? ""}
                   onChange={e => updateRange("marketCap", "max", e.target.value)}
-                  className="w-full bg-bloomberg-bg border border-bloomberg-border rounded px-1.5 py-0.5 text-[9px] text-foreground placeholder:text-muted-foreground/40"
+                  className="w-full bg-bloomberg-bg border border-bloomberg-border rounded px-1.5 py-0.5 text-[13px] text-foreground placeholder:text-muted-foreground/40"
                 />
               </div>
             </div>
             {COLUMNS.filter(c => c.key !== "marketCap" && c.key !== "changePercent").map(col => (
               <div key={col.key} className="space-y-1">
-                <div className="text-[8px] text-muted-foreground font-bold">{col.short}</div>
+                <div className="text-[12px] text-muted-foreground font-bold">{col.short}</div>
                 <div className="flex gap-1">
                   <input
                     type="number"
@@ -657,7 +657,7 @@ export default function SectorScreener() {
                     placeholder="od"
                     value={rangeFilters[col.key]?.min ?? ""}
                     onChange={e => updateRange(col.key, "min", e.target.value)}
-                    className="w-full bg-bloomberg-bg border border-bloomberg-border rounded px-1.5 py-0.5 text-[9px] text-foreground placeholder:text-muted-foreground/40"
+                    className="w-full bg-bloomberg-bg border border-bloomberg-border rounded px-1.5 py-0.5 text-[13px] text-foreground placeholder:text-muted-foreground/40"
                   />
                   <input
                     type="number"
@@ -665,7 +665,7 @@ export default function SectorScreener() {
                     placeholder="do"
                     value={rangeFilters[col.key]?.max ?? ""}
                     onChange={e => updateRange(col.key, "max", e.target.value)}
-                    className="w-full bg-bloomberg-bg border border-bloomberg-border rounded px-1.5 py-0.5 text-[9px] text-foreground placeholder:text-muted-foreground/40"
+                    className="w-full bg-bloomberg-bg border border-bloomberg-border rounded px-1.5 py-0.5 text-[13px] text-foreground placeholder:text-muted-foreground/40"
                   />
                 </div>
               </div>
@@ -678,15 +678,15 @@ export default function SectorScreener() {
       {currentMedians && selectedSector !== "ALL" && (
         <div className="bg-bloomberg-card border border-bloomberg-border rounded px-3 py-2">
           <div className="flex items-center gap-2 flex-wrap">
-            <span className="text-[8px] text-bloomberg-amber font-bold shrink-0">
+            <span className="text-[12px] text-bloomberg-amber font-bold shrink-0">
               {sectorInfo?.icon} MEDIANA SEKTORA:
             </span>
             {COLUMNS.filter(c => c.key !== "marketCap" && c.key !== "changePercent").map(col => {
               const val = currentMedians[col.key]
               return (
                 <div key={col.key} className="flex items-center gap-0.5">
-                  <span className="text-[8px] text-muted-foreground">{col.short}:</span>
-                  <span className="text-[8px] text-bloomberg-amber font-bold">
+                  <span className="text-[12px] text-muted-foreground">{col.short}:</span>
+                  <span className="text-[12px] text-bloomberg-amber font-bold">
                     {val != null ? `${val.toFixed(2)}${col.suffix ?? ""}` : "—"}
                   </span>
                 </div>
@@ -700,10 +700,10 @@ export default function SectorScreener() {
       {loading && (
         <div className="bg-bloomberg-card border border-bloomberg-border rounded p-8 flex flex-col items-center gap-3">
           <Loader2 className="w-6 h-6 text-bloomberg-amber animate-spin" />
-          <div className="text-[10px] text-muted-foreground">
+          <div className="text-[12px] text-muted-foreground">
             Pobieranie danych dla {selectedSector === "ALL" ? "wszystkich sektorów" : sectorInfo?.label}...
           </div>
-          <div className="text-[8px] text-muted-foreground/60">
+          <div className="text-[12px] text-muted-foreground/60">
             To może potrwać ~30-60s (zależnie od liczby spółek)
           </div>
         </div>
@@ -711,7 +711,7 @@ export default function SectorScreener() {
 
       {/* ERROR */}
       {error && (
-        <div className="bg-bloomberg-red/10 border border-bloomberg-red/30 rounded p-3 text-[10px] text-bloomberg-red">
+        <div className="bg-bloomberg-red/10 border border-bloomberg-red/30 rounded p-3 text-[12px] text-bloomberg-red">
           {error}
         </div>
       )}
@@ -719,10 +719,10 @@ export default function SectorScreener() {
       {/* NO DATA YET */}
       {!data && !loading && !error && (
         <div className="bg-bloomberg-card border border-bloomberg-border rounded p-8 text-center">
-          <div className="text-[11px] text-muted-foreground mb-2">
+          <div className="text-[13px] text-muted-foreground mb-2">
             Wybierz sektor i rynek, aby rozpocząć skanowanie.
           </div>
-          <div className="text-[9px] text-muted-foreground/60">
+          <div className="text-[13px] text-muted-foreground/60">
             Dane zostaną pobrane z Yahoo Finance dla wybranych spółek.
           </div>
         </div>
@@ -733,22 +733,22 @@ export default function SectorScreener() {
         <div className="bg-bloomberg-card border border-bloomberg-border rounded overflow-hidden">
           {/* Table header */}
           <div className="px-3 py-1.5 border-b border-bloomberg-border flex items-center gap-2">
-            <span className="text-[9px] text-bloomberg-amber font-bold">
+            <span className="text-[13px] text-bloomberg-amber font-bold">
               {selectedThematic ? `${thematicInfo?.icon} ${thematicInfo?.label}` : selectedSector === "ALL" ? "🌐 WSZYSTKIE SEKTORY" : `${sectorInfo?.icon} ${sectorInfo?.label}`}
             </span>
-            <span className="text-[8px] text-muted-foreground">
+            <span className="text-[12px] text-muted-foreground">
               {displayStocks.length} spółek
               {displayStocks.length !== data.stocks.length && ` (z ${data.stocks.length})`}
               {data.indexInfo && ` | S&P 500: ${data.indexInfo.fetchedSP500}`}
               {data.indexInfo && data.indexInfo.fetchedNASDAQ > 0 && ` + NASDAQ: ${data.indexInfo.fetchedNASDAQ}`}
             </span>
-            <span className="text-[8px] text-muted-foreground ml-auto">
+            <span className="text-[12px] text-muted-foreground ml-auto">
               {new Date(data.timestamp).toLocaleTimeString("pl-PL", { hour: "2-digit", minute: "2-digit" })}
             </span>
           </div>
 
           <div className="overflow-x-auto">
-            <table className="w-full text-[9px]">
+            <table className="w-full text-[13px]">
               <thead>
                 <tr className="border-b border-bloomberg-border bg-bloomberg-bg/50">
                   {/* Ticker + Name */}
@@ -785,7 +785,7 @@ export default function SectorScreener() {
                 ))}
                 {displayStocks.length === 0 && (
                   <tr>
-                    <td colSpan={COLUMNS.length + 2} className="px-4 py-6 text-center text-muted-foreground text-[10px]">
+                    <td colSpan={COLUMNS.length + 2} className="px-4 py-6 text-center text-muted-foreground text-[12px]">
                       Brak spółek spełniających kryteria filtrowania.
                     </td>
                   </tr>
@@ -829,7 +829,7 @@ function StockRow({ stock, medians, sector }: {
         <td className="px-2 py-1.5 sticky left-0 bg-bloomberg-card/95 z-10">
           <div className="flex items-center gap-1">
             <span className="font-bold text-foreground">{stock.symbol.replace(".WA", "")}</span>
-            <span className={`text-[7px] ${srcColor}`}>{stock.source}</span>
+            <span className={`text-[13px] ${srcColor}`}>{stock.source}</span>
           </div>
         </td>
         {/* Name */}
@@ -891,7 +891,7 @@ function StockRow({ stock, medians, sector }: {
       {expanded && (
         <tr className="bg-bloomberg-bg/50">
           <td colSpan={COLUMNS.length + 2} className="px-3 py-2">
-            <div className="flex items-center gap-3 flex-wrap text-[8px]">
+            <div className="flex items-center gap-3 flex-wrap text-[12px]">
               <span className="text-muted-foreground">Branża: <span className="text-foreground">{stock.industry ?? "—"}</span></span>
               <span className="text-muted-foreground">Giełda: <span className="text-foreground">{stock.exchange}</span></span>
               <span className="text-muted-foreground">Cena: <span className="text-foreground">{stock.currency === "PLN" ? `${stock.price.toFixed(2)} zł` : `$${stock.price.toFixed(2)}`}</span></span>
@@ -915,7 +915,7 @@ function StockRow({ stock, medians, sector }: {
             {/* Valuation vs sector median */}
             {medians && sector !== "ALL" && (
               <div className="mt-2 flex items-center gap-2 flex-wrap">
-                <span className="text-[8px] text-bloomberg-amber font-bold">VS MEDIANA:</span>
+                <span className="text-[12px] text-bloomberg-amber font-bold">VS MEDIANA:</span>
                 {COLUMNS.filter(c => c.key !== "marketCap" && c.key !== "changePercent" && c.key !== "upside").map(col => {
                   const val = getMetric(stock, col.key)
                   const med = medians[col.key]
@@ -926,7 +926,7 @@ function StockRow({ stock, medians, sector }: {
                     ? (pctDiff > 0 ? "text-bloomberg-green" : "text-bloomberg-red")
                     : (pctDiff > 0 ? "text-bloomberg-red" : "text-bloomberg-green")
                   return (
-                    <span key={col.key} className="text-[7px]">
+                    <span key={col.key} className="text-[13px]">
                       <span className="text-muted-foreground">{col.short}: </span>
                       <span className={`font-bold ${Math.abs(pctDiff) < 10 ? "text-bloomberg-amber" : diffColor}`}>
                         {pctDiff > 0 ? "+" : ""}{pctDiff.toFixed(0)}%
@@ -939,35 +939,35 @@ function StockRow({ stock, medians, sector }: {
             {/* Multiplier Valuation Details */}
             {stock.valuation && (stock.valuation.peValuation || stock.valuation.evEbitdaValuation) && (
               <div className="mt-2 pt-2 border-t border-bloomberg-border/30">
-                <span className="text-[8px] text-purple-400 font-bold">WYCENA MNOŻNIKOWA:</span>
+                <span className="text-[12px] text-purple-400 font-bold">WYCENA MNOŻNIKOWA:</span>
                 <div className="flex items-center gap-3 flex-wrap mt-1">
                   {stock.valuation.peValuation != null && (
-                    <span className="text-[7px]">
+                    <span className="text-[13px]">
                       <span className="text-muted-foreground">P/E → </span>
                       <span className="text-foreground font-bold">{fmtBigValue(stock.valuation.peValuation, stock.currency)}</span>
                       <span className="text-muted-foreground"> (Zysk netto × mediana P/E sektora)</span>
                     </span>
                   )}
                   {stock.valuation.evEbitdaValuation != null && (
-                    <span className="text-[7px]">
+                    <span className="text-[13px]">
                       <span className="text-muted-foreground">EV/EBITDA → </span>
                       <span className="text-foreground font-bold">{fmtBigValue(stock.valuation.evEbitdaValuation, stock.currency)}</span>
                       <span className="text-muted-foreground"> (EBITDA × mediana EV/EBITDA − dług netto)</span>
                     </span>
                   )}
                   {stock.valuation.avgValuation != null && (
-                    <span className="text-[7px]">
+                    <span className="text-[13px]">
                       <span className="text-muted-foreground">Średnia → </span>
                       <span className="text-foreground font-bold">{fmtBigValue(stock.valuation.avgValuation, stock.currency)}</span>
                     </span>
                   )}
                   {stock.valuation.upside != null && (
-                    <span className={`text-[7px] font-bold ${stock.valuation.upside > 10 ? "text-bloomberg-green" : stock.valuation.upside < -10 ? "text-bloomberg-red" : "text-bloomberg-amber"}`}>
+                    <span className={`text-[13px] font-bold ${stock.valuation.upside > 10 ? "text-bloomberg-green" : stock.valuation.upside < -10 ? "text-bloomberg-red" : "text-bloomberg-amber"}`}>
                       Potencjał: {stock.valuation.upside > 0 ? "+" : ""}{stock.valuation.upside.toFixed(1)}%
                     </span>
                   )}
                   {stock.valuation.premiumDiscount && (
-                    <span className={`text-[7px] font-bold border px-1 py-px rounded ${
+                    <span className={`text-[13px] font-bold border px-1 py-px rounded ${
                       stock.valuation.premiumDiscount === "PREMIUM" ? "text-bloomberg-green border-bloomberg-green/30" :
                       stock.valuation.premiumDiscount === "DISCOUNT" ? "text-bloomberg-red border-bloomberg-red/30" :
                       "text-bloomberg-amber border-bloomberg-amber/30"
@@ -1005,8 +1005,8 @@ function KeywordRow({ stock }: { stock: any }) {
           <span className="font-bold text-foreground">{stock.symbol}</span>
         </td>
         <td className="px-2 py-1.5 text-muted-foreground truncate max-w-[140px]">{stock.name}</td>
-        <td className="px-2 py-1.5 text-muted-foreground truncate max-w-[120px] text-[8px]">{stock.industry ?? "—"}</td>
-        <td className="px-2 py-1.5 text-muted-foreground truncate max-w-[100px] text-[8px]">{stock.sector}</td>
+        <td className="px-2 py-1.5 text-muted-foreground truncate max-w-[120px] text-[12px]">{stock.industry ?? "—"}</td>
+        <td className="px-2 py-1.5 text-muted-foreground truncate max-w-[100px] text-[12px]">{stock.sector}</td>
         <td className="px-2 py-1.5 text-right text-foreground">
           {stock.currency === "PLN" ? `${stock.price.toFixed(2)} zł` : `$${stock.price.toFixed(2)}`}
         </td>
@@ -1023,7 +1023,7 @@ function KeywordRow({ stock }: { stock: any }) {
           {stock.profitMargin != null ? `${stock.profitMargin.toFixed(1)}%` : "—"}
         </td>
         <td className="px-2 py-1.5">
-          <span className={`text-[7px] font-bold border px-1 py-px rounded ${matchColor} border-current/30`}>
+          <span className={`text-[13px] font-bold border px-1 py-px rounded ${matchColor} border-current/30`}>
             {matchLabel}
           </span>
         </td>
@@ -1031,7 +1031,7 @@ function KeywordRow({ stock }: { stock: any }) {
       {expanded && (
         <tr className="bg-bloomberg-bg/50">
           <td colSpan={10} className="px-3 py-2">
-            <div className="flex items-center gap-3 flex-wrap text-[8px]">
+            <div className="flex items-center gap-3 flex-wrap text-[12px]">
               <span className="text-muted-foreground">Sektor: <span className="text-foreground">{stock.sector}</span></span>
               <span className="text-muted-foreground">Branża: <span className="text-foreground">{stock.industry ?? "—"}</span></span>
               <span className="text-muted-foreground">Giełda: <span className="text-foreground">{stock.exchange}</span></span>
@@ -1068,7 +1068,7 @@ function KeywordRow({ stock }: { stock: any }) {
 function TranslatedDescription({ text }: { text: string }) {
   const translated = useTranslatePL(text)
   return (
-    <div className="mt-2 text-[8px] text-muted-foreground/80 leading-relaxed">
+    <div className="mt-2 text-[12px] text-muted-foreground/80 leading-relaxed">
       {translated}
     </div>
   )

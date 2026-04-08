@@ -384,7 +384,7 @@ export default function SankeyFlow({ ticker, companyName, currency = "$" }: Sank
       {/* Header */}
       <div className="flex items-center gap-3 mb-3 flex-wrap">
         <span className="text-bloomberg-amber font-bold text-sm tracking-wider font-mono">SANKEY FLOW CHART</span>
-        <span className="text-muted-foreground text-[10px] font-mono">{companyName}</span>
+        <span className="text-muted-foreground text-[12px] font-mono">{companyName}</span>
 
         {/* Year selector */}
         {data?.availableYears && data.availableYears.length > 0 && (
@@ -393,7 +393,7 @@ export default function SankeyFlow({ ticker, companyName, currency = "$" }: Sank
               <button
                 key={yr}
                 onClick={() => setSelectedYear(yr)}
-                className={`px-2 py-1 rounded text-[10px] font-bold font-mono border transition-colors ${
+                className={`px-2 py-1 rounded text-[12px] font-bold font-mono border transition-colors ${
                   selectedYear === yr
                     ? "bg-bloomberg-amber/20 text-bloomberg-amber border-bloomberg-amber/50"
                     : "border-bloomberg-border/50 text-muted-foreground hover:border-bloomberg-amber/30"
@@ -408,7 +408,7 @@ export default function SankeyFlow({ ticker, companyName, currency = "$" }: Sank
 
       {/* Margins bar */}
       {yearData && (
-        <div className="flex gap-4 mb-3 text-[10px] font-mono">
+        <div className="flex gap-4 mb-3 text-[12px] font-mono">
           {yearData.margins.gross != null && (
             <span className="text-muted-foreground">
               Marza brutto: <span className="text-bloomberg-green font-bold">{yearData.margins.gross.toFixed(1)}%</span>
@@ -429,7 +429,7 @@ export default function SankeyFlow({ ticker, companyName, currency = "$" }: Sank
             </span>
           )}
           {yearData.segments.length > 0 && (
-            <span className="text-[8px] text-purple-400 ml-auto">
+            <span className="text-[12px] text-purple-400 ml-auto">
               {yearData.segments.length} segmentow przychodowych
             </span>
           )}

@@ -144,7 +144,7 @@ export default function PortfolioBuilder() {
         <div className="text-xs text-bloomberg-amber font-bold mb-3">ADD POSITION</div>
         <div className="flex flex-wrap gap-2 items-end">
           <div>
-            <label className="text-[10px] text-muted-foreground block">TICKER</label>
+            <label className="text-[12px] text-muted-foreground block">TICKER</label>
             <input
               value={newTicker}
               onChange={(e) => setNewTicker(e.target.value.toUpperCase())}
@@ -153,7 +153,7 @@ export default function PortfolioBuilder() {
             />
           </div>
           <div>
-            <label className="text-[10px] text-muted-foreground block">SHARES</label>
+            <label className="text-[12px] text-muted-foreground block">SHARES</label>
             <input
               value={newShares}
               onChange={(e) => setNewShares(e.target.value)}
@@ -163,7 +163,7 @@ export default function PortfolioBuilder() {
             />
           </div>
           <div>
-            <label className="text-[10px] text-muted-foreground block">AVG PRICE</label>
+            <label className="text-[12px] text-muted-foreground block">AVG PRICE</label>
             <input
               value={newAvgPrice}
               onChange={(e) => setNewAvgPrice(e.target.value)}
@@ -203,7 +203,7 @@ export default function PortfolioBuilder() {
         <>
           <div className="bg-bloomberg-card border border-bloomberg-border rounded p-4">
             {currencies.size > 1 && (
-              <div className="text-[9px] text-muted-foreground mb-2 text-right">
+              <div className="text-[13px] text-muted-foreground mb-2 text-right">
                 Wartości przeliczone na {portfolioCurrency}
                 {fxRates["PLN"] ? ` | 1 PLN = ${fxRates["PLN"].toFixed(4)} USD` : ""}
               </div>
@@ -267,7 +267,7 @@ export default function PortfolioBuilder() {
                       <tr key={i} className="border-b border-bloomberg-border/30 hover:bg-bloomberg-bg/50">
                         <td className="py-2 px-3">
                           <span className="font-bold text-bloomberg-green">{entry.ticker}</span>
-                          {q && <span className="text-muted-foreground ml-1 text-[10px]">{alloc.toFixed(1)}%</span>}
+                          {q && <span className="text-muted-foreground ml-1 text-[12px]">{alloc.toFixed(1)}%</span>}
                         </td>
                         <td className="py-2 px-3 text-right">{entry.shares}</td>
                         <td className="py-2 px-3 text-right">

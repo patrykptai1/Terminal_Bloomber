@@ -448,7 +448,7 @@ export default function SankeyModule() {
                 <span className="text-xs text-muted-foreground">Marza netto: <span className={`font-bold text-sm ${yearData.margins.net >= 0 ? "text-green-400" : "text-red-400"}`}>{yearData.margins.net.toFixed(1)}%</span></span>
               )}
               {yearData.segments.length > 0 && (
-                <span className="text-[10px] text-purple-400 ml-auto font-bold">{yearData.segments.length} segmentow | FMP data</span>
+                <span className="text-[12px] text-purple-400 ml-auto font-bold">{yearData.segments.length} segmentow | FMP data</span>
               )}
             </div>
           )}

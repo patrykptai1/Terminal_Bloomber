@@ -37,7 +37,7 @@ function yearFromDate(d: string): string { const m = d.match(/^(\d{4})/); return
 function fmtShares(n: number): string { if (n >= 1e9) return (n / 1e9).toFixed(2) + "B"; if (n >= 1e6) return (n / 1e6).toFixed(1) + "M"; if (n >= 1e3) return (n / 1e3).toFixed(0) + "K"; return n.toString() }
 function fmtPct(n: number | null): string { return n != null ? `${(n * 100).toFixed(1)}%` : "N/A" }
 function Explainer({ text }: { text: string }) {
-  return <div className="flex items-start gap-1.5 text-[10px] text-muted-foreground mt-1"><Info className="w-3 h-3 mt-0.5 shrink-0 opacity-50" /><span>{text}</span></div>
+  return <div className="flex items-start gap-1.5 text-[12px] text-muted-foreground mt-1"><Info className="w-3 h-3 mt-0.5 shrink-0 opacity-50" /><span>{text}</span></div>
 }
 
 /* ══════════════════════════════════════════════════════════════
@@ -59,7 +59,7 @@ function TTMBarSection({ title, ttmData, annualData, forwardAnnual, currency, co
   return (
     <div className="bg-bloomberg-card border border-bloomberg-border rounded p-4">
       <div className="text-xs text-bloomberg-amber font-bold mb-1">{title}</div>
-      <div className="text-[10px] text-muted-foreground mb-3">TTM = Trailing Twelve Months (suma 4 kwartałów) — eliminuje sezonowość</div>
+      <div className="text-[12px] text-muted-foreground mb-3">TTM = Trailing Twelve Months (suma 4 kwartałów) — eliminuje sezonowość</div>
       <div className="flex items-end gap-3 h-56">
         {bars.map((bar, i) => {
           const h = maxVal > 0 ? (Math.abs(bar.value) / maxVal) * 100 : 0
@@ -70,12 +70,12 @@ function TTMBarSection({ title, ttmData, annualData, forwardAnnual, currency, co
           if (yoyBar) { growth = ((bar.value - yoyBar.value) / Math.abs(yoyBar.value)) * 100; compLabel = `vs ${yoyBar.label}` }
           return (
             <div key={i} className="flex-1 flex flex-col items-center gap-0.5 min-w-0">
-              {growth != null ? <div className="flex flex-col items-center"><div className={`text-[10px] font-bold flex items-center gap-0.5 ${growth >= 0 ? "text-bloomberg-green" : "text-bloomberg-red"}`}>{growth >= 0 ? <TrendingUp className="w-3 h-3" /> : <TrendingDown className="w-3 h-3" />}{growth >= 0 ? "+" : ""}{growth.toFixed(1)}%</div><div className="text-[8px] text-muted-foreground text-center">{compLabel}</div></div> : <div className="h-[26px]" />}
+              {growth != null ? <div className="flex flex-col items-center"><div className={`text-[12px] font-bold flex items-center gap-0.5 ${growth >= 0 ? "text-bloomberg-green" : "text-bloomberg-red"}`}>{growth >= 0 ? <TrendingUp className="w-3 h-3" /> : <TrendingDown className="w-3 h-3" />}{growth >= 0 ? "+" : ""}{growth.toFixed(1)}%</div><div className="text-[12px] text-muted-foreground text-center">{compLabel}</div></div> : <div className="h-[26px]" />}
               <div className="w-full flex items-end h-28"><div className={`flex-1 rounded-t transition-all ${bar.isEstimate ? "border-2 border-dashed border-bloomberg-amber bg-bloomberg-amber/20" : bar.isTTM ? `${color} ring-1 ring-white/20` : negative ? "bg-bloomberg-red" : `${color} opacity-60`}`} style={{ height: `${Math.max(h, 2)}%` }} /></div>
-              <div className="text-[10px] text-center font-bold text-muted-foreground leading-tight">{bar.label}</div>
-              <div className="text-[10px] text-muted-foreground text-center">{fmtBigValue(bar.value, currency)}</div>
-              {bar.isTTM && <div className="text-[8px] text-bloomberg-blue font-bold">TTM</div>}
-              {bar.isEstimate && <div className="text-[9px] text-bloomberg-amber font-bold">EST</div>}
+              <div className="text-[12px] text-center font-bold text-muted-foreground leading-tight">{bar.label}</div>
+              <div className="text-[12px] text-muted-foreground text-center">{fmtBigValue(bar.value, currency)}</div>
+              {bar.isTTM && <div className="text-[12px] text-bloomberg-blue font-bold">TTM</div>}
+              {bar.isEstimate && <div className="text-[13px] text-bloomberg-amber font-bold">EST</div>}
             </div>
           )
         })}
@@ -106,7 +106,7 @@ function TTMTable({ title, ttmData, annualData, forwardAnnual, currency }: {
       <tbody>{rows.map((row, i) => {
         const barYear = parseInt(yearFromDate(row.date)); const yoyRow = rows.find((r) => parseInt(yearFromDate(r.date)) === barYear - 1 && r.value !== 0)
         let change: number | null = null; let compRef = ""; if (yoyRow) { change = ((row.value - yoyRow.value) / Math.abs(yoyRow.value)) * 100; compRef = `vs ${yoyRow.label}` }
-        return (<tr key={i} className="border-b border-bloomberg-border/50"><td className="py-2 font-bold">{row.label}</td><td className="py-2 text-[10px] text-muted-foreground">{row.sublabel}</td><td className={`py-2 text-right font-bold ${row.value >= 0 ? "text-bloomberg-green" : "text-bloomberg-red"}`}>{fmtBigValue(row.value, currency)}</td><td className={`py-2 text-right ${change != null && change >= 0 ? "text-bloomberg-green" : "text-bloomberg-red"}`}>{change != null ? <span>{change >= 0 ? "+" : ""}{change.toFixed(1)}% <span className="text-[10px] text-muted-foreground">{compRef}</span></span> : "---"}</td><td className="py-2 text-center">{row.isEstimate ? <span className="text-[10px] bg-bloomberg-amber/20 text-bloomberg-amber px-1.5 py-0.5 rounded font-bold">EST</span> : <span className="text-[10px] text-muted-foreground">ACTUAL</span>}</td></tr>)
+        return (<tr key={i} className="border-b border-bloomberg-border/50"><td className="py-2 font-bold">{row.label}</td><td className="py-2 text-[12px] text-muted-foreground">{row.sublabel}</td><td className={`py-2 text-right font-bold ${row.value >= 0 ? "text-bloomberg-green" : "text-bloomberg-red"}`}>{fmtBigValue(row.value, currency)}</td><td className={`py-2 text-right ${change != null && change >= 0 ? "text-bloomberg-green" : "text-bloomberg-red"}`}>{change != null ? <span>{change >= 0 ? "+" : ""}{change.toFixed(1)}% <span className="text-[12px] text-muted-foreground">{compRef}</span></span> : "---"}</td><td className="py-2 text-center">{row.isEstimate ? <span className="text-[12px] bg-bloomberg-amber/20 text-bloomberg-amber px-1.5 py-0.5 rounded font-bold">EST</span> : <span className="text-[12px] text-muted-foreground">ACTUAL</span>}</td></tr>)
       })}</tbody></table></div>
     </div>
   )
@@ -419,9 +419,9 @@ function FinancialReport({ earnings: e, quote: q, currency }: { earnings: Earnin
 
       {/* ── P&L WATERFALL ── */}
       <div className="bg-bloomberg-card border border-bloomberg-border rounded p-4">
-        <div className="text-[10px] text-bloomberg-amber font-bold mb-3">RACHUNEK ZYSKÓW I STRAT (ROCZNY)</div>
+        <div className="text-[12px] text-bloomberg-amber font-bold mb-3">RACHUNEK ZYSKÓW I STRAT (ROCZNY)</div>
         <div className="overflow-x-auto">
-          <table className="w-full text-[9px]">
+          <table className="w-full text-[13px]">
             <thead>
               <tr className="border-b border-bloomberg-border">
                 <th className="text-left py-1.5 text-muted-foreground sticky left-0 bg-bloomberg-card z-10 min-w-[160px]">POZYCJA</th>
@@ -447,10 +447,10 @@ function FinancialReport({ earnings: e, quote: q, currency }: { earnings: Earnin
                         <td key={vi} className={`py-1.5 text-right ${row.isBold ? "font-bold" : ""} ${row.isSubtotal ? valColor(v) : v != null && v < 0 ? "text-bloomberg-red/70" : "text-muted-foreground"}`}>
                           {fmtV(v)}
                           {row.isSubtotal && v != null && ann[vi].revenue ? (
-                            <span className="text-[7px] text-muted-foreground/60 ml-0.5">({pct(v, ann[vi].revenue)})</span>
+                            <span className="text-[13px] text-muted-foreground/60 ml-0.5">({pct(v, ann[vi].revenue)})</span>
                           ) : null}
                           {flagged && (
-                            <span className="ml-1 text-[7px] text-yellow-400 border border-yellow-400/40 rounded px-0.5" title="Pozycja jednorazowa — odbiega znacząco od normy historycznej">1x</span>
+                            <span className="ml-1 text-[13px] text-yellow-400 border border-yellow-400/40 rounded px-0.5" title="Pozycja jednorazowa — odbiega znacząco od normy historycznej">1x</span>
                           )}
                         </td>
                       )
@@ -471,7 +471,7 @@ function FinancialReport({ earnings: e, quote: q, currency }: { earnings: Earnin
         {/* ── P&L VISUAL BAR (stacked for latest year) ── */}
         {latest.revenue != null && latest.revenue > 0 && (
           <div className="mt-3">
-            <div className="text-[8px] text-muted-foreground mb-1.5">STRUKTURA KOSZTÓW — {yearFromDate(latest.date)}</div>
+            <div className="text-[12px] text-muted-foreground mb-1.5">STRUKTURA KOSZTÓW — {yearFromDate(latest.date)}</div>
             {(() => {
               const rev = latest.revenue!
               const items = [
@@ -485,17 +485,17 @@ function FinancialReport({ earnings: e, quote: q, currency }: { earnings: Earnin
                 <div className="space-y-1">
                   <div className="flex h-5 rounded overflow-hidden border border-bloomberg-border/30">
                     {items.map((item, i) => (
-                      <div key={i} className={`${item.color} flex items-center justify-center text-[7px] text-white/80 overflow-hidden`}
+                      <div key={i} className={`${item.color} flex items-center justify-center text-[13px] text-white/80 overflow-hidden`}
                         style={{ width: `${(item.val / rev) * 100}%` }}>
                         {(item.val / rev) * 100 > 8 ? `${item.label} ${((item.val / rev) * 100).toFixed(0)}%` : ""}
                       </div>
                     ))}
-                    <div className={`${profit >= 0 ? "bg-bloomberg-green/40" : "bg-bloomberg-red/40"} flex items-center justify-center text-[7px] text-white/80`}
+                    <div className={`${profit >= 0 ? "bg-bloomberg-green/40" : "bg-bloomberg-red/40"} flex items-center justify-center text-[13px] text-white/80`}
                       style={{ width: `${Math.max((Math.abs(profit) / rev) * 100, 2)}%` }}>
                       {profit >= 0 ? `Zysk ${((profit / rev) * 100).toFixed(0)}%` : `Strata`}
                     </div>
                   </div>
-                  <div className="flex flex-wrap gap-3 text-[7px] text-muted-foreground">
+                  <div className="flex flex-wrap gap-3 text-[13px] text-muted-foreground">
                     {items.map((item, i) => (
                       <span key={i}><span className={`inline-block w-2 h-2 rounded-sm mr-0.5 ${item.color}`} />{item.label}: {fmtV(item.val)} ({((item.val / rev) * 100).toFixed(1)}%)</span>
                     ))}
@@ -513,9 +513,9 @@ function FinancialReport({ earnings: e, quote: q, currency }: { earnings: Earnin
       {/* ── P&L QUARTERLY ── */}
       {qtr.length > 0 && (
         <div className="bg-bloomberg-card border border-bloomberg-border rounded p-4">
-          <div className="text-[10px] text-bloomberg-amber font-bold mb-3">RACHUNEK ZYSKÓW I STRAT (KWARTALNY)</div>
+          <div className="text-[12px] text-bloomberg-amber font-bold mb-3">RACHUNEK ZYSKÓW I STRAT (KWARTALNY)</div>
           <div className="overflow-x-auto">
-            <table className="w-full text-[9px]">
+            <table className="w-full text-[13px]">
               <thead>
                 <tr className="border-b border-bloomberg-border">
                   <th className="text-left py-1.5 text-muted-foreground sticky left-0 bg-bloomberg-card z-10 min-w-[160px]">POZYCJA</th>
@@ -541,10 +541,10 @@ function FinancialReport({ earnings: e, quote: q, currency }: { earnings: Earnin
                           <td key={vi} className={`py-1.5 text-right ${row.isBold ? "font-bold" : ""} ${row.isSubtotal ? valColor(v) : v != null && v < 0 ? "text-bloomberg-red/70" : "text-muted-foreground"}`}>
                             {fmtV(v)}
                             {row.isSubtotal && v != null && qtr[vi].revenue ? (
-                              <span className="text-[7px] text-muted-foreground/60 ml-0.5">({pct(v, qtr[vi].revenue)})</span>
+                              <span className="text-[13px] text-muted-foreground/60 ml-0.5">({pct(v, qtr[vi].revenue)})</span>
                             ) : null}
                             {flagged && (
-                              <span className="ml-1 text-[7px] text-yellow-400 border border-yellow-400/40 rounded px-0.5" title="Pozycja jednorazowa — odbiega znacząco od normy historycznej">1x</span>
+                              <span className="ml-1 text-[13px] text-yellow-400 border border-yellow-400/40 rounded px-0.5" title="Pozycja jednorazowa — odbiega znacząco od normy historycznej">1x</span>
                             )}
                           </td>
                         )
@@ -567,12 +567,12 @@ function FinancialReport({ earnings: e, quote: q, currency }: { earnings: Earnin
       {/* ── BALANCE SHEET ── */}
       {latestBS && (latestBS.totalAssets != null || latestBS.totalDebt != null) && (
         <div className="bg-bloomberg-card border border-bloomberg-border rounded p-4">
-          <div className="text-[10px] text-bloomberg-amber font-bold mb-3">BILANS — {latestBS.date ? shortQLabel(latestBS.date) : "OSTATNI"}</div>
+          <div className="text-[12px] text-bloomberg-amber font-bold mb-3">BILANS — {latestBS.date ? shortQLabel(latestBS.date) : "OSTATNI"}</div>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             {/* Assets */}
             <div>
-              <div className="text-[8px] text-bloomberg-green font-bold mb-1.5">AKTYWA</div>
-              <table className="w-full text-[9px]">
+              <div className="text-[12px] text-bloomberg-green font-bold mb-1.5">AKTYWA</div>
+              <table className="w-full text-[13px]">
                 <tbody>
                   {bsRows.filter(r => ["Gotówka i ekwiwalenty", "Aktywa obrotowe", "Aktywa razem", "Goodwill", "Wartości niematerialne", "Należności"].includes(r.label)).map((row, i) => {
                     const v = row.getValue(latestBS)
@@ -589,8 +589,8 @@ function FinancialReport({ earnings: e, quote: q, currency }: { earnings: Earnin
             </div>
             {/* Liabilities + Equity */}
             <div>
-              <div className="text-[8px] text-bloomberg-red font-bold mb-1.5">PASYWA</div>
-              <table className="w-full text-[9px]">
+              <div className="text-[12px] text-bloomberg-red font-bold mb-1.5">PASYWA</div>
+              <table className="w-full text-[13px]">
                 <tbody>
                   {bsRows.filter(r => ["Zobowiązania bieżące", "Dług", "Zobowiązania razem", "Kapitał własny", "Zyski zatrzymane"].includes(r.label)).map((row, i) => {
                     const v = row.getValue(latestBS)
@@ -609,7 +609,7 @@ function FinancialReport({ earnings: e, quote: q, currency }: { earnings: Earnin
           </div>
 
           {/* Ratios */}
-          <div className="mt-3 flex flex-wrap gap-4 text-[9px]">
+          <div className="mt-3 flex flex-wrap gap-4 text-[13px]">
             {latestBS.currentAssets != null && latestBS.currentLiabilities != null && latestBS.currentLiabilities > 0 && (
               <div className="flex items-center gap-1">
                 <span className="text-muted-foreground">Płynność bieżąca:</span>
@@ -641,9 +641,9 @@ function FinancialReport({ earnings: e, quote: q, currency }: { earnings: Earnin
       {/* ── CASH FLOW ANNUAL ── */}
       {cfAnn.length > 0 && (
         <div className="bg-bloomberg-card border border-bloomberg-border rounded p-4">
-          <div className="text-[10px] text-bloomberg-amber font-bold mb-3">PRZEPŁYWY PIENIĘŻNE (ROCZNE)</div>
+          <div className="text-[12px] text-bloomberg-amber font-bold mb-3">PRZEPŁYWY PIENIĘŻNE (ROCZNE)</div>
           <div className="overflow-x-auto">
-            <table className="w-full text-[9px]">
+            <table className="w-full text-[13px]">
               <thead>
                 <tr className="border-b border-bloomberg-border">
                   <th className="text-left py-1.5 text-muted-foreground sticky left-0 bg-bloomberg-card z-10 min-w-[160px]">POZYCJA</th>
@@ -694,10 +694,10 @@ function FinancialReport({ earnings: e, quote: q, currency }: { earnings: Earnin
       {/* ── KOMENTARZ ALGORYTMICZNY ── */}
       {comments.length > 0 && (
         <div className="bg-bloomberg-card border border-bloomberg-amber/30 rounded p-4">
-          <div className="text-[10px] text-bloomberg-amber font-bold mb-3">💬 KOMENTARZ — PODSUMOWANIE</div>
+          <div className="text-[12px] text-bloomberg-amber font-bold mb-3">💬 KOMENTARZ — PODSUMOWANIE</div>
           <div className="space-y-1.5">
             {comments.map((c, i) => (
-              <div key={i} className="flex items-start gap-2 text-[10px]">
+              <div key={i} className="flex items-start gap-2 text-[12px]">
                 <span className="shrink-0 mt-0.5">{c.type === "good" ? "🟢" : c.type === "warn" ? "🟡" : c.type === "bad" ? "🔴" : "⚪"}</span>
                 <span className={c.type === "good" ? "text-bloomberg-green" : c.type === "bad" ? "text-bloomberg-red" : c.type === "warn" ? "text-bloomberg-amber" : "text-muted-foreground"}>{c.text}</span>
               </div>
@@ -830,8 +830,8 @@ export default function EarningsReport() {
               {scoreData && <FinancialScoreCircle score={scoreData} />}
             </div>
             <div className="mt-3 flex flex-wrap gap-4 items-center">
-              {gaapEpsTTMVal != null && <div className="flex items-center gap-2"><span className="text-[10px] bg-bloomberg-red/20 text-bloomberg-red px-1.5 py-0.5 rounded font-bold">GAAP</span><span className="text-xs text-muted-foreground">EPS (TTM):</span><span className={`font-bold text-sm ${gaapEpsTTMVal >= 0 ? "text-bloomberg-green" : "text-bloomberg-red"}`}>{gaapEpsTTMVal.toFixed(2)}</span></div>}
-              {nonGaapEpsTTMVal != null && hasGaapDiff && <div className="flex items-center gap-2"><span className="text-[10px] bg-bloomberg-blue/20 text-bloomberg-blue px-1.5 py-0.5 rounded font-bold">ADJ</span><span className="text-xs text-muted-foreground">EPS Non-GAAP (TTM):</span><span className={`font-bold text-sm ${nonGaapEpsTTMVal >= 0 ? "text-bloomberg-green" : "text-bloomberg-red"}`}>{nonGaapEpsTTMVal.toFixed(2)}</span></div>}
+              {gaapEpsTTMVal != null && <div className="flex items-center gap-2"><span className="text-[12px] bg-bloomberg-red/20 text-bloomberg-red px-1.5 py-0.5 rounded font-bold">GAAP</span><span className="text-xs text-muted-foreground">EPS (TTM):</span><span className={`font-bold text-sm ${gaapEpsTTMVal >= 0 ? "text-bloomberg-green" : "text-bloomberg-red"}`}>{gaapEpsTTMVal.toFixed(2)}</span></div>}
+              {nonGaapEpsTTMVal != null && hasGaapDiff && <div className="flex items-center gap-2"><span className="text-[12px] bg-bloomberg-blue/20 text-bloomberg-blue px-1.5 py-0.5 rounded font-bold">ADJ</span><span className="text-xs text-muted-foreground">EPS Non-GAAP (TTM):</span><span className={`font-bold text-sm ${nonGaapEpsTTMVal >= 0 ? "text-bloomberg-green" : "text-bloomberg-red"}`}>{nonGaapEpsTTMVal.toFixed(2)}</span></div>}
               {!hasGaapDiff && nonGaapEpsTTMVal != null && gaapEpsTTMVal == null && <div className="flex items-center gap-2"><span className="text-xs text-muted-foreground">EPS (TTM):</span><span className="font-bold text-sm">{nonGaapEpsTTMVal.toFixed(2)}</span></div>}
             </div>
             {hasGaapDiff && <Explainer text="GAAP uwzgl. koszty jednorazowe i SBC. Non-GAAP (Adjusted) je wyklucza." />}
@@ -883,13 +883,13 @@ export default function EarningsReport() {
                   <div className="flex items-center gap-2">
                     <span className="text-lg">{tier.emoji}</span>
                     <div>
-                      <div className="text-[11px] font-bold tracking-wider text-foreground">RULE OF 40</div>
-                      <div className="text-[8px] text-muted-foreground">Revenue Growth + FCF Margin ≥ 40%</div>
+                      <div className="text-[13px] font-bold tracking-wider text-foreground">RULE OF 40</div>
+                      <div className="text-[12px] text-muted-foreground">Revenue Growth + FCF Margin ≥ 40%</div>
                     </div>
                   </div>
                   <div className="text-right">
                     <div className={`text-2xl font-black ${tier.color}`}>{rule40.toFixed(1)}%</div>
-                    <div className={`text-[9px] font-bold ${tier.color}`}>{tier.label}</div>
+                    <div className={`text-[13px] font-bold ${tier.color}`}>{tier.label}</div>
                   </div>
                 </div>
 
@@ -897,7 +897,7 @@ export default function EarningsReport() {
                 <div className="relative h-6 bg-bloomberg-bg rounded-full overflow-hidden mb-3 border border-bloomberg-border/50">
                   {/* 40% threshold marker */}
                   <div className="absolute top-0 bottom-0 left-[33.3%] w-px bg-white/30 z-10" />
-                  <div className="absolute -top-4 left-[33.3%] -translate-x-1/2 text-[7px] text-white/50">40%</div>
+                  <div className="absolute -top-4 left-[33.3%] -translate-x-1/2 text-[13px] text-white/50">40%</div>
                   {/* Revenue growth portion */}
                   <div
                     className="absolute top-0 bottom-0 left-0 bg-bloomberg-green/60 transition-all duration-500"
@@ -910,20 +910,20 @@ export default function EarningsReport() {
                   />
                   {/* Score label on bar */}
                   <div className="absolute inset-0 flex items-center justify-center">
-                    <span className="text-[10px] font-bold text-white drop-shadow-md">{rule40.toFixed(1)}%</span>
+                    <span className="text-[12px] font-bold text-white drop-shadow-md">{rule40.toFixed(1)}%</span>
                   </div>
                 </div>
 
                 {/* Breakdown */}
                 <div className="grid grid-cols-2 gap-3">
                   <div className="bg-bloomberg-bg/50 rounded p-2.5 border border-bloomberg-border/30">
-                    <div className="text-[8px] text-muted-foreground mb-1">📈 Revenue Growth (YoY)</div>
+                    <div className="text-[12px] text-muted-foreground mb-1">📈 Revenue Growth (YoY)</div>
                     <div className={`text-lg font-bold ${revGrowth >= 0 ? "text-bloomberg-green" : "text-bloomberg-red"}`}>
                       {revGrowth > 0 ? "+" : ""}{revGrowth.toFixed(1)}%
                     </div>
                   </div>
                   <div className="bg-bloomberg-bg/50 rounded p-2.5 border border-bloomberg-border/30">
-                    <div className="text-[8px] text-muted-foreground mb-1">💰 FCF Margin (TTM)</div>
+                    <div className="text-[12px] text-muted-foreground mb-1">💰 FCF Margin (TTM)</div>
                     <div className={`text-lg font-bold ${fcfMargin >= 0 ? "text-bloomberg-green" : "text-bloomberg-red"}`}>
                       {fcfMargin > 0 ? "+" : ""}{fcfMargin.toFixed(1)}%
                     </div>
@@ -933,8 +933,8 @@ export default function EarningsReport() {
                 {/* Status */}
                 <div className="mt-3 flex items-center gap-2">
                   {passed
-                    ? <span className="text-[10px] text-bloomberg-green font-bold">✅ Rule of 40 SPEŁNIONA — spółka rośnie szybko i/lub generuje silny FCF</span>
-                    : <span className="text-[10px] text-bloomberg-red font-bold">❌ Rule of 40 NIESPEŁNIONA — wzrost + FCF poniżej progu 40%</span>
+                    ? <span className="text-[12px] text-bloomberg-green font-bold">✅ Rule of 40 SPEŁNIONA — spółka rośnie szybko i/lub generuje silny FCF</span>
+                    : <span className="text-[12px] text-bloomberg-red font-bold">❌ Rule of 40 NIESPEŁNIONA — wzrost + FCF poniżej progu 40%</span>
                   }
                 </div>
               </div>
@@ -1096,7 +1096,7 @@ export default function EarningsReport() {
               <div className="overflow-x-auto"><table className="w-full text-xs"><thead><tr className="border-b border-bloomberg-border"><th className="text-left py-2 text-muted-foreground">PERIOD</th><th className="text-right py-2 text-muted-foreground">OP. CF</th><th className="text-right py-2 text-muted-foreground">CAPEX</th><th className="text-right py-2 text-muted-foreground">FCF</th><th className="text-right py-2 text-muted-foreground">FCF MARGIN</th><th className="text-right py-2 text-muted-foreground">YoY</th></tr></thead>
               <tbody>
                 {(e.cashFlowAnnual ?? []).filter((c) => c.freeCashFlow != null).map((c, i, arr) => { const y = yearFromDate(c.date); if (fcfTTM.some((t) => yearFromDate(t.date) === y)) return null; const ra = annualRevenue.find((r) => yearFromDate(r.date) === y); const fm = ra?.value && c.freeCashFlow ? (c.freeCashFlow / ra.value) * 100 : null; const prev = arr[i - 1]; const yoy = prev?.freeCashFlow && c.freeCashFlow ? ((c.freeCashFlow - prev.freeCashFlow) / Math.abs(prev.freeCashFlow)) * 100 : null; return (<tr key={`a-${i}`} className="border-b border-bloomberg-border/50"><td className="py-2 font-bold">FY{y}</td><td className="py-2 text-right">{c.operatingCashFlow != null ? fmtBigValue(c.operatingCashFlow, q.currency) : "N/A"}</td><td className="py-2 text-right text-bloomberg-red">{c.capitalExpenditure != null ? fmtBigValue(c.capitalExpenditure, q.currency) : "N/A"}</td><td className={`py-2 text-right font-bold ${(c.freeCashFlow ?? 0) >= 0 ? "text-bloomberg-green" : "text-bloomberg-red"}`}>{fmtBigValue(c.freeCashFlow!, q.currency)}</td><td className={`py-2 text-right ${fm != null && fm >= 0 ? "text-bloomberg-green" : "text-bloomberg-red"}`}>{fm != null ? `${fm.toFixed(1)}%` : "N/A"}</td><td className={`py-2 text-right ${yoy != null && yoy >= 0 ? "text-bloomberg-green" : "text-bloomberg-red"}`}>{yoy != null ? `${yoy >= 0 ? "+" : ""}${yoy.toFixed(1)}%` : "---"}</td></tr>) })}
-                {fcfTTM.map((fcf, i) => { const oc = opCfTTM.find((o) => o.date === fcf.date); const cx = capexTTM.find((c) => c.date === fcf.date); const rv = revenueTTM.find((r) => r.date === fcf.date); const fm = rv ? (fcf.value / rv.value) * 100 : null; const py = parseInt(yearFromDate(fcf.date)) - 1; const pf = fcfTTM.find((f) => parseInt(yearFromDate(f.date)) === py) ?? annualFCF.find((a) => yearFromDate(a.date) === String(py)); const pv = pf && "value" in pf ? pf.value : null; const yoy = pv && pv !== 0 ? ((fcf.value - pv) / Math.abs(pv)) * 100 : null; return (<tr key={`t-${i}`} className="border-b border-bloomberg-border/50 bg-bloomberg-blue/5"><td className="py-2 font-bold">{fcf.label} <span className="text-[8px] text-bloomberg-blue">TTM</span></td><td className="py-2 text-right">{oc ? fmtBigValue(oc.value, q.currency) : "N/A"}</td><td className="py-2 text-right text-bloomberg-red">{cx ? fmtBigValue(cx.value, q.currency) : "N/A"}</td><td className={`py-2 text-right font-bold ${fcf.value >= 0 ? "text-bloomberg-green" : "text-bloomberg-red"}`}>{fmtBigValue(fcf.value, q.currency)}</td><td className={`py-2 text-right ${fm != null && fm >= 0 ? "text-bloomberg-green" : "text-bloomberg-red"}`}>{fm != null ? `${fm.toFixed(1)}%` : "N/A"}</td><td className={`py-2 text-right ${yoy != null && yoy >= 0 ? "text-bloomberg-green" : "text-bloomberg-red"}`}>{yoy != null ? `${yoy >= 0 ? "+" : ""}${yoy.toFixed(1)}%` : "---"}</td></tr>) })}
+                {fcfTTM.map((fcf, i) => { const oc = opCfTTM.find((o) => o.date === fcf.date); const cx = capexTTM.find((c) => c.date === fcf.date); const rv = revenueTTM.find((r) => r.date === fcf.date); const fm = rv ? (fcf.value / rv.value) * 100 : null; const py = parseInt(yearFromDate(fcf.date)) - 1; const pf = fcfTTM.find((f) => parseInt(yearFromDate(f.date)) === py) ?? annualFCF.find((a) => yearFromDate(a.date) === String(py)); const pv = pf && "value" in pf ? pf.value : null; const yoy = pv && pv !== 0 ? ((fcf.value - pv) / Math.abs(pv)) * 100 : null; return (<tr key={`t-${i}`} className="border-b border-bloomberg-border/50 bg-bloomberg-blue/5"><td className="py-2 font-bold">{fcf.label} <span className="text-[12px] text-bloomberg-blue">TTM</span></td><td className="py-2 text-right">{oc ? fmtBigValue(oc.value, q.currency) : "N/A"}</td><td className="py-2 text-right text-bloomberg-red">{cx ? fmtBigValue(cx.value, q.currency) : "N/A"}</td><td className={`py-2 text-right font-bold ${fcf.value >= 0 ? "text-bloomberg-green" : "text-bloomberg-red"}`}>{fmtBigValue(fcf.value, q.currency)}</td><td className={`py-2 text-right ${fm != null && fm >= 0 ? "text-bloomberg-green" : "text-bloomberg-red"}`}>{fm != null ? `${fm.toFixed(1)}%` : "N/A"}</td><td className={`py-2 text-right ${yoy != null && yoy >= 0 ? "text-bloomberg-green" : "text-bloomberg-red"}`}>{yoy != null ? `${yoy >= 0 ? "+" : ""}${yoy.toFixed(1)}%` : "---"}</td></tr>) })}
               </tbody></table></div>
             </div>
 
@@ -1113,7 +1113,7 @@ export default function EarningsReport() {
                   <div className="grid grid-cols-3 gap-4 text-xs">
                     <div><div className="text-muted-foreground">FCF (TTM)</div><div className={`font-bold text-sm ${latFcf >= 0 ? "text-bloomberg-green" : "text-bloomberg-red"}`}>{fmtBigValue(latFcf, q.currency)}</div></div>
                     <div><div className="text-muted-foreground">Market Cap</div><div className="font-bold text-sm">{mc > 0 ? fmtBigValue(mc, q.currency) : "N/A"}</div></div>
-                    <div><div className="text-muted-foreground">FCF Yield</div><div className={`font-bold text-sm ${color}`}>{fcfYield != null ? `${fcfYield.toFixed(1)}%` : "N/A"} <span className="text-[10px]">{label}</span></div></div>
+                    <div><div className="text-muted-foreground">FCF Yield</div><div className={`font-bold text-sm ${color}`}>{fcfYield != null ? `${fcfYield.toFixed(1)}%` : "N/A"} <span className="text-[12px]">{label}</span></div></div>
                   </div>
                 </div>
               )
@@ -1174,12 +1174,12 @@ export default function EarningsReport() {
                 <div className="bg-bloomberg-card border border-bloomberg-green/30 rounded p-4">
                   <div className="text-xs text-bloomberg-green font-bold mb-3">JAK LICZYMY FCF? — RECONCILIATION ({f.label})</div>
                   <div className="overflow-x-auto"><table className="w-full text-xs"><tbody>
-                    <tr className="border-b border-bloomberg-border/50"><td className={`py-1.5 ${ebitdaVal != null && ebitdaVal < 0 ? "text-bloomberg-red font-bold" : ""}`}>EBITDA <span className="text-[10px] text-muted-foreground">(OpIncome + D&A)</span></td><td className={`py-1.5 text-right font-bold ${ebitdaVal != null && ebitdaVal < 0 ? "text-bloomberg-red" : ""}`}>{ebitdaVal != null ? fmtBigValue(ebitdaVal, q.currency) : "N/A"}</td></tr>
+                    <tr className="border-b border-bloomberg-border/50"><td className={`py-1.5 ${ebitdaVal != null && ebitdaVal < 0 ? "text-bloomberg-red font-bold" : ""}`}>EBITDA <span className="text-[12px] text-muted-foreground">(OpIncome + D&A)</span></td><td className={`py-1.5 text-right font-bold ${ebitdaVal != null && ebitdaVal < 0 ? "text-bloomberg-red" : ""}`}>{ebitdaVal != null ? fmtBigValue(ebitdaVal, q.currency) : "N/A"}</td></tr>
                     <tr className="border-b border-bloomberg-border/50"><td className="py-1.5">- Taxes</td><td className="py-1.5 text-right text-bloomberg-red font-bold">{taxVal != null ? `-${fmtBigValue(Math.abs(taxVal), q.currency)}` : <span className="text-muted-foreground">N/A</span>}</td></tr>
                     <tr className="border-b border-bloomberg-border/50"><td className="py-1.5">- Interest Expense</td><td className="py-1.5 text-right text-bloomberg-red font-bold">{intPaidVal != null ? `-${fmtBigValue(Math.abs(intPaidVal), q.currency)}` : <span className="text-muted-foreground">N/A</span>}</td></tr>
-                    <tr className="border-b border-bloomberg-border/50"><td className="py-1.5">+ Stock Based Compensation <span className="text-[10px] text-muted-foreground">(non-cash)</span></td><td className="py-1.5 text-right text-bloomberg-green font-bold">{sbcVal != null ? `+${fmtBigValue(Math.abs(sbcVal), q.currency)}` : <span className="text-muted-foreground">N/A</span>}</td></tr>
+                    <tr className="border-b border-bloomberg-border/50"><td className="py-1.5">+ Stock Based Compensation <span className="text-[12px] text-muted-foreground">(non-cash)</span></td><td className="py-1.5 text-right text-bloomberg-green font-bold">{sbcVal != null ? `+${fmtBigValue(Math.abs(sbcVal), q.currency)}` : <span className="text-muted-foreground">N/A</span>}</td></tr>
                     <tr className="border-b border-bloomberg-border/50"><td className="py-1.5">+/- Working Capital Changes</td><td className={`py-1.5 text-right font-bold ${wcVal != null && wcVal >= 0 ? "text-bloomberg-green" : "text-bloomberg-red"}`}>{wcVal != null ? `${wcVal >= 0 ? "+" : ""}${fmtBigValue(wcVal, q.currency)}` : <span className="text-muted-foreground">N/A</span>}</td></tr>
-                    <tr className="border-b border-bloomberg-border/50"><td className="py-1.5 text-muted-foreground">+/- Other Adjustments <span className="text-[10px]">(deferred tax, other non-cash)</span></td><td className={`py-1.5 text-right font-bold ${otherVal != null && otherVal >= 0 ? "text-bloomberg-green" : "text-bloomberg-red"}`}>{otherVal != null ? `${otherVal >= 0 ? "+" : ""}${fmtBigValue(otherVal, q.currency)}` : <span className="text-muted-foreground">N/A</span>}</td></tr>
+                    <tr className="border-b border-bloomberg-border/50"><td className="py-1.5 text-muted-foreground">+/- Other Adjustments <span className="text-[12px]">(deferred tax, other non-cash)</span></td><td className={`py-1.5 text-right font-bold ${otherVal != null && otherVal >= 0 ? "text-bloomberg-green" : "text-bloomberg-red"}`}>{otherVal != null ? `${otherVal >= 0 ? "+" : ""}${fmtBigValue(otherVal, q.currency)}` : <span className="text-muted-foreground">N/A</span>}</td></tr>
                     <tr className="border-b border-bloomberg-border"><td className="py-1.5 font-bold">= Operating Cash Flow</td><td className="py-1.5 text-right font-bold">{ocVal != null ? fmtBigValue(ocVal, q.currency) : "N/A"}</td></tr>
                     <tr className="border-b border-bloomberg-border/50"><td className="py-1.5">- Capital Expenditures (CapEx)</td><td className="py-1.5 text-right text-bloomberg-red font-bold">{cxVal != null ? fmtBigValue(cxVal, q.currency) : "N/A"}</td></tr>
                     <tr><td className="py-1.5 font-bold text-bloomberg-green">= Free Cash Flow</td><td className={`py-1.5 text-right font-bold text-sm ${fcfVal >= 0 ? "text-bloomberg-green" : "text-bloomberg-red"}`}>{fmtBigValue(fcfVal, q.currency)}</td></tr>
@@ -1220,11 +1220,11 @@ export default function EarningsReport() {
                 const margin = (r.ni / r.rev) * 100
                 const prev = i > 0 ? marginRows[i - 1] : null; const prevMargin = prev ? (prev.ni / prev.rev) * 100 : null; const delta = prevMargin != null ? margin - prevMargin : null
                 const mColor = margin > 0 ? "text-bloomberg-green" : margin > -5 ? "text-bloomberg-amber" : "text-bloomberg-red"
-                return (<tr key={i} className="border-b border-bloomberg-border/50"><td className="py-2 font-bold">{r.label}</td><td className="py-2 text-right">{fmtBigValue(r.rev, q.currency)}</td><td className={`py-2 text-right font-bold ${r.ni >= 0 ? "text-bloomberg-green" : "text-bloomberg-red"}`}>{fmtBigValue(r.ni, q.currency)}</td><td className={`py-2 text-right font-bold ${mColor}`}>{margin.toFixed(1)}%</td><td className="py-2 text-center">{delta != null ? <span className={`text-[10px] font-bold ${delta >= 0 ? "text-bloomberg-green" : "text-bloomberg-red"}`}>{delta >= 0 ? "+" : ""}{delta.toFixed(1)}pp</span> : <span className="text-[10px] text-muted-foreground">---</span>}</td></tr>)
+                return (<tr key={i} className="border-b border-bloomberg-border/50"><td className="py-2 font-bold">{r.label}</td><td className="py-2 text-right">{fmtBigValue(r.rev, q.currency)}</td><td className={`py-2 text-right font-bold ${r.ni >= 0 ? "text-bloomberg-green" : "text-bloomberg-red"}`}>{fmtBigValue(r.ni, q.currency)}</td><td className={`py-2 text-right font-bold ${mColor}`}>{margin.toFixed(1)}%</td><td className="py-2 text-center">{delta != null ? <span className={`text-[12px] font-bold ${delta >= 0 ? "text-bloomberg-green" : "text-bloomberg-red"}`}>{delta >= 0 ? "+" : ""}{delta.toFixed(1)}pp</span> : <span className="text-[12px] text-muted-foreground">---</span>}</td></tr>)
               })}</tbody></table></div>
               <div className="mt-4 flex items-end gap-3 h-24">{marginRows.map((r, i) => {
                 const margin = (r.ni / r.rev) * 100; const maxM = Math.max(...marginRows.map((x) => Math.abs((x.ni / x.rev) * 100))); const h = maxM > 0 ? (Math.abs(margin) / maxM) * 100 : 0
-                return (<div key={i} className="flex-1 flex flex-col items-center gap-1"><div className="w-full flex items-end h-16"><div className={`flex-1 rounded-t ${margin >= 0 ? "bg-bloomberg-green" : margin > -5 ? "bg-bloomberg-amber" : "bg-bloomberg-red"}`} style={{ height: `${h}%` }} /></div><div className="text-[10px] text-muted-foreground">{r.label}</div><div className={`text-[10px] font-bold ${margin >= 0 ? "text-bloomberg-green" : margin > -5 ? "text-bloomberg-amber" : "text-bloomberg-red"}`}>{margin.toFixed(1)}%</div></div>)
+                return (<div key={i} className="flex-1 flex flex-col items-center gap-1"><div className="w-full flex items-end h-16"><div className={`flex-1 rounded-t ${margin >= 0 ? "bg-bloomberg-green" : margin > -5 ? "bg-bloomberg-amber" : "bg-bloomberg-red"}`} style={{ height: `${h}%` }} /></div><div className="text-[12px] text-muted-foreground">{r.label}</div><div className={`text-[12px] font-bold ${margin >= 0 ? "text-bloomberg-green" : margin > -5 ? "text-bloomberg-amber" : "text-bloomberg-red"}`}>{margin.toFixed(1)}%</div></div>)
               })}</div>
             </div>
           )}
@@ -1237,8 +1237,8 @@ export default function EarningsReport() {
                 <div className="text-xs text-bloomberg-amber font-bold mb-3">SHARES OUTSTANDING TREND</div>
                 <div className="overflow-x-auto"><table className="w-full text-xs"><thead><tr className="border-b border-bloomberg-border"><th className="text-left py-2 text-muted-foreground">PERIOD</th><th className="text-right py-2 text-muted-foreground">SHARES</th><th className="text-right py-2 text-muted-foreground">YoY CHANGE</th><th className="text-center py-2 text-muted-foreground">DILUTION</th></tr></thead>
                 <tbody>
-                  {(e.balanceSheetAnnual ?? []).filter((b) => b.sharesOutstanding != null).map((b, i, arr) => { const prev = arr[i - 1]; const ch = prev?.sharesOutstanding && b.sharesOutstanding ? ((b.sharesOutstanding - prev.sharesOutstanding) / prev.sharesOutstanding) * 100 : null; const dilut = ch != null && ch > 0.5; return (<tr key={i} className="border-b border-bloomberg-border/50"><td className="py-2 font-bold">FY{yearFromDate(b.date)}</td><td className="py-2 text-right font-bold">{fmtShares(b.sharesOutstanding!)}</td><td className={`py-2 text-right ${ch != null ? (dilut ? "text-bloomberg-red" : "text-bloomberg-green") : ""}`}>{ch != null ? `${ch >= 0 ? "+" : ""}${ch.toFixed(1)}%` : "---"}</td><td className="py-2 text-center">{ch != null && (dilut ? <span className="text-[10px] bg-bloomberg-red/20 text-bloomberg-red px-1.5 py-0.5 rounded font-bold">DILUTIVE</span> : <span className="text-[10px] bg-bloomberg-green/20 text-bloomberg-green px-1.5 py-0.5 rounded font-bold">STABLE</span>)}</td></tr>) })}
-                  {(() => { const la = (e.balanceSheetAnnual ?? []).filter((b) => b.sharesOutstanding != null).slice(-1)[0]; const lq = (e.balanceSheetQuarterly ?? []).filter((b) => b.sharesOutstanding != null).slice(-1)[0]; if (!lq || !la || lq.date <= la.date) return null; const ch = la.sharesOutstanding && lq.sharesOutstanding ? ((lq.sharesOutstanding - la.sharesOutstanding) / la.sharesOutstanding) * 100 : null; return (<tr className="border-b border-bloomberg-border/50 bg-bloomberg-blue/5"><td className="py-2 font-bold">{shortQLabel(lq.date)} <span className="text-[8px] text-bloomberg-blue">LATEST</span></td><td className="py-2 text-right font-bold">{fmtShares(lq.sharesOutstanding!)}</td><td className={`py-2 text-right ${ch != null && ch > 0.5 ? "text-bloomberg-red" : "text-bloomberg-green"}`}>{ch != null ? `${ch >= 0 ? "+" : ""}${ch.toFixed(1)}%` : "---"}</td><td className="py-2 text-center"><span className="text-[10px] text-muted-foreground">vs FY{yearFromDate(la.date)}</span></td></tr>) })()}
+                  {(e.balanceSheetAnnual ?? []).filter((b) => b.sharesOutstanding != null).map((b, i, arr) => { const prev = arr[i - 1]; const ch = prev?.sharesOutstanding && b.sharesOutstanding ? ((b.sharesOutstanding - prev.sharesOutstanding) / prev.sharesOutstanding) * 100 : null; const dilut = ch != null && ch > 0.5; return (<tr key={i} className="border-b border-bloomberg-border/50"><td className="py-2 font-bold">FY{yearFromDate(b.date)}</td><td className="py-2 text-right font-bold">{fmtShares(b.sharesOutstanding!)}</td><td className={`py-2 text-right ${ch != null ? (dilut ? "text-bloomberg-red" : "text-bloomberg-green") : ""}`}>{ch != null ? `${ch >= 0 ? "+" : ""}${ch.toFixed(1)}%` : "---"}</td><td className="py-2 text-center">{ch != null && (dilut ? <span className="text-[12px] bg-bloomberg-red/20 text-bloomberg-red px-1.5 py-0.5 rounded font-bold">DILUTIVE</span> : <span className="text-[12px] bg-bloomberg-green/20 text-bloomberg-green px-1.5 py-0.5 rounded font-bold">STABLE</span>)}</td></tr>) })}
+                  {(() => { const la = (e.balanceSheetAnnual ?? []).filter((b) => b.sharesOutstanding != null).slice(-1)[0]; const lq = (e.balanceSheetQuarterly ?? []).filter((b) => b.sharesOutstanding != null).slice(-1)[0]; if (!lq || !la || lq.date <= la.date) return null; const ch = la.sharesOutstanding && lq.sharesOutstanding ? ((lq.sharesOutstanding - la.sharesOutstanding) / la.sharesOutstanding) * 100 : null; return (<tr className="border-b border-bloomberg-border/50 bg-bloomberg-blue/5"><td className="py-2 font-bold">{shortQLabel(lq.date)} <span className="text-[12px] text-bloomberg-blue">LATEST</span></td><td className="py-2 text-right font-bold">{fmtShares(lq.sharesOutstanding!)}</td><td className={`py-2 text-right ${ch != null && ch > 0.5 ? "text-bloomberg-red" : "text-bloomberg-green"}`}>{ch != null ? `${ch >= 0 ? "+" : ""}${ch.toFixed(1)}%` : "---"}</td><td className="py-2 text-center"><span className="text-[12px] text-muted-foreground">vs FY{yearFromDate(la.date)}</span></td></tr>) })()}
                 </tbody></table></div>
               </div>
             )}
@@ -1248,7 +1248,7 @@ export default function EarningsReport() {
                 <div className="overflow-x-auto"><table className="w-full text-xs"><thead><tr className="border-b border-bloomberg-border"><th className="text-left py-2 text-muted-foreground">PERIOD</th><th className="text-right py-2 text-muted-foreground">SBC</th><th className="text-right py-2 text-muted-foreground">% REVENUE</th><th className="text-right py-2 text-muted-foreground">YoY</th></tr></thead>
                 <tbody>
                   {annualSBC.filter((a) => a.value != null).map((s, i, arr) => { const y = yearFromDate(s.date); if (sbcTTM.some((t) => yearFromDate(t.date) === y)) return null; const rv = annualRevenue.find((r) => yearFromDate(r.date) === y); const pr = rv?.value && s.value ? (s.value / rv.value) * 100 : null; const pv = arr[i - 1]; const yoy = pv?.value && s.value ? ((s.value - pv.value) / Math.abs(pv.value)) * 100 : null; return (<tr key={`a-${i}`} className="border-b border-bloomberg-border/50"><td className="py-2 font-bold">FY{y}</td><td className="py-2 text-right font-bold">{fmtBigValue(s.value!, q.currency)}</td><td className={`py-2 text-right ${pr != null && pr > 20 ? "text-bloomberg-red" : pr != null && pr > 10 ? "text-bloomberg-amber" : ""}`}>{pr != null ? `${pr.toFixed(1)}%` : "N/A"}</td><td className={`py-2 text-right ${yoy != null && yoy > 0 ? "text-bloomberg-red" : "text-bloomberg-green"}`}>{yoy != null ? `${yoy >= 0 ? "+" : ""}${yoy.toFixed(1)}%` : "---"}</td></tr>) })}
-                  {sbcTTM.map((s, i) => { const rv = revenueTTM.find((r) => r.date === s.date); const pr = rv ? (s.value / rv.value) * 100 : null; const py = parseInt(yearFromDate(s.date)) - 1; const ps = sbcTTM.find((x) => parseInt(yearFromDate(x.date)) === py) ?? annualSBC.find((a) => yearFromDate(a.date) === String(py)); const pv = ps && "value" in ps ? ps.value : null; const yoy = pv && pv !== 0 ? ((s.value - pv) / Math.abs(pv)) * 100 : null; return (<tr key={`t-${i}`} className="border-b border-bloomberg-border/50 bg-bloomberg-blue/5"><td className="py-2 font-bold">{s.label} <span className="text-[8px] text-bloomberg-blue">TTM</span></td><td className="py-2 text-right font-bold">{fmtBigValue(s.value, q.currency)}</td><td className={`py-2 text-right ${pr != null && pr > 20 ? "text-bloomberg-red" : pr != null && pr > 10 ? "text-bloomberg-amber" : ""}`}>{pr != null ? `${pr.toFixed(1)}%` : "N/A"}</td><td className={`py-2 text-right ${yoy != null && yoy > 0 ? "text-bloomberg-red" : "text-bloomberg-green"}`}>{yoy != null ? `${yoy >= 0 ? "+" : ""}${yoy.toFixed(1)}%` : "---"}</td></tr>) })}
+                  {sbcTTM.map((s, i) => { const rv = revenueTTM.find((r) => r.date === s.date); const pr = rv ? (s.value / rv.value) * 100 : null; const py = parseInt(yearFromDate(s.date)) - 1; const ps = sbcTTM.find((x) => parseInt(yearFromDate(x.date)) === py) ?? annualSBC.find((a) => yearFromDate(a.date) === String(py)); const pv = ps && "value" in ps ? ps.value : null; const yoy = pv && pv !== 0 ? ((s.value - pv) / Math.abs(pv)) * 100 : null; return (<tr key={`t-${i}`} className="border-b border-bloomberg-border/50 bg-bloomberg-blue/5"><td className="py-2 font-bold">{s.label} <span className="text-[12px] text-bloomberg-blue">TTM</span></td><td className="py-2 text-right font-bold">{fmtBigValue(s.value, q.currency)}</td><td className={`py-2 text-right ${pr != null && pr > 20 ? "text-bloomberg-red" : pr != null && pr > 10 ? "text-bloomberg-amber" : ""}`}>{pr != null ? `${pr.toFixed(1)}%` : "N/A"}</td><td className={`py-2 text-right ${yoy != null && yoy > 0 ? "text-bloomberg-red" : "text-bloomberg-green"}`}>{yoy != null ? `${yoy >= 0 ? "+" : ""}${yoy.toFixed(1)}%` : "---"}</td></tr>) })}
                 </tbody></table></div>
                 <Explainer text="SBC obniża GAAP EPS ale nie wpływa na gotówkę. Wysoki SBC jako % Revenue może sygnalizować nadmierne rozwodnienie." />
               </div>
@@ -1281,8 +1281,8 @@ export default function EarningsReport() {
                     <div className="flex items-center gap-2"><div className="w-3 h-3 rounded-full bg-[#22c55e]" /><div className="text-xs"><div className="text-muted-foreground">Institutional</div><div className="font-bold text-sm">{fmtPct(ow.institutionsPercentHeld)}</div></div></div>
                     <div className="flex items-center gap-2"><div className="w-3 h-3 rounded-full bg-[#3b82f6]" /><div className="text-xs"><div className="text-muted-foreground">Insider</div><div className="font-bold text-sm">{fmtPct(ow.insidersPercentHeld)}</div></div></div>
                     <div className="flex items-center gap-2"><div className="w-3 h-3 rounded-full bg-[#6b7280]" /><div className="text-xs"><div className="text-muted-foreground">Retail/Other</div><div className="font-bold text-sm">{((1 - (ow.institutionsPercentHeld ?? 0) - (ow.insidersPercentHeld ?? 0)) * 100).toFixed(1)}%</div></div></div>
-                    {ow.institutionsCount != null && <div className="text-[10px] text-muted-foreground mt-2">{ow.institutionsCount} instytucji posiada akcje</div>}
-                    <div className="text-[10px] text-muted-foreground">{(ow.institutionsPercentHeld ?? 0) > 0.7 ? "High institutional interest" : (ow.institutionsPercentHeld ?? 0) > 0.4 ? "Moderate institutional interest" : "Low institutional coverage"}</div>
+                    {ow.institutionsCount != null && <div className="text-[12px] text-muted-foreground mt-2">{ow.institutionsCount} instytucji posiada akcje</div>}
+                    <div className="text-[12px] text-muted-foreground">{(ow.institutionsPercentHeld ?? 0) > 0.7 ? "High institutional interest" : (ow.institutionsPercentHeld ?? 0) > 0.4 ? "Moderate institutional interest" : "Low institutional coverage"}</div>
                   </div>
                 </div>
               </div>
@@ -1294,7 +1294,7 @@ export default function EarningsReport() {
                   <div className="overflow-x-auto"><table className="w-full text-xs"><thead><tr className="border-b border-bloomberg-border"><th className="text-left py-2 text-muted-foreground">INSTITUTION</th><th className="text-right py-2 text-muted-foreground">SHARES</th><th className="text-right py-2 text-muted-foreground">% OWNED</th><th className="text-right py-2 text-muted-foreground">VALUE</th><th className="text-center py-2 text-muted-foreground">CHANGE</th></tr></thead>
                   <tbody>{ow.institutions.map((inst, i) => {
                     const ch = inst.pctChange; const signal = ch == null ? null : ch > 0.05 ? "INCREASED" : ch < -0.05 ? "REDUCED" : null
-                    return (<tr key={i} className="border-b border-bloomberg-border/50"><td className="py-2 font-bold">{inst.organization}</td><td className="py-2 text-right">{inst.position != null ? fmtShares(inst.position) : "N/A"}</td><td className="py-2 text-right font-bold">{inst.pctHeld != null ? `${(inst.pctHeld * 100).toFixed(1)}%` : "N/A"}</td><td className="py-2 text-right">{inst.value != null ? fmtBigValue(inst.value, q.currency) : "N/A"}</td><td className="py-2 text-center">{signal === "INCREASED" ? <span className="text-[10px] bg-bloomberg-green/20 text-bloomberg-green px-1.5 py-0.5 rounded font-bold">+{((ch ?? 0) * 100).toFixed(0)}% ▲</span> : signal === "REDUCED" ? <span className="text-[10px] bg-bloomberg-red/20 text-bloomberg-red px-1.5 py-0.5 rounded font-bold">{((ch ?? 0) * 100).toFixed(0)}% ▼</span> : <span className="text-[10px] text-muted-foreground">—</span>}</td></tr>)
+                    return (<tr key={i} className="border-b border-bloomberg-border/50"><td className="py-2 font-bold">{inst.organization}</td><td className="py-2 text-right">{inst.position != null ? fmtShares(inst.position) : "N/A"}</td><td className="py-2 text-right font-bold">{inst.pctHeld != null ? `${(inst.pctHeld * 100).toFixed(1)}%` : "N/A"}</td><td className="py-2 text-right">{inst.value != null ? fmtBigValue(inst.value, q.currency) : "N/A"}</td><td className="py-2 text-center">{signal === "INCREASED" ? <span className="text-[12px] bg-bloomberg-green/20 text-bloomberg-green px-1.5 py-0.5 rounded font-bold">+{((ch ?? 0) * 100).toFixed(0)}% ▲</span> : signal === "REDUCED" ? <span className="text-[12px] bg-bloomberg-red/20 text-bloomberg-red px-1.5 py-0.5 rounded font-bold">{((ch ?? 0) * 100).toFixed(0)}% ▼</span> : <span className="text-[12px] text-muted-foreground">—</span>}</td></tr>)
                   })}</tbody></table></div>
                 </div>
               )}
@@ -1325,7 +1325,7 @@ export default function EarningsReport() {
 
                 const TxTable = ({ txs, caption }: { txs: typeof allTx; caption?: string }) => (
                   <div className="overflow-x-auto">
-                    {caption && <div className="text-[10px] text-muted-foreground mb-1 italic">{caption}</div>}
+                    {caption && <div className="text-[12px] text-muted-foreground mb-1 italic">{caption}</div>}
                     <table className="w-full text-xs"><thead><tr className="border-b border-bloomberg-border"><th className="text-left py-2 text-muted-foreground">NAME</th><th className="text-left py-2 text-muted-foreground">ROLE</th><th className="text-left py-2 text-muted-foreground">TYPE</th><th className="text-right py-2 text-muted-foreground">SHARES</th><th className="text-right py-2 text-muted-foreground">VALUE</th><th className="text-right py-2 text-muted-foreground">DATE</th></tr></thead>
                     <tbody>{txs.map((tx, i) => {
                       const c = classifyTx(tx.transactionType)
@@ -1365,19 +1365,19 @@ export default function EarningsReport() {
 
                     {/* Open Market Transactions */}
                     {openMarket.length > 0 && (<>
-                      <div className="text-[10px] text-bloomberg-amber font-bold mb-1 mt-2">OPEN MARKET TRANSACTIONS</div>
+                      <div className="text-[12px] text-bloomberg-amber font-bold mb-1 mt-2">OPEN MARKET TRANSACTIONS</div>
                       <TxTable txs={openMarket.slice(0, 10)} />
                     </>)}
 
                     {/* Stock Awards & Vesting */}
                     {awards.length > 0 && (<>
-                      <div className="text-[10px] text-bloomberg-amber font-bold mb-1 mt-4">STOCK AWARDS & VESTING</div>
+                      <div className="text-[12px] text-bloomberg-amber font-bold mb-1 mt-4">STOCK AWARDS & VESTING</div>
                       <TxTable txs={awards.slice(0, 10)} caption="Automatyczne przyznanie akcji — część wynagrodzenia. Nie wliczane do Net Flow." />
                     </>)}
 
                     {/* Other */}
                     {other.length > 0 && (<>
-                      <div className="text-[10px] text-bloomberg-amber font-bold mb-1 mt-4">OTHER (Option Exercise, Gift, etc.)</div>
+                      <div className="text-[12px] text-bloomberg-amber font-bold mb-1 mt-4">OTHER (Option Exercise, Gift, etc.)</div>
                       <TxTable txs={other.slice(0, 5)} />
                     </>)}
 
@@ -1428,16 +1428,16 @@ function FinancialScoreCircle({ score }: { score: ScoreBreakdown }) {
           <span className="relative text-sm font-extrabold text-white z-10">{s}</span>
         </div>
         <div className="flex flex-col">
-          <span className="text-[9px] text-muted-foreground tracking-wider">FINANCIAL SCORE</span>
-          <span className="text-[10px] font-bold" style={{ color: color.start }}>{label}</span>
+          <span className="text-[13px] text-muted-foreground tracking-wider">FINANCIAL SCORE</span>
+          <span className="text-[12px] font-bold" style={{ color: color.start }}>{label}</span>
         </div>
       </div>
 
       {/* Breakdown tooltip */}
       {showBreakdown && (
         <div className="absolute right-0 top-16 z-50 bg-bloomberg-card border border-bloomberg-border rounded p-3 shadow-xl min-w-[220px]">
-          <div className="text-[9px] text-bloomberg-amber font-bold mb-2 tracking-wider">SCORE BREAKDOWN</div>
-          {(score.subIndustry || score.sector) && <div className="text-[8px] text-muted-foreground mb-2">Profil: <span className="text-bloomberg-amber">{score.subIndustry}</span>{score.sector && ` (${score.sector})`}</div>}
+          <div className="text-[13px] text-bloomberg-amber font-bold mb-2 tracking-wider">SCORE BREAKDOWN</div>
+          {(score.subIndustry || score.sector) && <div className="text-[12px] text-muted-foreground mb-2">Profil: <span className="text-bloomberg-amber">{score.subIndustry}</span>{score.sector && ` (${score.sector})`}</div>}
           <div className="space-y-1.5">
             <ScoreBar label="Growth" value={score.growth} max={score.maxGrowth} color="#22c55e" />
             <ScoreBar label="Profitability" value={score.profitability} max={score.maxProfit} color="#3b82f6" />
@@ -1450,7 +1450,7 @@ function FinancialScoreCircle({ score }: { score: ScoreBreakdown }) {
           {score.details.length > 0 && (
             <div className="mt-2 pt-2 border-t border-bloomberg-border">
               {score.details.map((d, i) => (
-                <div key={i} className="text-[8px] text-muted-foreground">{d}</div>
+                <div key={i} className="text-[12px] text-muted-foreground">{d}</div>
               ))}
             </div>
           )}
@@ -1464,11 +1464,11 @@ function ScoreBar({ label, value, max, color }: { label: string; value: number; 
   const pct = max > 0 ? (value / max) * 100 : 0
   return (
     <div className="flex items-center gap-2">
-      <span className="text-[8px] text-muted-foreground w-[85px] shrink-0 truncate">{label}</span>
+      <span className="text-[12px] text-muted-foreground w-[85px] shrink-0 truncate">{label}</span>
       <div className="flex-1 h-1.5 bg-bloomberg-bg rounded-full overflow-hidden">
         <div className="h-full rounded-full transition-all" style={{ width: `${pct}%`, backgroundColor: color }} />
       </div>
-      <span className="text-[8px] text-foreground font-bold w-8 text-right">{value}/{max}</span>
+      <span className="text-[12px] text-foreground font-bold w-8 text-right">{value}/{max}</span>
     </div>
   )
 }

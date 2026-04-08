@@ -187,7 +187,9 @@ export function computeFullAnalysis(
 
   // --- Fundamentals ---
   // FIX #1: Use real gross margins, not profit margin as proxy
-  const grossMarginRaw = stats?.grossMargins != null ? stats.grossMargins * 100 : null
+  // Guard: reject nonsensical values (>99% or negative = Yahoo data error, e.g. pre-revenue firms)
+  const rawGM = stats?.grossMargins != null ? stats.grossMargins * 100 : null
+  const grossMarginRaw = rawGM != null && rawGM >= 0 && rawGM < 99 ? rawGM : null
   const profitMargin = stats?.profitMargin != null ? stats.profitMargin * 100 : null
   const operatingMargin = stats?.operatingMargin != null ? stats.operatingMargin * 100 : null
   const fcfMargin =
@@ -273,6 +275,18 @@ export function computeFullAnalysis(
   else if (checkScore >= -1) verdict = "SELL"
   else verdict = "AVOID"
 
+  // Guard: pre-revenue or deeply loss-making companies — cap verdict
+  const totalRevenue = stats?.totalRevenue ?? null
+  const profitMarginCheck = stats?.profitMargin ?? null
+  if (totalRevenue != null && totalRevenue <= 0) {
+    // Pre-revenue company — max HOLD regardless of checklist
+    if (verdict === "BUY") verdict = "HOLD"
+  }
+  if (profitMarginCheck != null && profitMarginCheck < -0.5) {
+    // Net margin worse than -50% — deeply unprofitable, max HOLD
+    if (verdict === "BUY") verdict = "HOLD"
+  }
+
   // FIX #12: Confidence based on trueCount (positive signals), not aligned (true+false)
   // High = 6+ positive signals with data quality, Medium = 4+, Low = rest
   let confidence: "High" | "Medium" | "Low"
@@ -347,7 +361,9 @@ export function computeFullAnalysis(
   else if (stats?.debtToEquity != null && stats.debtToEquity > 200)
     mainRisk = "Wysoki poziom zadłużenia — wrażliwość na zmiany stóp procentowych"
   else if (revenueGrowth != null && revenueGrowth < -5)
-    mainRisk = "Spadek przychodów — biznes może się kurczyć"
+    mainRisk = (sector === "Energy" || sector === "Basic Materials")
+      ? `Spadek przychodów (${revenueGrowth.toFixed(1)}%) — prawdopodobnie cykliczny, związany z cenami surowców`
+      : `Spadek przychodów (${revenueGrowth.toFixed(1)}%) — spółka traci skalę biznesu`
   else if (rsi != null && rsi > 75)
     mainRisk = "Wykupiony RSI — prawdopodobna krótkoterminowa korekta"
   else if (distanceFrom52High < -30)

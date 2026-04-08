@@ -224,24 +224,24 @@ export default function StockAnalysis() {
 
             {/* Company info: MCap */}
             <div className="flex items-center gap-2 mb-3">
-              <span className="text-[10px] text-muted-foreground">MCap:</span>
-              <span className="text-[11px] text-foreground font-bold">{fmtBigValue(q.marketCap, q.currency)}</span>
+              <span className="text-[12px] text-muted-foreground">MCap:</span>
+              <span className="text-[13px] text-foreground font-bold">{fmtBigValue(q.marketCap, q.currency)}</span>
               {st?.sector && (
                 <>
-                  <span className="text-[10px] text-muted-foreground">|</span>
-                  <span className="text-[10px] text-bloomberg-amber">{st.sector}</span>
+                  <span className="text-[12px] text-muted-foreground">|</span>
+                  <span className="text-[12px] text-bloomberg-amber">{st.sector}</span>
                 </>
               )}
               {st?.industry && (
                 <>
-                  <span className="text-[10px] text-muted-foreground">|</span>
-                  <span className="text-[10px] text-muted-foreground">{st.industry}</span>
+                  <span className="text-[12px] text-muted-foreground">|</span>
+                  <span className="text-[12px] text-muted-foreground">{st.industry}</span>
                 </>
               )}
               {st?.fullTimeEmployees && (
                 <>
-                  <span className="text-[10px] text-muted-foreground">|</span>
-                  <span className="text-[10px] text-muted-foreground">{st.fullTimeEmployees.toLocaleString()} pracowników</span>
+                  <span className="text-[12px] text-muted-foreground">|</span>
+                  <span className="text-[12px] text-muted-foreground">{st.fullTimeEmployees.toLocaleString()} pracowników</span>
                 </>
               )}
             </div>
@@ -249,7 +249,7 @@ export default function StockAnalysis() {
             {/* PROFIL SPÓŁKI — full business description in Polish */}
             {st?.longBusinessSummary && (
               <div className="mb-4 pb-3 border-b border-bloomberg-border/30">
-                <div className="text-[9px] text-bloomberg-amber font-bold mb-1.5 tracking-wider">📋 PROFIL SPÓŁKI</div>
+                <div className="text-[13px] text-bloomberg-amber font-bold mb-1.5 tracking-wider">📋 PROFIL SPÓŁKI</div>
                 <TranslatedSummary text={st.longBusinessSummary} full />
               </div>
             )}
@@ -348,37 +348,37 @@ export default function StockAnalysis() {
                   <div className="flex items-center gap-2">
                     <span className="text-lg">{tier.emoji}</span>
                     <div>
-                      <div className="text-[11px] font-bold tracking-wider text-foreground">RULE OF 40</div>
-                      <div className="text-[8px] text-muted-foreground">Revenue Growth + FCF Margin ≥ 40%</div>
+                      <div className="text-[13px] font-bold tracking-wider text-foreground">RULE OF 40</div>
+                      <div className="text-[12px] text-muted-foreground">Revenue Growth + FCF Margin ≥ 40%</div>
                     </div>
                   </div>
                   <div className="text-right">
                     <div className={`text-2xl font-black ${tier.color}`}>{rule40.toFixed(1)}%</div>
-                    <div className={`text-[9px] font-bold ${tier.color}`}>{tier.label}</div>
+                    <div className={`text-[13px] font-bold ${tier.color}`}>{tier.label}</div>
                   </div>
                 </div>
 
                 {/* Bar */}
                 <div className="relative h-6 bg-bloomberg-bg rounded-full overflow-hidden mb-3 border border-bloomberg-border/50">
                   <div className="absolute top-0 bottom-0 left-[33.3%] w-px bg-white/30 z-10" />
-                  <div className="absolute -top-4 left-[33.3%] -translate-x-1/2 text-[7px] text-white/50">40%</div>
+                  <div className="absolute -top-4 left-[33.3%] -translate-x-1/2 text-[13px] text-white/50">40%</div>
                   <div className="absolute top-0 bottom-0 left-0 bg-bloomberg-green/60 transition-all duration-500" style={{ width: `${growthBar}%` }} />
                   <div className={`absolute top-0 bottom-0 transition-all duration-500 ${a.fcfMargin >= 0 ? "bg-blue-500/60" : "bg-bloomberg-red/40"}`} style={{ left: `${growthBar}%`, width: `${fcfBar}%` }} />
                   <div className="absolute inset-0 flex items-center justify-center">
-                    <span className="text-[10px] font-bold text-white drop-shadow-md">{rule40.toFixed(1)}%</span>
+                    <span className="text-[12px] font-bold text-white drop-shadow-md">{rule40.toFixed(1)}%</span>
                   </div>
                 </div>
 
                 {/* Breakdown */}
                 <div className="grid grid-cols-2 gap-3">
                   <div className="bg-bloomberg-bg/50 rounded p-2.5 border border-bloomberg-border/30">
-                    <div className="text-[8px] text-muted-foreground mb-1">📈 Revenue Growth (YoY)</div>
+                    <div className="text-[12px] text-muted-foreground mb-1">📈 Revenue Growth (YoY)</div>
                     <div className={`text-lg font-bold ${a.revenueGrowth >= 0 ? "text-bloomberg-green" : "text-bloomberg-red"}`}>
                       {a.revenueGrowth > 0 ? "+" : ""}{a.revenueGrowth.toFixed(1)}%
                     </div>
                   </div>
                   <div className="bg-bloomberg-bg/50 rounded p-2.5 border border-bloomberg-border/30">
-                    <div className="text-[8px] text-muted-foreground mb-1">💰 FCF Margin (TTM)</div>
+                    <div className="text-[12px] text-muted-foreground mb-1">💰 FCF Margin (TTM)</div>
                     <div className={`text-lg font-bold ${a.fcfMargin >= 0 ? "text-bloomberg-green" : "text-bloomberg-red"}`}>
                       {a.fcfMargin > 0 ? "+" : ""}{a.fcfMargin.toFixed(1)}%
                     </div>
@@ -387,8 +387,8 @@ export default function StockAnalysis() {
 
                 <div className="mt-3">
                   {passed
-                    ? <span className="text-[10px] text-bloomberg-green font-bold">✅ Rule of 40 SPEŁNIONA — spółka rośnie szybko i/lub generuje silny FCF</span>
-                    : <span className="text-[10px] text-bloomberg-red font-bold">❌ Rule of 40 NIESPEŁNIONA — wzrost + FCF poniżej progu 40%</span>
+                    ? <span className="text-[12px] text-bloomberg-green font-bold">✅ Rule of 40 SPEŁNIONA — spółka rośnie szybko i/lub generuje silny FCF</span>
+                    : <span className="text-[12px] text-bloomberg-red font-bold">❌ Rule of 40 NIESPEŁNIONA — wzrost + FCF poniżej progu 40%</span>
                   }
                 </div>
               </div>
@@ -418,7 +418,7 @@ export default function StockAnalysis() {
               <div className="bg-bloomberg-card border border-bloomberg-border rounded p-4 space-y-4">
                 {/* Header with score */}
                 <div className="flex items-center justify-between">
-                  <div className="text-[11px] text-bloomberg-amber font-bold tracking-widest">📊 ANALIZA FUNDAMENTALNA — PRODUKT & STRATEGIA</div>
+                  <div className="text-[13px] text-bloomberg-amber font-bold tracking-widest">📊 ANALIZA FUNDAMENTALNA — PRODUKT & STRATEGIA</div>
                   <div className="flex items-center gap-3">
                     {/* Score circle */}
                     <div className="relative w-16 h-16">
@@ -435,8 +435,8 @@ export default function StockAnalysis() {
                       </div>
                     </div>
                     <div className="text-right">
-                      <div className={`text-[10px] font-bold ${tierColor}`}>{fa.scoreTier.toUpperCase()}</div>
-                      <div className="text-[7px] text-muted-foreground">/100</div>
+                      <div className={`text-[12px] font-bold ${tierColor}`}>{fa.scoreTier.toUpperCase()}</div>
+                      <div className="text-[13px] text-muted-foreground">/100</div>
                     </div>
                   </div>
                 </div>
@@ -450,7 +450,7 @@ export default function StockAnalysis() {
                     <div className="bg-bloomberg-green/70" style={{ width: `${fa.scoreBreakdown.moatComponent}%` }} title={`Fosa: ${fa.scoreBreakdown.moatComponent}/25`} />
                     <div className="bg-bloomberg-amber/70" style={{ width: `${fa.scoreBreakdown.financialFit}%` }} title={`Finanse: ${fa.scoreBreakdown.financialFit}/15`} />
                   </div>
-                  <div className="flex justify-between text-[7px] text-muted-foreground">
+                  <div className="flex justify-between text-[13px] text-muted-foreground">
                     <span>🟣 Produkt {fa.scoreBreakdown.productDNA}/20</span>
                     <span>🔵 Porter {fa.scoreBreakdown.porterScore}/25</span>
                     <span>🔷 PESTEL {fa.scoreBreakdown.pestelScore}/15</span>
@@ -461,43 +461,43 @@ export default function StockAnalysis() {
 
                 {/* 1. Product DNA */}
                 <div>
-                  <div className="text-[10px] text-bloomberg-green font-bold mb-2">1. CO SPÓŁKA SPRZEDAJE — DNA PRODUKTU</div>
+                  <div className="text-[12px] text-bloomberg-green font-bold mb-2">1. CO SPÓŁKA SPRZEDAJE — DNA PRODUKTU</div>
 
                   {/* Key metrics row */}
                   <div className="grid grid-cols-2 md:grid-cols-5 gap-2 mb-3">
                     <div className="bg-bloomberg-bg rounded p-2 border border-bloomberg-border/30">
-                      <div className="text-[7px] text-muted-foreground mb-0.5">TYP ROZWIĄZANIA</div>
-                      <div className="text-[10px] font-bold text-foreground">{fa.productType === "Painkiller" ? "💊 Painkiller" : fa.productType === "Platform" ? "🔗 Platforma" : fa.productType === "Infrastructure" ? "🏗️ Infrastruktura" : "💎 Vitamin"}</div>
+                      <div className="text-[13px] text-muted-foreground mb-0.5">TYP ROZWIĄZANIA</div>
+                      <div className="text-[12px] font-bold text-foreground">{fa.productType === "Painkiller" ? "💊 Painkiller" : fa.productType === "Platform" ? "🔗 Platforma" : fa.productType === "Infrastructure" ? "🏗️ Infrastruktura" : "💎 Vitamin"}</div>
                     </div>
                     <div className="bg-bloomberg-bg rounded p-2 border border-bloomberg-border/30">
-                      <div className="text-[7px] text-muted-foreground mb-0.5">MODEL PRZYCHODOWY</div>
-                      <div className="text-[10px] font-bold text-foreground">{fa.revenueModel}</div>
+                      <div className="text-[13px] text-muted-foreground mb-0.5">MODEL PRZYCHODOWY</div>
+                      <div className="text-[12px] font-bold text-foreground">{fa.revenueModel}</div>
                     </div>
                     <div className="bg-bloomberg-bg rounded p-2 border border-bloomberg-border/30">
-                      <div className="text-[7px] text-muted-foreground mb-0.5">CYKL ŻYCIA</div>
-                      <div className={`text-[10px] font-bold ${fa.lifecycle === "Wzrost" ? "text-bloomberg-green" : fa.lifecycle === "Dojrzałość" ? "text-bloomberg-amber" : fa.lifecycle === "Schyłek" ? "text-bloomberg-red" : "text-purple-400"}`}>{fa.lifecycle}</div>
+                      <div className="text-[13px] text-muted-foreground mb-0.5">CYKL ŻYCIA</div>
+                      <div className={`text-[12px] font-bold ${fa.lifecycle === "Wzrost" ? "text-bloomberg-green" : fa.lifecycle === "Dojrzałość" ? "text-bloomberg-amber" : fa.lifecycle === "Schyłek" ? "text-bloomberg-red" : "text-purple-400"}`}>{fa.lifecycle}</div>
                     </div>
                     <div className="bg-bloomberg-bg rounded p-2 border border-bloomberg-border/30">
-                      <div className="text-[7px] text-muted-foreground mb-0.5">KLIENT DOCELOWY</div>
-                      <div className="text-[10px] font-bold text-foreground">{fa.targetCustomer}</div>
+                      <div className="text-[13px] text-muted-foreground mb-0.5">KLIENT DOCELOWY</div>
+                      <div className="text-[12px] font-bold text-foreground">{fa.targetCustomer}</div>
                     </div>
                     <div className="bg-bloomberg-bg rounded p-2 border border-bloomberg-border/30">
-                      <div className="text-[7px] text-muted-foreground mb-0.5">ZASIĘG</div>
-                      <div className="text-[9px] font-bold text-foreground">{fa.geographicReach}</div>
+                      <div className="text-[13px] text-muted-foreground mb-0.5">ZASIĘG</div>
+                      <div className="text-[13px] font-bold text-foreground">{fa.geographicReach}</div>
                     </div>
                   </div>
 
                   {/* Products table */}
                   {fa.mainProducts.length > 0 && (
                     <div className="mb-3">
-                      <div className="text-[8px] text-bloomberg-amber font-bold mb-1.5">📦 GŁÓWNE PRODUKTY / USŁUGI</div>
+                      <div className="text-[12px] text-bloomberg-amber font-bold mb-1.5">📦 GŁÓWNE PRODUKTY / USŁUGI</div>
                       <div className="space-y-1">
                         {fa.mainProducts.map((p, i) => (
                           <div key={i} className="flex items-start gap-2 bg-bloomberg-bg/50 rounded p-1.5 border border-bloomberg-border/20">
-                            <span className="text-[8px] text-bloomberg-green font-bold shrink-0 mt-0.5">#{i+1}</span>
+                            <span className="text-[12px] text-bloomberg-green font-bold shrink-0 mt-0.5">#{i+1}</span>
                             <div>
-                              <span className="text-[9px] font-bold text-foreground">{p.name}</span>
-                              {p.description !== "—" && <span className="text-[8px] text-muted-foreground ml-1">— {p.description}</span>}
+                              <span className="text-[13px] font-bold text-foreground">{p.name}</span>
+                              {p.description !== "—" && <span className="text-[12px] text-muted-foreground ml-1">— {p.description}</span>}
                             </div>
                           </div>
                         ))}
@@ -508,16 +508,16 @@ export default function StockAnalysis() {
                   {/* Customer segments */}
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-2">
                     <div>
-                      <div className="text-[8px] text-bloomberg-amber font-bold mb-1">🎯 SEGMENTY KLIENTÓW</div>
+                      <div className="text-[12px] text-bloomberg-amber font-bold mb-1">🎯 SEGMENTY KLIENTÓW</div>
                       <div className="flex flex-wrap gap-1">
                         {fa.customerSegments.map((s, i) => (
-                          <span key={i} className="text-[8px] px-1.5 py-0.5 bg-bloomberg-green/10 text-bloomberg-green rounded border border-bloomberg-green/20">{s}</span>
+                          <span key={i} className="text-[12px] px-1.5 py-0.5 bg-bloomberg-green/10 text-bloomberg-green rounded border border-bloomberg-green/20">{s}</span>
                         ))}
                       </div>
                     </div>
                     <div>
-                      <div className="text-[8px] text-bloomberg-amber font-bold mb-1">🏢 BRANŻA & SKALA</div>
-                      <div className="text-[9px] text-muted-foreground">
+                      <div className="text-[12px] text-bloomberg-amber font-bold mb-1">🏢 BRANŻA & SKALA</div>
+                      <div className="text-[13px] text-muted-foreground">
                         <span className="text-foreground font-bold">{st?.industry ?? "—"}</span>
                         {fa.employees && <span className="ml-2">| {fa.employees.toLocaleString()} pracowników</span>}
                         <span className="ml-2">| MCap: {fmtBigValue(q.marketCap, q.currency)}</span>
@@ -527,36 +527,36 @@ export default function StockAnalysis() {
 
                   {/* Competitive position */}
                   <div className="bg-bloomberg-bg/30 rounded p-2 border border-bloomberg-border/20">
-                    <div className="text-[8px] text-bloomberg-amber font-bold mb-1">⚔️ POZYCJA KONKURENCYJNA</div>
-                    <div className="text-[9px] text-foreground/80 leading-relaxed">{fa.competitivePosition}</div>
+                    <div className="text-[12px] text-bloomberg-amber font-bold mb-1">⚔️ POZYCJA KONKURENCYJNA</div>
+                    <div className="text-[13px] text-foreground/80 leading-relaxed">{fa.competitivePosition}</div>
                   </div>
 
                   {/* USP */}
-                  <div className="mt-2 text-[9px] text-muted-foreground leading-relaxed">
+                  <div className="mt-2 text-[13px] text-muted-foreground leading-relaxed">
                     <span className="text-bloomberg-amber font-bold">USP:</span> {fa.usp}
                   </div>
                 </div>
 
                 {/* 2. Porter's 5 Forces */}
                 <div>
-                  <div className="text-[10px] text-bloomberg-green font-bold mb-2">2. PORTER&apos;S 5 FORCES <span className="text-muted-foreground font-normal">(Średnia: {fa.porterAvg}/10)</span></div>
+                  <div className="text-[12px] text-bloomberg-green font-bold mb-2">2. PORTER&apos;S 5 FORCES <span className="text-muted-foreground font-normal">(Średnia: {fa.porterAvg}/10)</span></div>
                   <div className="space-y-1.5">
                     {fa.porter.map((f, i) => (
                       <div key={i} className="flex items-center gap-2">
-                        <div className="w-[140px] text-[8px] text-muted-foreground shrink-0">{f.namePL}</div>
+                        <div className="w-[140px] text-[12px] text-muted-foreground shrink-0">{f.namePL}</div>
                         <div className="flex-1 h-3 bg-bloomberg-bg rounded-full overflow-hidden border border-bloomberg-border/30">
                           <div
                             className={`h-full rounded-full transition-all ${f.score >= 7 ? "bg-bloomberg-green/70" : f.score >= 5 ? "bg-bloomberg-amber/70" : "bg-bloomberg-red/70"}`}
                             style={{ width: `${f.score * 10}%` }}
                           />
                         </div>
-                        <span className={`text-[10px] font-bold w-6 text-right ${f.score >= 7 ? "text-bloomberg-green" : f.score >= 5 ? "text-bloomberg-amber" : "text-bloomberg-red"}`}>{f.score}</span>
+                        <span className={`text-[12px] font-bold w-6 text-right ${f.score >= 7 ? "text-bloomberg-green" : f.score >= 5 ? "text-bloomberg-amber" : "text-bloomberg-red"}`}>{f.score}</span>
                       </div>
                     ))}
                   </div>
                   <div className="mt-2 grid grid-cols-1 md:grid-cols-2 gap-1">
                     {fa.porter.map((f, i) => (
-                      <div key={i} className="text-[8px] text-muted-foreground/80">
+                      <div key={i} className="text-[12px] text-muted-foreground/80">
                         <span className="text-foreground font-bold">{f.namePL}:</span> {f.description}
                       </div>
                     ))}
@@ -565,14 +565,14 @@ export default function StockAnalysis() {
 
                 {/* 3. PESTEL */}
                 <div>
-                  <div className="text-[10px] text-bloomberg-green font-bold mb-2">3. ANALIZA PESTEL</div>
+                  <div className="text-[12px] text-bloomberg-green font-bold mb-2">3. ANALIZA PESTEL</div>
                   <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-1.5">
                     {fa.pestel.map((p, i) => (
                       <div key={i} className="flex items-start gap-1.5 bg-bloomberg-bg rounded p-2 border border-bloomberg-border/30">
-                        <span className="text-[10px] shrink-0">{impactIcon(p.impact)}</span>
+                        <span className="text-[12px] shrink-0">{impactIcon(p.impact)}</span>
                         <div>
-                          <div className="text-[8px] font-bold text-foreground">{p.code} — {p.name}</div>
-                          <div className="text-[8px] text-muted-foreground leading-snug">{p.description}</div>
+                          <div className="text-[12px] font-bold text-foreground">{p.code} — {p.name}</div>
+                          <div className="text-[12px] text-muted-foreground leading-snug">{p.description}</div>
                         </div>
                       </div>
                     ))}
@@ -582,11 +582,11 @@ export default function StockAnalysis() {
                 {/* 4. Economic Moat */}
                 <div className={`rounded p-3 border ${moatBorder} ${moatBg}`}>
                   <div className="flex items-center justify-between mb-2">
-                    <div className="text-[10px] text-bloomberg-green font-bold">4. FOSA EKONOMICZNA (ECONOMIC MOAT)</div>
+                    <div className="text-[12px] text-bloomberg-green font-bold">4. FOSA EKONOMICZNA (ECONOMIC MOAT)</div>
                     <div className="flex items-center gap-2">
                       <span className={`text-lg font-black ${moatColor}`}>{fa.moatScore}</span>
-                      <span className="text-[8px] text-muted-foreground">/100</span>
-                      <span className={`text-[9px] font-bold border px-1.5 py-0.5 rounded ${moatColor} ${moatBorder}`}>
+                      <span className="text-[12px] text-muted-foreground">/100</span>
+                      <span className={`text-[13px] font-bold border px-1.5 py-0.5 rounded ${moatColor} ${moatBorder}`}>
                         {fa.moatRating === "Wide" ? "🏰 SZEROKA" : fa.moatRating === "Narrow" ? "🔶 WĄSKA" : "⚠️ BRAK"}
                       </span>
                     </div>
@@ -594,12 +594,12 @@ export default function StockAnalysis() {
                   <div className="grid grid-cols-2 md:grid-cols-4 gap-2 mb-2">
                     {fa.moatTypes.map((m, i) => (
                       <div key={i} className="bg-bloomberg-bg/50 rounded p-2 border border-bloomberg-border/20">
-                        <div className="text-[8px] text-muted-foreground mb-0.5">{m.type}</div>
-                        <div className={`text-[9px] font-bold ${strengthColor(m.strength)}`}>{strengthLabel(m.strength)}</div>
+                        <div className="text-[12px] text-muted-foreground mb-0.5">{m.type}</div>
+                        <div className={`text-[13px] font-bold ${strengthColor(m.strength)}`}>{strengthLabel(m.strength)}</div>
                       </div>
                     ))}
                   </div>
-                  <div className="text-[9px] text-foreground/80 leading-relaxed">{fa.verdict}</div>
+                  <div className="text-[13px] text-foreground/80 leading-relaxed">{fa.verdict}</div>
                 </div>
               </div>
             )
@@ -671,7 +671,7 @@ export default function StockAnalysis() {
                     </span>
                   )}
                 </div>
-                <div className="flex items-center gap-3 mb-3 text-[9px]">
+                <div className="flex items-center gap-3 mb-3 text-[13px]">
                   {a.ma50 != null && (
                     <span className="text-muted-foreground">
                       MA50: <span className="text-foreground">{fmtCurrencyPrice(a.ma50, q.currency)}</span> ({fmtPct(a.distanceFromMA50Pct)})
@@ -700,7 +700,7 @@ export default function StockAnalysis() {
                   resistances={a.target1 ? [a.target1] : []}
                 />
                 {/* Valuation legend */}
-                <div className="flex items-center gap-4 mt-2 text-[8px]">
+                <div className="flex items-center gap-4 mt-2 text-[12px]">
                   <span className="flex items-center gap-1">
                     <span className="w-3 h-0.5 bg-bloomberg-red inline-block" /> Strefa przewartościowania {overvalued ? `(>${fmtCurrencyPrice(overvalued, q.currency)})` : ""}
                   </span>
@@ -860,12 +860,12 @@ export default function StockAnalysis() {
                     <tr key={r.name} className="border-b border-bloomberg-border/50">
                       <td className="py-2 pr-4 text-foreground font-bold">{r.name}</td>
                       <td className="py-2 px-3 text-center">
-                        <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${riskBg(r.probability)} ${riskColor(r.probability)}`}>
+                        <span className={`px-2 py-0.5 rounded text-[12px] font-bold ${riskBg(r.probability)} ${riskColor(r.probability)}`}>
                           {r.probability}
                         </span>
                       </td>
                       <td className="py-2 px-3 text-center">
-                        <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${riskBg(r.impact)} ${riskColor(r.impact)}`}>
+                        <span className={`px-2 py-0.5 rounded text-[12px] font-bold ${riskBg(r.impact)} ${riskColor(r.impact)}`}>
                           {r.impact}
                         </span>
                       </td>
@@ -944,7 +944,7 @@ export default function StockAnalysis() {
                     </span>
                     <div className="flex-1 min-w-0">
                       <div className="text-xs text-foreground truncate">{n.headline}</div>
-                      <div className="text-[10px] text-muted-foreground">
+                      <div className="text-[12px] text-muted-foreground">
                         {n.source} — {n.date}
                       </div>
                     </div>
@@ -985,9 +985,9 @@ function LevelBox({
 }) {
   return (
     <div className="text-center">
-      <div className="text-[10px] text-muted-foreground tracking-wider">{label}</div>
+      <div className="text-[12px] text-muted-foreground tracking-wider">{label}</div>
       <div className={`text-sm font-bold ${color}`}>{value}</div>
-      {sub && <div className={`text-[10px] ${color} opacity-70`}>{sub}</div>}
+      {sub && <div className={`text-[12px] ${color} opacity-70`}>{sub}</div>}
     </div>
   )
 }
@@ -995,7 +995,7 @@ function LevelBox({
 function CheckItem({ label, value }: { label: string; value: boolean | null }) {
   return (
     <div className="flex items-center gap-2 py-0.5">
-      <span className={`font-bold text-[10px] ${checkColor(value)}`}>
+      <span className={`font-bold text-[12px] ${checkColor(value)}`}>
         {checkIcon(value)}
       </span>
       <span className="text-muted-foreground">{label}</span>
@@ -1067,13 +1067,13 @@ function TranslatedSummary({ text, full }: { text: string; full?: boolean }) {
   const translated = useTranslatePL(text)
   if (full) {
     return (
-      <div className="text-[10px] text-foreground/80 leading-relaxed">
+      <div className="text-[12px] text-foreground/80 leading-relaxed">
         {translated}
       </div>
     )
   }
   return (
-    <div className="text-[9px] text-muted-foreground leading-snug flex-1 line-clamp-2">
+    <div className="text-[13px] text-muted-foreground leading-snug flex-1 line-clamp-2">
       {translated}
     </div>
   )

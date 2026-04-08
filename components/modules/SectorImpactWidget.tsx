@@ -113,15 +113,15 @@ function DeepTickerRow({ t, rank, color }: { t: AITicker; rank: number; color: "
   return (
     <div className="mb-2 last:mb-0">
       <button onClick={() => setOpen(!open)} className="w-full flex items-start gap-2 text-left group">
-        <span className={`text-[10px] font-bold ${c} w-4 shrink-0 pt-0.5`}>{rank}.</span>
+        <span className={`text-[12px] font-bold ${c} w-4 shrink-0 pt-0.5`}>{rank}.</span>
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-1.5 flex-wrap">
-            <span className={`text-[11px] font-bold ${c}`}>{t.symbol}</span>
-            <span className="text-[9px] text-muted-foreground">{t.name}</span>
-            <span className="text-[7px] text-muted-foreground shrink-0 border border-bloomberg-border/50 px-1 rounded">{t.index}</span>
-            {rel && <span className={`text-[7px] font-bold ${rel.color} border border-current/30 px-1 rounded`}>{rel.label}</span>}
+            <span className={`text-[13px] font-bold ${c}`}>{t.symbol}</span>
+            <span className="text-[13px] text-muted-foreground">{t.name}</span>
+            <span className="text-[13px] text-muted-foreground shrink-0 border border-bloomberg-border/50 px-1 rounded">{t.index}</span>
+            {rel && <span className={`text-[13px] font-bold ${rel.color} border border-current/30 px-1 rounded`}>{rel.label}</span>}
           </div>
-          <div className="text-[9px] text-muted-foreground leading-snug mt-0.5">{t.why}</div>
+          <div className="text-[13px] text-muted-foreground leading-snug mt-0.5">{t.why}</div>
         </div>
         <ChevronDown className={`w-3 h-3 text-muted-foreground shrink-0 mt-0.5 transition-transform ${open ? "rotate-180" : ""}`} />
       </button>
@@ -129,15 +129,15 @@ function DeepTickerRow({ t, rank, color }: { t: AITicker; rank: number; color: "
         <div className="ml-6 mt-1.5 pl-2 border-l border-bloomberg-border/50">
           <div className="flex gap-1.5">
             <a href={`https://finance.yahoo.com/quote/${t.symbol}`} target="_blank" rel="noopener noreferrer"
-              className="inline-flex items-center gap-0.5 text-[8px] px-1.5 py-0.5 bg-bloomberg-green/20 text-bloomberg-green border border-bloomberg-green/30 rounded hover:bg-bloomberg-green/30 transition-colors">
+              className="inline-flex items-center gap-0.5 text-[12px] px-1.5 py-0.5 bg-bloomberg-green/20 text-bloomberg-green border border-bloomberg-green/30 rounded hover:bg-bloomberg-green/30 transition-colors">
               Yahoo Finance <ExternalLink className="w-2 h-2" />
             </a>
             <a href={`https://www.google.com/finance/quote/${t.symbol}:NASDAQ`} target="_blank" rel="noopener noreferrer"
-              className="inline-flex items-center gap-0.5 text-[8px] px-1.5 py-0.5 bg-bloomberg-blue/20 text-bloomberg-blue border border-bloomberg-blue/30 rounded hover:bg-bloomberg-blue/30 transition-colors">
+              className="inline-flex items-center gap-0.5 text-[12px] px-1.5 py-0.5 bg-bloomberg-blue/20 text-bloomberg-blue border border-bloomberg-blue/30 rounded hover:bg-bloomberg-blue/30 transition-colors">
               Google Finance <ExternalLink className="w-2 h-2" />
             </a>
             <a href={`https://stockanalysis.com/stocks/${t.symbol.toLowerCase()}/`} target="_blank" rel="noopener noreferrer"
-              className="inline-flex items-center gap-0.5 text-[8px] px-1.5 py-0.5 bg-bloomberg-amber/20 text-bloomberg-amber border border-bloomberg-amber/30 rounded hover:bg-bloomberg-amber/30 transition-colors">
+              className="inline-flex items-center gap-0.5 text-[12px] px-1.5 py-0.5 bg-bloomberg-amber/20 text-bloomberg-amber border border-bloomberg-amber/30 rounded hover:bg-bloomberg-amber/30 transition-colors">
               StockAnalysis <ExternalLink className="w-2 h-2" />
             </a>
           </div>
@@ -160,7 +160,7 @@ function ChainOfEffects({ chain }: { chain: string[] }) {
             }`} />
             {i < chain.length - 1 && <div className="w-px h-3 bg-bloomberg-border/50" />}
           </div>
-          <div className="text-[9px] text-muted-foreground leading-snug flex-1">{step}</div>
+          <div className="text-[13px] text-muted-foreground leading-snug flex-1">{step}</div>
         </div>
       ))}
     </div>
@@ -185,20 +185,20 @@ function ThemeCard({ theme, isExpanded, onToggle }: { theme: AITheme; isExpanded
       >
         <span className="text-sm mt-0.5">{SECTOR_ICON[theme.primarySector] ?? "📊"}</span>
         <div className="flex-1 min-w-0">
-          <div className="text-[11px] font-bold text-foreground leading-tight">{theme.themeName}</div>
+          <div className="text-[13px] font-bold text-foreground leading-tight">{theme.themeName}</div>
           <div className="flex items-center gap-1 mt-0.5 flex-wrap">
             {theme.affectedSectors.slice(0, 3).map(s => (
-              <span key={s} className="text-[7px] text-muted-foreground border border-bloomberg-border/40 px-1 py-px rounded">
+              <span key={s} className="text-[13px] text-muted-foreground border border-bloomberg-border/40 px-1 py-px rounded">
                 {SECTOR_PL[s] ?? s}
               </span>
             ))}
             {theme.affectedSectors.length > 3 && (
-              <span className="text-[7px] text-muted-foreground">+{theme.affectedSectors.length - 3}</span>
+              <span className="text-[13px] text-muted-foreground">+{theme.affectedSectors.length - 3}</span>
             )}
           </div>
         </div>
         <div className="flex items-center gap-1.5 shrink-0">
-          <span className={`text-[8px] font-bold ${impactColor} border border-current/30 px-1 py-px rounded`}>
+          <span className={`text-[12px] font-bold ${impactColor} border border-current/30 px-1 py-px rounded`}>
             {impactArrow} {impactLabel}
           </span>
           {isExpanded ? <ChevronUp className="w-3 h-3 text-muted-foreground" /> : <ChevronDown className="w-3 h-3 text-muted-foreground" />}
@@ -211,9 +211,9 @@ function ThemeCard({ theme, isExpanded, onToggle }: { theme: AITheme; isExpanded
           <div className="mb-3">
             <div className="flex items-center gap-1 mb-1.5">
               <Brain className="w-3 h-3 text-purple-400" />
-              <span className="text-[9px] text-purple-400 font-bold">DEEP ANALYSIS</span>
+              <span className="text-[13px] text-purple-400 font-bold">DEEP ANALYSIS</span>
             </div>
-            <div className="text-[10px] text-foreground/80 leading-relaxed">{theme.deepAnalysis}</div>
+            <div className="text-[12px] text-foreground/80 leading-relaxed">{theme.deepAnalysis}</div>
           </div>
 
           {/* Chain of Effects */}
@@ -221,7 +221,7 @@ function ThemeCard({ theme, isExpanded, onToggle }: { theme: AITheme; isExpanded
             <div className="mb-3">
               <div className="flex items-center gap-1 mb-1.5">
                 <Link2 className="w-3 h-3 text-bloomberg-amber" />
-                <span className="text-[9px] text-bloomberg-amber font-bold">ŁAŃCUCH PRZYCZYNOWO-SKUTKOWY</span>
+                <span className="text-[13px] text-bloomberg-amber font-bold">ŁAŃCUCH PRZYCZYNOWO-SKUTKOWY</span>
               </div>
               <ChainOfEffects chain={theme.chainOfEffects} />
             </div>
@@ -229,10 +229,10 @@ function ThemeCard({ theme, isExpanded, onToggle }: { theme: AITheme; isExpanded
 
           {/* Affected Sectors */}
           <div className="mb-3">
-            <div className="text-[9px] text-muted-foreground font-bold mb-1">DOTKNIĘTE SEKTORY GICS:</div>
+            <div className="text-[13px] text-muted-foreground font-bold mb-1">DOTKNIĘTE SEKTORY GICS:</div>
             <div className="flex flex-wrap gap-1">
               {theme.affectedSectors.map(s => (
-                <span key={s} className="text-[8px] px-1.5 py-0.5 bg-bloomberg-border/20 text-muted-foreground rounded border border-bloomberg-border/30">
+                <span key={s} className="text-[12px] px-1.5 py-0.5 bg-bloomberg-border/20 text-muted-foreground rounded border border-bloomberg-border/30">
                   {SECTOR_ICON[s]} {SECTOR_PL[s]}
                 </span>
               ))}
@@ -244,7 +244,7 @@ function ThemeCard({ theme, isExpanded, onToggle }: { theme: AITheme; isExpanded
             <div className="mb-3">
               <div className="flex items-center gap-1.5 mb-1.5">
                 <Star className="w-3 h-3 text-bloomberg-green" />
-                <span className="text-[9px] text-bloomberg-green font-bold">BENEFICJENCI ({theme.topBullish.length})</span>
+                <span className="text-[13px] text-bloomberg-green font-bold">BENEFICJENCI ({theme.topBullish.length})</span>
               </div>
               {theme.topBullish.map((t, i) => (
                 <DeepTickerRow key={t.symbol} t={t} rank={i + 1} color="green" />
@@ -257,7 +257,7 @@ function ThemeCard({ theme, isExpanded, onToggle }: { theme: AITheme; isExpanded
             <div>
               <div className="flex items-center gap-1.5 mb-1.5">
                 <Shield className="w-3 h-3 text-bloomberg-red" />
-                <span className="text-[9px] text-bloomberg-red font-bold">ZAGROŻONE ({theme.topBearish.length})</span>
+                <span className="text-[13px] text-bloomberg-red font-bold">ZAGROŻONE ({theme.topBearish.length})</span>
               </div>
               {theme.topBearish.map((t, i) => (
                 <DeepTickerRow key={t.symbol} t={t} rank={i + 1} color="red" />
@@ -288,10 +288,10 @@ function AIRadarCard({ theme, isExpanded, onToggle }: { theme: AITheme; isExpand
         <div className="flex items-center gap-2 mb-1">
           <div className="flex items-center gap-1.5">
             <span className="text-base">🤖</span>
-            <span className="text-[11px] text-purple-400 font-bold tracking-wider">AI & TECH RADAR</span>
+            <span className="text-[13px] text-purple-400 font-bold tracking-wider">AI & TECH RADAR</span>
           </div>
           <div className="flex-1" />
-          <span className={`text-[8px] font-bold border px-1.5 py-0.5 rounded ${
+          <span className={`text-[12px] font-bold border px-1.5 py-0.5 rounded ${
             theme.impact === "bullish"
               ? "text-bloomberg-green border-bloomberg-green/30"
               : theme.impact === "bearish"
@@ -302,15 +302,15 @@ function AIRadarCard({ theme, isExpanded, onToggle }: { theme: AITheme; isExpand
           </span>
           {isExpanded ? <ChevronUp className="w-3.5 h-3.5 text-purple-400" /> : <ChevronDown className="w-3.5 h-3.5 text-purple-400" />}
         </div>
-        <div className="text-[10px] text-foreground font-medium leading-snug">{radarTitle}</div>
+        <div className="text-[12px] text-foreground font-medium leading-snug">{radarTitle}</div>
         <div className="flex items-center gap-1 mt-1 flex-wrap">
           {theme.affectedSectors.slice(0, 4).map(s => (
-            <span key={s} className="text-[7px] text-purple-300/70 border border-purple-500/20 px-1 py-px rounded bg-purple-500/5">
+            <span key={s} className="text-[13px] text-purple-300/70 border border-purple-500/20 px-1 py-px rounded bg-purple-500/5">
               {SECTOR_ICON[s]} {SECTOR_PL[s]}
             </span>
           ))}
           {theme.affectedSectors.length > 4 && (
-            <span className="text-[7px] text-purple-300/50">+{theme.affectedSectors.length - 4}</span>
+            <span className="text-[13px] text-purple-300/50">+{theme.affectedSectors.length - 4}</span>
           )}
         </div>
       </button>
@@ -321,9 +321,9 @@ function AIRadarCard({ theme, isExpanded, onToggle }: { theme: AITheme; isExpand
           <div className="mb-3">
             <div className="flex items-center gap-1 mb-1.5">
               <Brain className="w-3 h-3 text-purple-400" />
-              <span className="text-[9px] text-purple-400 font-bold">DEEP ANALYSIS — TRENDY AI</span>
+              <span className="text-[13px] text-purple-400 font-bold">DEEP ANALYSIS — TRENDY AI</span>
             </div>
-            <div className="text-[10px] text-foreground/80 leading-relaxed">{theme.deepAnalysis}</div>
+            <div className="text-[12px] text-foreground/80 leading-relaxed">{theme.deepAnalysis}</div>
           </div>
 
           {/* Chain of Effects */}
@@ -331,7 +331,7 @@ function AIRadarCard({ theme, isExpanded, onToggle }: { theme: AITheme; isExpand
             <div className="mb-3">
               <div className="flex items-center gap-1 mb-1.5">
                 <Link2 className="w-3 h-3 text-purple-400" />
-                <span className="text-[9px] text-purple-400 font-bold">ŁAŃCUCH EFEKTÓW</span>
+                <span className="text-[13px] text-purple-400 font-bold">ŁAŃCUCH EFEKTÓW</span>
               </div>
               <div className="space-y-1">
                 {theme.chainOfEffects.map((step, i) => (
@@ -342,7 +342,7 @@ function AIRadarCard({ theme, isExpanded, onToggle }: { theme: AITheme; isExpand
                       }`} />
                       {i < theme.chainOfEffects.length - 1 && <div className="w-px h-3 bg-purple-400/30" />}
                     </div>
-                    <div className="text-[9px] text-muted-foreground leading-snug flex-1">{step}</div>
+                    <div className="text-[13px] text-muted-foreground leading-snug flex-1">{step}</div>
                   </div>
                 ))}
               </div>
@@ -351,10 +351,10 @@ function AIRadarCard({ theme, isExpanded, onToggle }: { theme: AITheme; isExpand
 
           {/* Affected Sectors */}
           <div className="mb-3">
-            <div className="text-[9px] text-muted-foreground font-bold mb-1">DOTKNIĘTE SEKTORY:</div>
+            <div className="text-[13px] text-muted-foreground font-bold mb-1">DOTKNIĘTE SEKTORY:</div>
             <div className="flex flex-wrap gap-1">
               {theme.affectedSectors.map(s => (
-                <span key={s} className="text-[8px] px-1.5 py-0.5 bg-purple-500/10 text-purple-300 rounded border border-purple-500/20">
+                <span key={s} className="text-[12px] px-1.5 py-0.5 bg-purple-500/10 text-purple-300 rounded border border-purple-500/20">
                   {SECTOR_ICON[s]} {SECTOR_PL[s]}
                 </span>
               ))}
@@ -366,7 +366,7 @@ function AIRadarCard({ theme, isExpanded, onToggle }: { theme: AITheme; isExpand
             <div className="mb-3">
               <div className="flex items-center gap-1.5 mb-1.5">
                 <Star className="w-3 h-3 text-bloomberg-green" />
-                <span className="text-[9px] text-bloomberg-green font-bold">BENEFICJENCI AI ({theme.topBullish.length})</span>
+                <span className="text-[13px] text-bloomberg-green font-bold">BENEFICJENCI AI ({theme.topBullish.length})</span>
               </div>
               {theme.topBullish.map((t, i) => (
                 <DeepTickerRow key={t.symbol} t={t} rank={i + 1} color="green" />
@@ -379,7 +379,7 @@ function AIRadarCard({ theme, isExpanded, onToggle }: { theme: AITheme; isExpand
             <div>
               <div className="flex items-center gap-1.5 mb-1.5">
                 <Shield className="w-3 h-3 text-bloomberg-red" />
-                <span className="text-[9px] text-bloomberg-red font-bold">ZAGROŻONE ({theme.topBearish.length})</span>
+                <span className="text-[13px] text-bloomberg-red font-bold">ZAGROŻONE ({theme.topBearish.length})</span>
               </div>
               {theme.topBearish.map((t, i) => (
                 <DeepTickerRow key={t.symbol} t={t} rank={i + 1} color="red" />
@@ -407,10 +407,10 @@ function TechBreakthroughsCard({ theme, isExpanded, onToggle }: { theme: AITheme
         <div className="flex items-center gap-2 mb-1">
           <div className="flex items-center gap-1.5">
             <span className="text-base">🔬</span>
-            <span className="text-[11px] text-cyan-400 font-bold tracking-wider">NOWINKI TECHNICZNE</span>
+            <span className="text-[13px] text-cyan-400 font-bold tracking-wider">NOWINKI TECHNICZNE</span>
           </div>
           <div className="flex-1" />
-          <span className={`text-[8px] font-bold border px-1.5 py-0.5 rounded ${
+          <span className={`text-[12px] font-bold border px-1.5 py-0.5 rounded ${
             theme.impact === "bullish"
               ? "text-bloomberg-green border-bloomberg-green/30"
               : theme.impact === "bearish"
@@ -421,15 +421,15 @@ function TechBreakthroughsCard({ theme, isExpanded, onToggle }: { theme: AITheme
           </span>
           {isExpanded ? <ChevronUp className="w-3.5 h-3.5 text-cyan-400" /> : <ChevronDown className="w-3.5 h-3.5 text-cyan-400" />}
         </div>
-        <div className="text-[10px] text-foreground font-medium leading-snug">{title}</div>
+        <div className="text-[12px] text-foreground font-medium leading-snug">{title}</div>
         <div className="flex items-center gap-1 mt-1 flex-wrap">
           {theme.affectedSectors.slice(0, 4).map(s => (
-            <span key={s} className="text-[7px] text-cyan-300/70 border border-cyan-500/20 px-1 py-px rounded bg-cyan-500/5">
+            <span key={s} className="text-[13px] text-cyan-300/70 border border-cyan-500/20 px-1 py-px rounded bg-cyan-500/5">
               {SECTOR_ICON[s]} {SECTOR_PL[s]}
             </span>
           ))}
           {theme.affectedSectors.length > 4 && (
-            <span className="text-[7px] text-cyan-300/50">+{theme.affectedSectors.length - 4}</span>
+            <span className="text-[13px] text-cyan-300/50">+{theme.affectedSectors.length - 4}</span>
           )}
         </div>
       </button>
@@ -440,9 +440,9 @@ function TechBreakthroughsCard({ theme, isExpanded, onToggle }: { theme: AITheme
           <div className="mb-3">
             <div className="flex items-center gap-1 mb-1.5">
               <Brain className="w-3 h-3 text-cyan-400" />
-              <span className="text-[9px] text-cyan-400 font-bold">PRZEŁOMOWE TECHNOLOGIE — OSTATNIE 24H</span>
+              <span className="text-[13px] text-cyan-400 font-bold">PRZEŁOMOWE TECHNOLOGIE — OSTATNIE 24H</span>
             </div>
-            <div className="text-[10px] text-foreground/80 leading-relaxed">{theme.deepAnalysis}</div>
+            <div className="text-[12px] text-foreground/80 leading-relaxed">{theme.deepAnalysis}</div>
           </div>
 
           {/* Chain of Effects */}
@@ -450,7 +450,7 @@ function TechBreakthroughsCard({ theme, isExpanded, onToggle }: { theme: AITheme
             <div className="mb-3">
               <div className="flex items-center gap-1 mb-1.5">
                 <Link2 className="w-3 h-3 text-cyan-400" />
-                <span className="text-[9px] text-cyan-400 font-bold">ŁAŃCUCH EFEKTÓW</span>
+                <span className="text-[13px] text-cyan-400 font-bold">ŁAŃCUCH EFEKTÓW</span>
               </div>
               <div className="space-y-1">
                 {theme.chainOfEffects.map((step, i) => (
@@ -461,7 +461,7 @@ function TechBreakthroughsCard({ theme, isExpanded, onToggle }: { theme: AITheme
                       }`} />
                       {i < theme.chainOfEffects.length - 1 && <div className="w-px h-3 bg-cyan-400/30" />}
                     </div>
-                    <div className="text-[9px] text-muted-foreground leading-snug flex-1">{step}</div>
+                    <div className="text-[13px] text-muted-foreground leading-snug flex-1">{step}</div>
                   </div>
                 ))}
               </div>
@@ -470,10 +470,10 @@ function TechBreakthroughsCard({ theme, isExpanded, onToggle }: { theme: AITheme
 
           {/* Affected Sectors */}
           <div className="mb-3">
-            <div className="text-[9px] text-muted-foreground font-bold mb-1">DOTKNIĘTE SEKTORY:</div>
+            <div className="text-[13px] text-muted-foreground font-bold mb-1">DOTKNIĘTE SEKTORY:</div>
             <div className="flex flex-wrap gap-1">
               {theme.affectedSectors.map(s => (
-                <span key={s} className="text-[8px] px-1.5 py-0.5 bg-cyan-500/10 text-cyan-300 rounded border border-cyan-500/20">
+                <span key={s} className="text-[12px] px-1.5 py-0.5 bg-cyan-500/10 text-cyan-300 rounded border border-cyan-500/20">
                   {SECTOR_ICON[s]} {SECTOR_PL[s]}
                 </span>
               ))}
@@ -485,7 +485,7 @@ function TechBreakthroughsCard({ theme, isExpanded, onToggle }: { theme: AITheme
             <div className="mb-3">
               <div className="flex items-center gap-1.5 mb-1.5">
                 <Star className="w-3 h-3 text-bloomberg-green" />
-                <span className="text-[9px] text-bloomberg-green font-bold">BENEFICJENCI ({theme.topBullish.length})</span>
+                <span className="text-[13px] text-bloomberg-green font-bold">BENEFICJENCI ({theme.topBullish.length})</span>
               </div>
               {theme.topBullish.map((t, i) => (
                 <DeepTickerRow key={t.symbol} t={t} rank={i + 1} color="green" />
@@ -498,7 +498,7 @@ function TechBreakthroughsCard({ theme, isExpanded, onToggle }: { theme: AITheme
             <div>
               <div className="flex items-center gap-1.5 mb-1.5">
                 <Shield className="w-3 h-3 text-bloomberg-red" />
-                <span className="text-[9px] text-bloomberg-red font-bold">ZAGROŻONE ({theme.topBearish.length})</span>
+                <span className="text-[13px] text-bloomberg-red font-bold">ZAGROŻONE ({theme.topBearish.length})</span>
               </div>
               {theme.topBearish.map((t, i) => (
                 <DeepTickerRow key={t.symbol} t={t} rank={i + 1} color="red" />
@@ -526,10 +526,10 @@ function QuantumRadarCard({ theme, isExpanded, onToggle }: { theme: AITheme; isE
         <div className="flex items-center gap-2 mb-1">
           <div className="flex items-center gap-1.5">
             <span className="text-base">⚛️</span>
-            <span className="text-[11px] text-emerald-400 font-bold tracking-wider">QUANTUM RADAR</span>
+            <span className="text-[13px] text-emerald-400 font-bold tracking-wider">QUANTUM RADAR</span>
           </div>
           <div className="flex-1" />
-          <span className={`text-[8px] font-bold border px-1.5 py-0.5 rounded ${
+          <span className={`text-[12px] font-bold border px-1.5 py-0.5 rounded ${
             theme.impact === "bullish"
               ? "text-bloomberg-green border-bloomberg-green/30"
               : theme.impact === "bearish"
@@ -540,10 +540,10 @@ function QuantumRadarCard({ theme, isExpanded, onToggle }: { theme: AITheme; isE
           </span>
           {isExpanded ? <ChevronUp className="w-3.5 h-3.5 text-emerald-400" /> : <ChevronDown className="w-3.5 h-3.5 text-emerald-400" />}
         </div>
-        <div className="text-[10px] text-foreground font-medium leading-snug">{title}</div>
+        <div className="text-[12px] text-foreground font-medium leading-snug">{title}</div>
         <div className="flex items-center gap-1 mt-1 flex-wrap">
           {theme.affectedSectors.slice(0, 4).map(s => (
-            <span key={s} className="text-[7px] text-emerald-300/70 border border-emerald-500/20 px-1 py-px rounded bg-emerald-500/5">
+            <span key={s} className="text-[13px] text-emerald-300/70 border border-emerald-500/20 px-1 py-px rounded bg-emerald-500/5">
               {SECTOR_ICON[s]} {SECTOR_PL[s]}
             </span>
           ))}
@@ -555,16 +555,16 @@ function QuantumRadarCard({ theme, isExpanded, onToggle }: { theme: AITheme; isE
           <div className="mb-3">
             <div className="flex items-center gap-1 mb-1.5">
               <Brain className="w-3 h-3 text-emerald-400" />
-              <span className="text-[9px] text-emerald-400 font-bold">DEEP ANALYSIS — QUANTUM COMPUTING</span>
+              <span className="text-[13px] text-emerald-400 font-bold">DEEP ANALYSIS — QUANTUM COMPUTING</span>
             </div>
-            <div className="text-[10px] text-foreground/80 leading-relaxed">{theme.deepAnalysis}</div>
+            <div className="text-[12px] text-foreground/80 leading-relaxed">{theme.deepAnalysis}</div>
           </div>
 
           {theme.chainOfEffects?.length > 0 && (
             <div className="mb-3">
               <div className="flex items-center gap-1 mb-1.5">
                 <Link2 className="w-3 h-3 text-emerald-400" />
-                <span className="text-[9px] text-emerald-400 font-bold">ŁAŃCUCH EFEKTÓW</span>
+                <span className="text-[13px] text-emerald-400 font-bold">ŁAŃCUCH EFEKTÓW</span>
               </div>
               <div className="space-y-1">
                 {theme.chainOfEffects.map((step, i) => (
@@ -575,7 +575,7 @@ function QuantumRadarCard({ theme, isExpanded, onToggle }: { theme: AITheme; isE
                       }`} />
                       {i < theme.chainOfEffects.length - 1 && <div className="w-px h-3 bg-emerald-400/30" />}
                     </div>
-                    <div className="text-[9px] text-muted-foreground leading-snug flex-1">{step}</div>
+                    <div className="text-[13px] text-muted-foreground leading-snug flex-1">{step}</div>
                   </div>
                 ))}
               </div>
@@ -583,10 +583,10 @@ function QuantumRadarCard({ theme, isExpanded, onToggle }: { theme: AITheme; isE
           )}
 
           <div className="mb-3">
-            <div className="text-[9px] text-muted-foreground font-bold mb-1">DOTKNIĘTE SEKTORY:</div>
+            <div className="text-[13px] text-muted-foreground font-bold mb-1">DOTKNIĘTE SEKTORY:</div>
             <div className="flex flex-wrap gap-1">
               {theme.affectedSectors.map(s => (
-                <span key={s} className="text-[8px] px-1.5 py-0.5 bg-emerald-500/10 text-emerald-300 rounded border border-emerald-500/20">
+                <span key={s} className="text-[12px] px-1.5 py-0.5 bg-emerald-500/10 text-emerald-300 rounded border border-emerald-500/20">
                   {SECTOR_ICON[s]} {SECTOR_PL[s]}
                 </span>
               ))}
@@ -597,7 +597,7 @@ function QuantumRadarCard({ theme, isExpanded, onToggle }: { theme: AITheme; isE
             <div className="mb-3">
               <div className="flex items-center gap-1.5 mb-1.5">
                 <Star className="w-3 h-3 text-bloomberg-green" />
-                <span className="text-[9px] text-bloomberg-green font-bold">LIDERZY QUANTUM ({theme.topBullish.length})</span>
+                <span className="text-[13px] text-bloomberg-green font-bold">LIDERZY QUANTUM ({theme.topBullish.length})</span>
               </div>
               {theme.topBullish.map((t, i) => (
                 <DeepTickerRow key={t.symbol} t={t} rank={i + 1} color="green" />
@@ -609,7 +609,7 @@ function QuantumRadarCard({ theme, isExpanded, onToggle }: { theme: AITheme; isE
             <div>
               <div className="flex items-center gap-1.5 mb-1.5">
                 <Shield className="w-3 h-3 text-bloomberg-red" />
-                <span className="text-[9px] text-bloomberg-red font-bold">ZAGROŻONE ({theme.topBearish.length})</span>
+                <span className="text-[13px] text-bloomberg-red font-bold">ZAGROŻONE ({theme.topBearish.length})</span>
               </div>
               {theme.topBearish.map((t, i) => (
                 <DeepTickerRow key={t.symbol} t={t} rank={i + 1} color="red" />
@@ -718,21 +718,21 @@ export default function SectorImpactWidget({ newsItems }: SectorImpactWidgetProp
       <div className="px-3 py-2 border-b border-bloomberg-border">
         <div className="flex items-center gap-1.5 mb-1">
           <Zap className="w-3 h-3 text-bloomberg-amber" />
-          <span className="text-[10px] text-bloomberg-amber font-bold tracking-wider">WPŁYW NA RYNEK US</span>
-          <span className="text-[9px] text-muted-foreground ml-auto">S&P 500 + NASDAQ</span>
+          <span className="text-[12px] text-bloomberg-amber font-bold tracking-wider">WPŁYW NA RYNEK US</span>
+          <span className="text-[13px] text-muted-foreground ml-auto">S&P 500 + NASDAQ</span>
         </div>
         {isAI ? (
           <div className="flex items-center gap-1.5">
             <Brain className="w-3 h-3 text-purple-400" />
-            <span className="text-[8px] text-purple-400 font-bold">
+            <span className="text-[12px] text-purple-400 font-bold">
               {isDeep ? "DEEP RESEARCH" : "ANALIZA AI"} • {aiResponse!.model}
             </span>
-            <span className="text-[8px] text-muted-foreground">
+            <span className="text-[12px] text-muted-foreground">
               • {aiResponse!.newsAnalyzed} newsów → {themes.length} tematów → {allAffectedSectors.size} sektorów
             </span>
           </div>
         ) : (
-          <div className="text-[9px] text-muted-foreground">
+          <div className="text-[13px] text-muted-foreground">
             {newsItems.length} newsów | Kliknij przycisk poniżej aby uruchomić głęboką analizę AI
           </div>
         )}
@@ -743,7 +743,7 @@ export default function SectorImpactWidget({ newsItems }: SectorImpactWidgetProp
         <button
           onClick={handleGrokAnalysis}
           disabled={aiLoading}
-          className={`w-full flex items-center justify-center gap-2 px-3 py-2.5 rounded text-[10px] font-bold tracking-wider transition-all ${
+          className={`w-full flex items-center justify-center gap-2 px-3 py-2.5 rounded text-[12px] font-bold tracking-wider transition-all ${
             aiLoading
               ? "bg-purple-500/10 text-purple-400 border border-purple-500/30 cursor-wait"
               : isAI
@@ -755,7 +755,7 @@ export default function SectorImpactWidget({ newsItems }: SectorImpactWidgetProp
             <>
               <Loader2 className="w-3.5 h-3.5 animate-spin" />
               <span>GROK DEEP RESEARCH...</span>
-              <span className="text-[8px] font-normal opacity-60">(może potrwać ~30s)</span>
+              <span className="text-[12px] font-normal opacity-60">(może potrwać ~30s)</span>
             </>
           ) : isAI ? (
             <><Brain className="w-3.5 h-3.5" /> PONOWNA ANALIZA GROK</>
@@ -763,7 +763,7 @@ export default function SectorImpactWidget({ newsItems }: SectorImpactWidgetProp
             <><Brain className="w-3.5 h-3.5" /> 🔬 DEEP RESEARCH — ANALIZUJ PRZEZ GROK</>
           )}
         </button>
-        {aiError && <div className="text-[9px] text-bloomberg-red mt-1 text-center">{aiError}</div>}
+        {aiError && <div className="text-[13px] text-bloomberg-red mt-1 text-center">{aiError}</div>}
       </div>
 
       {/* CONTENT AREA */}
@@ -775,13 +775,13 @@ export default function SectorImpactWidget({ newsItems }: SectorImpactWidgetProp
             <div className="px-3 py-1.5 border-b border-bloomberg-border/50 bg-purple-500/5 flex items-center gap-3">
               <div className="flex items-center gap-1">
                 <TrendingUp className="w-3 h-3 text-bloomberg-green" />
-                <span className="text-[9px] text-bloomberg-green font-bold">{bullishThemes} bullish</span>
+                <span className="text-[13px] text-bloomberg-green font-bold">{bullishThemes} bullish</span>
               </div>
               <div className="flex items-center gap-1">
                 <TrendingDown className="w-3 h-3 text-bloomberg-red" />
-                <span className="text-[9px] text-bloomberg-red font-bold">{bearishThemes} bearish</span>
+                <span className="text-[13px] text-bloomberg-red font-bold">{bearishThemes} bearish</span>
               </div>
-              <span className="text-[8px] text-muted-foreground ml-auto">
+              <span className="text-[12px] text-muted-foreground ml-auto">
                 {new Date(aiResponse!.timestamp).toLocaleTimeString("pl-PL", { hour: "2-digit", minute: "2-digit" })}
               </span>
             </div>
@@ -828,7 +828,7 @@ export default function SectorImpactWidget({ newsItems }: SectorImpactWidgetProp
         ) : !isAI ? (
           /* ═══ BEFORE AI — SECTOR OVERVIEW ═══ */
           <div className="px-3 py-3">
-            <div className="text-[9px] text-muted-foreground mb-2 font-bold">SEKTORY GICS — PRZEGLĄD</div>
+            <div className="text-[13px] text-muted-foreground mb-2 font-bold">SEKTORY GICS — PRZEGLĄD</div>
             <div className="grid grid-cols-2 gap-1">
               {GICS_SECTORS.map(s => {
                 const hasBull = staticAnalysis.bullish.some(x => x.sector === s)
@@ -852,22 +852,22 @@ export default function SectorImpactWidget({ newsItems }: SectorImpactWidgetProp
                         : "border-bloomberg-border/20 bg-bloomberg-bg/30 opacity-50"
                     }`}
                   >
-                    <span className="text-[10px]">{SECTOR_ICON[s]}</span>
-                    <span className="text-[8px] text-muted-foreground flex-1 truncate">{SECTOR_PL[s]}</span>
-                    <span className={`text-[10px] font-bold ${indicatorColor}`}>{indicator}</span>
+                    <span className="text-[12px]">{SECTOR_ICON[s]}</span>
+                    <span className="text-[12px] text-muted-foreground flex-1 truncate">{SECTOR_PL[s]}</span>
+                    <span className={`text-[12px] font-bold ${indicatorColor}`}>{indicator}</span>
                   </div>
                 )
               })}
             </div>
             <div className="mt-3 text-center">
-              <div className="text-[9px] text-muted-foreground leading-relaxed">
+              <div className="text-[13px] text-muted-foreground leading-relaxed">
                 Powyżej: wstępna analiza statyczna.<br />
                 Kliknij <span className="text-purple-400 font-bold">DEEP RESEARCH</span> aby Grok przeprowadził głęboką analizę z łańcuchem przyczynowo-skutkowym i wskazał konkretne spółki.
               </div>
             </div>
           </div>
         ) : (
-          <div className="p-4 text-center text-muted-foreground text-[10px]">
+          <div className="p-4 text-center text-muted-foreground text-[12px]">
             Brak tematów do wyświetlenia.
           </div>
         )}
@@ -877,13 +877,13 @@ export default function SectorImpactWidget({ newsItems }: SectorImpactWidgetProp
       {isAI && allAffectedSectors.size > 0 && (
         <div className="border-t border-bloomberg-border px-3 py-1.5">
           <div className="flex items-center gap-1 flex-wrap">
-            <span className="text-[8px] text-muted-foreground font-bold shrink-0">SEKTORY:</span>
+            <span className="text-[12px] text-muted-foreground font-bold shrink-0">SEKTORY:</span>
             {GICS_SECTORS.map(s => {
               const affected = allAffectedSectors.has(s)
               return (
                 <span
                   key={s}
-                  className={`text-[8px] px-1 py-px rounded ${
+                  className={`text-[12px] px-1 py-px rounded ${
                     affected
                       ? "bg-bloomberg-amber/15 text-bloomberg-amber border border-bloomberg-amber/30"
                       : "text-muted-foreground/30"
