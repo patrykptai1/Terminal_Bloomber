@@ -734,7 +734,7 @@ export default function StockAnalysis() {
                       ? "#ff3333"
                       : a.peFwd != null && a.peFwd > a.sectorPE
                         ? "#ff8c00"
-                        : "#22bb44",
+                        : "#1a9938",
                 },
                 {
                   label: "EV/EBITDA",
@@ -743,7 +743,7 @@ export default function StockAnalysis() {
                   color:
                     a.evEbitda != null && a.evEbitda > 20
                       ? "#ff3333"
-                      : "#22bb44",
+                      : "#1a9938",
                 },
                 {
                   label: "P/FCF",
@@ -752,7 +752,7 @@ export default function StockAnalysis() {
                   color:
                     a.pfcf != null && a.pfcf > 30
                       ? "#ff3333"
-                      : "#22bb44",
+                      : "#1a9938",
                 },
               ]}
             />

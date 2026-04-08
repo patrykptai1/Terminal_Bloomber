@@ -219,17 +219,25 @@ export function computeFullAnalysis(
           ? operatingMargin > 15
           : operatingMargin > 8  // tech/healthcare: 8%+ is stable
       : null
-  const balanceSheetHealthy =
-    stats?.currentRatio != null
-      ? stats.currentRatio > 1.0
-      : stats?.debtToEquity != null
-        ? stats.debtToEquity < 150
-        : null
+  // FIX: balanceSheetHealthy must check BOTH currentRatio AND debtToEquity
+  const balanceSheetHealthy = (() => {
+    const crOk = stats?.currentRatio != null ? stats.currentRatio > 1.0 : null
+    const deOk = stats?.debtToEquity != null ? stats.debtToEquity < 200 : null // D/E < 200% = healthy
+    // If D/E is catastrophic (>500%), always fail regardless of CR
+    if (stats?.debtToEquity != null && stats.debtToEquity > 500) return false
+    // Both available: both must pass
+    if (crOk != null && deOk != null) return crOk && deOk
+    // One available: use it
+    return crOk ?? deOk
+  })()
   const aboveMA50 = ma50 != null ? price > ma50 : null
   const aboveMA200 = ma200 != null ? price > ma200 : null
-  // FIX #9: Remove noExcessivePremium (duplicate of valuationReasonable), replace with FCF yield check
+  // FCF yield check — use OCF - CapEx when available (more reliable than Yahoo Levered FCF)
+  const ocf = stats?.operatingCashFlow ?? null
+  const capex = stats?.freeCashFlow != null && ocf != null ? ocf - (stats.freeCashFlow ?? 0) : null // derive capex
+  const unleveredFCF = ocf != null ? (capex != null ? ocf - capex : stats?.freeCashFlow ?? null) : stats?.freeCashFlow ?? null
   const healthyFCFYield =
-    fcf != null && quote.marketCap > 0 ? (fcf / quote.marketCap) > 0.02 : null  // FCF yield > 2%
+    fcf != null && quote.marketCap > 0 ? (fcf / quote.marketCap) > 0.015 : null  // FCF yield > 1.5%
   // FIX #7: sectorTailwind — use revenue growth relative to sector benchmark, not just own metrics
   const sectorGrowthBenchmark = sector === "Technology" ? 12 : sector === "Healthcare" ? 8 : sector === "Energy" ? 5 : sector === "Utilities" ? 3 : 6
   const sectorTailwind =

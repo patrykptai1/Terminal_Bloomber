@@ -2,7 +2,7 @@
 
 import { LineChart, Line, ResponsiveContainer } from "recharts";
 
-const BLOOMBERG_GREEN = "#22bb44";
+const BLOOMBERG_GREEN = "#1a9938";
 
 interface MiniSparklineProps {
   data: number[];

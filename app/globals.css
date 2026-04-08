@@ -27,7 +27,7 @@
     --border: #222244;
     --input: #111122;
     --ring: #ff8c00;
-    --chart-1: #22bb44;
+    --chart-1: #1a9938;
     --chart-2: #ff8c00;
     --chart-3: #3399ff;
     --chart-4: #ff3333;
@@ -62,7 +62,7 @@
     --border: #222244;
     --input: #111122;
     --ring: #ff8c00;
-    --chart-1: #22bb44;
+    --chart-1: #1a9938;
     --chart-2: #ff8c00;
     --chart-3: #3399ff;
     --chart-4: #ff3333;
@@ -119,7 +119,7 @@
     --radius-3xl: 0rem;
     --radius-4xl: 0rem;
     /* Bloomberg authentic colors */
-    --color-bloomberg-green: #22bb44;
+    --color-bloomberg-green: #1a9938;
     --color-bloomberg-amber: #ff8c00;
     --color-bloomberg-red: #ff3333;
     --color-bloomberg-blue: #3399ff;
@@ -182,7 +182,7 @@
 
 /* Bloomberg glow effects */
 .glow-green {
-  box-shadow: 0 0 6px #22bb4444;
+  box-shadow: 0 0 6px #1a993844;
 }
 .glow-amber {
   box-shadow: 0 0 6px #ff8c0044;

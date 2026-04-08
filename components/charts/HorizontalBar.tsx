@@ -12,7 +12,7 @@ import {
   Cell,
 } from "recharts";
 
-const BLOOMBERG_GREEN = "#22bb44";
+const BLOOMBERG_GREEN = "#1a9938";
 const BLOOMBERG_AMBER = "#ff8c00";
 const BORDER = "#222244";
 const MUTED_FG = "#888899";

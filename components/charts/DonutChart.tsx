@@ -14,7 +14,7 @@ const MUTED_FG = "#888899";
 const CARD_BG = "#0a0a1a";
 
 const DEFAULT_COLORS = [
-  "#22bb44", // bloomberg-green
+  "#1a9938", // bloomberg-green
   "#ff8c00",   // bloomberg-amber
   "#3399ff", // bloomberg-blue
   "#ff3333",    // bloomberg-red

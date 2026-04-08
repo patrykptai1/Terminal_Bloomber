@@ -2,7 +2,7 @@
 
 import { PieChart, Pie, Cell, ResponsiveContainer, Text } from "recharts";
 
-const BLOOMBERG_GREEN = "#22bb44";
+const BLOOMBERG_GREEN = "#1a9938";
 const BLOOMBERG_AMBER = "#ff8c00";
 const BLOOMBERG_RED = "#ff3333";
 const MUTED_FG = "#888899";

@@ -9,7 +9,7 @@ import type { QuoteData, AnalystData, RecommendationPeriod, EarningsForecast, An
 
 // ── Colors ───────────────────────────────────────────────────
 
-const GREEN = "#22bb44"
+const GREEN = "#1a9938"
 const DARK_GREEN = "#22aa22"
 const AMBER = "#ffaa33"
 const ORANGE = "#ee7722"

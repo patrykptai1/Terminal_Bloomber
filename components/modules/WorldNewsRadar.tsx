@@ -39,7 +39,7 @@ const CATEGORY_BG: Record<string, string> = {
 const CATEGORY_BAR_COLORS: Record<string, string> = {
   geopolitical: "#ff3333",
   economic: "#3399ff",
-  market: "#22bb44",
+  market: "#1a9938",
   energy: "#ff8c00",
   tech: "#cc66ff",
   crisis: "#cc3322",
@@ -57,7 +57,7 @@ const REGION_LABELS: Record<string, string> = {
 }
 
 const SENTIMENT_COLORS = {
-  positive: "#22bb44",
+  positive: "#1a9938",
   neutral: "#ff8c00",
   negative: "#ff3333",
 }
