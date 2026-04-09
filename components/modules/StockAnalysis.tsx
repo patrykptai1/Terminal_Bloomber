@@ -335,7 +335,7 @@ export default function StockAnalysis() {
                     <span className="text-lg">⚛️</span>
                     <div>
                       <div className="text-[13px] text-purple-400 font-bold tracking-wider">QUANTUM VALUATION — WYCENA SCENARIUSZOWA</div>
-                      <div className="text-[11px] text-muted-foreground">Architektura: {qv.profile.architecturePL} | TRL: {qv.trlScore}/9 | {qv.profile.stackType}</div>
+                      <div className="text-[11px] text-muted-foreground">Architektura: {qv.profile.architecturePL} | TRL: {qv.profile.trl}/9 | {qv.profile.stackType}</div>
                     </div>
                   </div>
                   <div className="text-right">
@@ -348,22 +348,22 @@ export default function StockAnalysis() {
                 <div className="grid grid-cols-2 gap-3">
                   <div className="bg-bloomberg-bg p-2.5 border border-bloomberg-border/30">
                     <div className="text-[11px] text-purple-400 font-bold mb-1">🔬 TECHNOLOGIA</div>
-                    <div className="text-[11px] text-foreground/80">{qv.trlDescription}</div>
-                    <div className="text-[11px] text-muted-foreground mt-1">Ryzyko architektury: {qv.architectureRisk}</div>
+                    <div className="text-[11px] text-foreground/80">{`TRL ${qv.profile.trl}/9 — ${qv.profile.architecturePL}`}</div>
+                    <div className="text-[11px] text-muted-foreground mt-1">Ryzyko architektury: {qv.profile.architecture}</div>
                   </div>
                   <div className="bg-bloomberg-bg p-2.5 border border-bloomberg-border/30">
                     <div className="text-[11px] text-purple-400 font-bold mb-1">💰 PRZEŻYWALNOŚĆ</div>
-                    <div className={`text-[13px] font-bold ${qv.runwayStatus === "comfortable" ? "text-bloomberg-green" : qv.runwayStatus === "warning" ? "text-bloomberg-amber" : qv.runwayStatus === "critical" ? "text-bloomberg-red" : ""}`}>
-                      {qv.cashRunwayQuarters != null ? (qv.cashRunwayQuarters >= 99 ? "Cash flow dodatni" : `${qv.cashRunwayQuarters} kwartałów runway`) : "Brak danych"}
+                    <div className={`text-[13px] font-bold ${qv.runway?.status === "BEZPIECZNY" ? "text-bloomberg-green" : qv.runway?.status === "UWAGA" ? "text-bloomberg-amber" : qv.runway?.status === "ALARM" ? "text-bloomberg-red" : ""}`}>
+                      {qv.runway?.quarters != null ? (qv.runway?.quarters >= 99 ? "Cash flow dodatni" : `${qv.runway?.quarters} kwartałów runway`) : "Brak danych"}
                     </div>
-                    {qv.quarterlyBurn != null && <div className="text-[11px] text-muted-foreground">Burn: ${(qv.quarterlyBurn/1e6).toFixed(0)}M/kwartał</div>}
-                    <div className="text-[11px] text-muted-foreground mt-1">{qv.dilutionRisk}</div>
+                    {qv.runway?.burnPerQuarterM != null && qv.runway.burnPerQuarterM > 0 && <div className="text-[11px] text-muted-foreground">Burn: ${qv.runway.burnPerQuarterM.toFixed(0)}M/kwartał</div>}
+                    <div className="text-[11px] text-muted-foreground mt-1">{qv.runway?.dilutionRisk ?? "Brak danych"}</div>
                   </div>
                 </div>
 
                 {/* Revenue quality */}
                 <div className="text-[11px] text-muted-foreground bg-bloomberg-bg p-2 border border-bloomberg-border/30">
-                  <span className="text-purple-400 font-bold">Przychody: </span>{qv.revenueQuality}
+                  <span className="text-purple-400 font-bold">Przychody: </span>{`Revenue: ${qv.evForwardRevenue ? "EV/FwdRev " + qv.evForwardRevenue.toFixed(1) + "x" : "N/A"}`}
                 </div>
 
                 {/* Scenario table */}
@@ -402,7 +402,7 @@ export default function StockAnalysis() {
                     </span>
                   </div>
                   <div className="text-[11px] text-muted-foreground mt-1">
-                    Implikowane prawdopodobieństwo pełnego sukcesu: <span className="text-foreground font-bold">{qv.impliedSuccessProbability}%</span>
+                    Implikowane prawdopodobieństwo pełnego sukcesu: <span className="text-foreground font-bold">{qv.impliedSuccessProb}%</span>
                   </div>
                 </div>
 
@@ -410,7 +410,7 @@ export default function StockAnalysis() {
                 <div>
                   <div className="text-[12px] text-purple-400 font-bold mb-2">🏰 FOSA TECHNOLOGICZNA</div>
                   <div className="space-y-1.5">
-                    {qv.moatFactors.map((m, i) => (
+                    {qv.techMoat.map((m, i) => (
                       <div key={i} className="flex items-center gap-2">
                         <span className="text-[11px] text-muted-foreground w-[160px] shrink-0">{m.name}</span>
                         <div className="flex-1 h-2.5 bg-bloomberg-bg border border-bloomberg-border/30 overflow-hidden">
@@ -420,7 +420,7 @@ export default function StockAnalysis() {
                       </div>
                     ))}
                   </div>
-                  <div className="text-[11px] text-muted-foreground mt-2">{qv.competitivePosition}</div>
+                  <div className="text-[11px] text-muted-foreground mt-2">{qv.verdict}</div>
                 </div>
 
                 {/* Red flags */}

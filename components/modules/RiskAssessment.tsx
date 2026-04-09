@@ -144,7 +144,7 @@ export default function RiskAssessment() {
               <div className="flex items-center justify-between mb-3">
                 <div>
                   <div className="text-xl font-bold text-purple-400">{q.symbol} <span className="text-[12px] text-muted-foreground font-normal">{q.name}</span></div>
-                  <div className="text-[11px] text-muted-foreground">⚛️ Quantum | {qv.profile.architecturePL} | TRL {qv.trlScore}/9</div>
+                  <div className="text-[11px] text-muted-foreground">⚛️ Quantum | {qv.profile.architecturePL} | TRL {qv.profile.trl}/9</div>
                 </div>
                 <div className="text-right">
                   <div className={`text-3xl font-black ${scoreColor}`}>{qv.overallScore}</div>
@@ -160,20 +160,20 @@ export default function RiskAssessment() {
               <div className="grid grid-cols-3 gap-3">
                 <div className="bg-bloomberg-bg p-2.5 border border-bloomberg-border/30">
                   <div className="text-[11px] text-muted-foreground">Cash Runway</div>
-                  <div className={`text-[15px] font-bold ${qv.runwayStatus === "comfortable" ? "text-bloomberg-green" : qv.runwayStatus === "warning" ? "text-bloomberg-amber" : "text-bloomberg-red"}`}>
-                    {qv.cashRunwayQuarters != null ? (qv.cashRunwayQuarters >= 99 ? "∞" : `${qv.cashRunwayQuarters}Q`) : "N/A"}
+                  <div className={`text-[15px] font-bold ${qv.runway?.status === "BEZPIECZNY" ? "text-bloomberg-green" : qv.runway?.status === "UWAGA" ? "text-bloomberg-amber" : "text-bloomberg-red"}`}>
+                    {qv.runway?.quarters != null ? (qv.runway?.quarters >= 99 ? "∞" : `${qv.runway?.quarters}Q`) : "N/A"}
                   </div>
                 </div>
                 <div className="bg-bloomberg-bg p-2.5 border border-bloomberg-border/30">
                   <div className="text-[11px] text-muted-foreground">Kwartalny burn</div>
-                  <div className="text-[15px] font-bold text-foreground">{qv.quarterlyBurn ? `$${(qv.quarterlyBurn/1e6).toFixed(0)}M` : "N/A"}</div>
+                  <div className="text-[15px] font-bold text-foreground">{qv.runway?.burnPerQuarterM ? `$${qv.runway.burnPerQuarterM.toFixed(0)}M` : "N/A"}</div>
                 </div>
                 <div className="bg-bloomberg-bg p-2.5 border border-bloomberg-border/30">
                   <div className="text-[11px] text-muted-foreground">Implikowany sukces</div>
-                  <div className="text-[15px] font-bold text-purple-400">{qv.impliedSuccessProbability}%</div>
+                  <div className="text-[15px] font-bold text-purple-400">{qv.impliedSuccessProb}%</div>
                 </div>
               </div>
-              <div className="mt-2 text-[11px] text-muted-foreground">{qv.dilutionRisk}</div>
+              <div className="mt-2 text-[11px] text-muted-foreground">{qv.runway?.dilutionRisk ?? "Brak danych"}</div>
             </div>
 
             {/* Red flags */}
@@ -213,7 +213,7 @@ export default function RiskAssessment() {
             {/* Technology moat */}
             <div className="bg-bloomberg-card border border-bloomberg-border p-4">
               <div className="text-[12px] text-purple-400 font-bold mb-2">🏰 FOSA TECHNOLOGICZNA</div>
-              {qv.moatFactors.map((m, i) => (
+              {qv.techMoat.map((m, i) => (
                 <div key={i} className="flex items-center gap-2 mb-1">
                   <span className="text-[11px] text-muted-foreground w-[160px] shrink-0">{m.name}</span>
                   <div className="flex-1 h-2.5 bg-bloomberg-bg border border-bloomberg-border/30 overflow-hidden">
@@ -222,8 +222,8 @@ export default function RiskAssessment() {
                   <span className="text-[12px] font-bold w-6 text-right">{m.score}</span>
                 </div>
               ))}
-              <div className="text-[11px] text-muted-foreground mt-2">{qv.competitivePosition}</div>
-              <div className="text-[11px] text-muted-foreground mt-1">{qv.architectureRisk}</div>
+              <div className="text-[11px] text-muted-foreground mt-2">{qv.verdict}</div>
+              <div className="text-[11px] text-muted-foreground mt-1">{qv.profile.architecture}</div>
             </div>
           </div>
         )

@@ -1,108 +1,41 @@
 // ============================================================
-// Quantum Computing Valuation & Risk Engine
-// Probabilistic scenario-based valuation for quantum stocks
-// NOT applicable to regular stocks — use only for quantum sector
+// Quantum Computing Valuation & Risk Engine v2
+// 10-module architecture per quantum investment methodology
+// NOT applicable to regular stocks — separate asset class
 // ============================================================
 
 import type { QuoteData, KeyStatistics, EarningsData } from "./yahoo"
 
 // ── Known quantum companies and their profiles ──
 
-interface QuantumProfile {
+export interface QuantumProfile {
   architecture: string
   architecturePL: string
-  trl: number  // NASA Technology Readiness Level 1-9
-  focus: string[]  // e.g. ["hardware", "cloud", "software"]
+  trl: number
+  focus: string[]
   stackType: "full-stack" | "hardware" | "software" | "components"
-  keyMetric?: string  // e.g. "32 logical qubits"
+  hardwareIntensity: boolean  // MOD7: true = physical hardware, false = software/cloud
+  hasSensing: boolean         // MOD8: diversified with sensing business
+  keyMetric?: string
 }
 
 const QUANTUM_PROFILES: Record<string, QuantumProfile> = {
-  "IONQ": {
-    architecture: "Trapped Ions",
-    architecturePL: "Pułapkowane jony",
-    trl: 6,
-    focus: ["hardware", "cloud", "enterprise"],
-    stackType: "full-stack",
-    keyMetric: "#AQ 35 algorithmic qubits",
-  },
-  "RGTI": {
-    architecture: "Superconducting",
-    architecturePL: "Nadprzewodnikowe kubity",
-    trl: 5,
-    focus: ["hardware", "cloud", "hybrid"],
-    stackType: "full-stack",
-    keyMetric: "84-qubit Ankaa system",
-  },
-  "QBTS": {
-    architecture: "Quantum Annealing",
-    architecturePL: "Wyżarzanie kwantowe",
-    trl: 7,
-    focus: ["optimization", "enterprise", "cloud"],
-    stackType: "full-stack",
-    keyMetric: "5000+ qubit Advantage2",
-  },
-  "QUBT": {
-    architecture: "Photonic / Software",
-    architecturePL: "Fotoniczne / Oprogramowanie",
-    trl: 4,
-    focus: ["software", "optimization", "sensing"],
-    stackType: "software",
-  },
-  "ARQQ": {
-    architecture: "Quantum Encryption (QKD)",
-    architecturePL: "Szyfrowanie kwantowe (QKD)",
-    trl: 6,
-    focus: ["post-quantum crypto", "enterprise security"],
-    stackType: "software",
-    keyMetric: "QuantumCloud platform",
-  },
-  "FORM": {
-    architecture: "Quantum Test Equipment",
-    architecturePL: "Sprzęt testowy dla quantum",
-    trl: 8,
-    focus: ["components", "testing", "probing"],
-    stackType: "components",
-    keyMetric: "Quantum probe stations",
-  },
-  "CRI.WA": {
-    architecture: "Quantum Instruments + Space",
-    architecturePL: "Instrumenty kwantowe + Kosmos",
-    trl: 5,
-    focus: ["instruments", "space", "quantum sensing"],
-    stackType: "components",
-  },
-  "INFQ": {
-    architecture: "Neutral Atoms / Cold Atoms",
-    architecturePL: "Neutralne atomy / Zimne atomy",
-    trl: 5,
-    focus: ["hardware", "quantum sensing", "quantum clocks", "software"],
-    stackType: "full-stack",
-    keyMetric: "Cold atom quantum computers + precision sensors",
-  },
-  "QMCO": {
-    architecture: "Quantum Biology / Proteomics",
-    architecturePL: "Biologia kwantowa / Proteomika",
-    trl: 4,
-    focus: ["quantum sensing", "proteomics", "semiconductor"],
-    stackType: "hardware",
-    keyMetric: "Quantum-Si protein sequencing",
-  },
+  "IONQ": { architecture: "Trapped Ions", architecturePL: "Pułapkowane jony", trl: 6, focus: ["hardware","cloud","enterprise"], stackType: "full-stack", hardwareIntensity: true, hasSensing: false, keyMetric: "#AQ 35 algorithmic qubits" },
+  "RGTI": { architecture: "Superconducting", architecturePL: "Nadprzewodnikowe kubity", trl: 5, focus: ["hardware","cloud","hybrid"], stackType: "full-stack", hardwareIntensity: true, hasSensing: false, keyMetric: "84-qubit Ankaa system" },
+  "QBTS": { architecture: "Quantum Annealing", architecturePL: "Wyżarzanie kwantowe", trl: 7, focus: ["optimization","enterprise","cloud"], stackType: "full-stack", hardwareIntensity: true, hasSensing: false, keyMetric: "5000+ qubit Advantage2" },
+  "QUBT": { architecture: "Photonic / Software", architecturePL: "Fotoniczne / Oprogramowanie", trl: 4, focus: ["software","optimization","sensing"], stackType: "software", hardwareIntensity: false, hasSensing: false },
+  "ARQQ": { architecture: "Quantum Encryption (QKD)", architecturePL: "Szyfrowanie kwantowe (QKD)", trl: 6, focus: ["post-quantum crypto","enterprise security"], stackType: "software", hardwareIntensity: false, hasSensing: false, keyMetric: "QuantumCloud platform" },
+  "FORM": { architecture: "Quantum Test Equipment", architecturePL: "Sprzęt testowy dla quantum", trl: 8, focus: ["components","testing","probing"], stackType: "components", hardwareIntensity: true, hasSensing: false, keyMetric: "Quantum probe stations" },
+  "CRI.WA": { architecture: "Quantum Instruments + Space", architecturePL: "Instrumenty kwantowe + Kosmos", trl: 5, focus: ["instruments","space","quantum sensing"], stackType: "components", hardwareIntensity: true, hasSensing: true },
+  "INFQ": { architecture: "Neutral Atoms / Cold Atoms", architecturePL: "Neutralne atomy / Zimne atomy", trl: 5, focus: ["hardware","quantum sensing","quantum clocks","software"], stackType: "full-stack", hardwareIntensity: true, hasSensing: true, keyMetric: "Cold atom QC + precision sensors" },
+  "QMCO": { architecture: "Quantum Biology / Proteomics", architecturePL: "Biologia kwantowa / Proteomika", trl: 4, focus: ["quantum sensing","proteomics","semiconductor"], stackType: "hardware", hardwareIntensity: true, hasSensing: true },
 }
 
 const QUANTUM_TICKERS = new Set(Object.keys(QUANTUM_PROFILES))
-
-// Auto-detect quantum from Yahoo description/industry
-const QUANTUM_KEYWORDS = [
-  "quantum comput", "quantum software", "quantum sensor",
-  "quantum encrypt", "quantum key", "qubit", "quantum process",
-  "quantum network", "quantum clock", "quantum simulat",
-  "post-quantum", "quantum-safe", "cold atom",
-]
+const QUANTUM_KEYWORDS = ["quantum comput","quantum software","quantum sensor","quantum encrypt","quantum key","qubit","quantum process","quantum network","quantum clock","quantum simulat","post-quantum","quantum-safe","cold atom"]
 
 export function isQuantumStock(symbol: string, industry?: string | null, summary?: string | null): boolean {
   if (QUANTUM_TICKERS.has(symbol.toUpperCase())) return true
-  // Fallback: check if description/industry mentions quantum
   const text = `${industry ?? ""} ${summary ?? ""}`.toLowerCase()
   return QUANTUM_KEYWORDS.some(kw => text.includes(kw))
 }
@@ -111,56 +44,91 @@ export function isQuantumStock(symbol: string, industry?: string | null, summary
 
 export interface QuantumScenario {
   name: string
-  probability: number  // 0-100
+  probability: number
   description: string
-  exitRevenue: string  // e.g. "$500M-$2B"
-  exitMultiple: string // e.g. "15-25x"
-  impliedValue: number // per share or total $M
+  exitRevenue: string
+  exitMultiple: string
+  impliedValue: number       // per share, DISCOUNTED to today
+  nominalValue: number       // per share, NOT discounted
+  discountRate: number       // e.g. 0.30
+  horizon: number            // years
+  pvFactor: number           // 1/(1+r)^n
 }
 
 export interface QuantumRedFlag {
-  category: "technology" | "financial" | "market"
+  category: "technology" | "financial" | "market" | "quantum"
   severity: "critical" | "high" | "medium"
   title: string
   description: string
   metric?: string
 }
 
+export interface QuantumChecklistItem {
+  label: string
+  status: "pass" | "fail" | "nodata"
+  reason: string
+}
+
 export interface QuantumValuation {
-  // Profile
   profile: QuantumProfile
   isQuantum: true
 
-  // TRL & Architecture
-  trlScore: number
-  trlDescription: string
-  architectureRisk: string
+  // MOD1: Relative valuation (NOT P/E based)
+  evForwardRevenue: number | null
+  evRPO: number | null
 
-  // Financial Survival
-  cashRunwayQuarters: number | null
-  runwayStatus: "comfortable" | "adequate" | "warning" | "critical"
-  quarterlyBurn: number | null
-  dilutionRisk: string
-  revenueQuality: string
+  // MOD2: Quantum checklist (not standard)
+  checklist: QuantumChecklistItem[]
 
-  // Scenario Valuation
+  // MOD3: Revenue Acceleration (replaces Rule of 40)
+  revenueAcceleration: { q1: string; q2: string; q1growth: number | null; q2growth: number | null; accelerating: boolean | null } | null
+
+  // MOD4: Implied Probability (correct formula)
+  impliedSuccessProb: number
+  modelSuccessProb: number
+  probDelta: number  // implied - model (positive = market more optimistic)
+
+  // MOD5: Scenarios with explicit discount
   scenarios: QuantumScenario[]
-  weightedFairValue: number  // $ per share
-  currentVsWeighted: number  // % (positive = overvalued)
-  impliedSuccessProbability: number  // what probability of success market implies
+  weightedFairValue: number
+  currentVsWeighted: number
+  discountRate: number
+  horizon: number
 
-  // Moat & Position
-  moatFactors: { name: string; score: number; description: string }[]
-  competitivePosition: string
+  // MOD6: Tech moat (6 data-driven criteria)
+  techMoat: { name: string; score: number; maxScore: number; description: string; source: string }[]
+  techMoatTotal: number
 
-  // Red Flags
+  // MOD7: Porter quantum-context (computed in UI from profile)
+
+  // MOD8: Sensing segment (if applicable)
+  sensingValuation: { revenue: string; description: string } | null
+
+  // MOD9: Quantum-specific risks
+  quantumRisks: QuantumRedFlag[]
+
+  // MOD10: Runway widget
+  runway: {
+    cashM: number
+    burnPerQuarterM: number
+    quarters: number
+    status: "BEZPIECZNY" | "KOMFORT MINIMALNY" | "UWAGA" | "ALARM"
+    nextFundingEstimate: string
+    dilutionRisk: string
+  } | null
+
+  // Red Flags (all)
   redFlags: QuantumRedFlag[]
 
   // Overall
-  overallScore: number  // 1-100
+  overallScore: number
   riskLevel: string
   verdict: string
 }
+
+// ── Helpers ──
+function clamp(v: number, min: number, max: number) { return Math.max(min, Math.min(max, v)) }
+function fmtM(v: number) { return v >= 1e9 ? `$${(v/1e9).toFixed(1)}B` : `$${(v/1e6).toFixed(0)}M` }
 
 // ── Main computation ──
 
@@ -171,332 +139,248 @@ export function computeQuantumValuation(
 ): QuantumValuation {
   const sym = q.symbol.toUpperCase()
   const profile = QUANTUM_PROFILES[sym] ?? {
-    // Auto-generated profile for quantum stocks detected by keyword
-    architecture: "Quantum (auto-detected)",
-    architecturePL: "Quantum (wykryte automatycznie z opisu)",
-    trl: 4,
-    focus: ["quantum"],
-    stackType: "hardware" as const,
-    keyMetric: undefined,
+    architecture: "Quantum (auto-detected)", architecturePL: "Quantum (auto)", trl: 4,
+    focus: ["quantum"], stackType: "hardware" as const, hardwareIntensity: true, hasSensing: false,
   }
   const redFlags: QuantumRedFlag[] = []
 
-  // ═══ TRL ASSESSMENT ═══
-  const trl = profile.trl
-  const trlDescription = trl >= 7
-    ? `TRL ${trl}/9 — Technologia zwalidowana w warunkach operacyjnych. Spółka może generować przychody komercyjne.`
-    : trl >= 5
-    ? `TRL ${trl}/9 — Technologia zwalidowana w warunkach laboratoryjnych. Komercjalizacja w horyzoncie 3-7 lat.`
-    : `TRL ${trl}/9 — Wczesna faza R&D. Komercjalizacja nie wcześniej niż 7-12 lat. Ryzyko technologiczne ekstremalnie wysokie.`
-
-  const architectureRisk = profile.architecture.includes("Annealing")
-    ? "Umiarkowane — wyżarzanie kwantowe to najbardziej dojrzała architektura, ale ograniczona do problemów optymalizacyjnych."
-    : profile.architecture.includes("Trapped")
-    ? "Umiarkowane — wysoka fidelity bramek, ale wyzwania ze skalowaniem fizycznym powyżej ~50 qubitów."
-    : profile.architecture.includes("Superconducting")
-    ? "Podwyższone — szybkie bramki ale wysokie error rates. Konkurencja z IBM/Google na tej samej architekturze."
-    : profile.architecture.includes("Photonic")
-    ? "Wysokie — działa w temp. pokojowej, ale trudna korekcja błędów. Wczesna komercjalizacja."
-    : profile.architecture.includes("Encryption")
-    ? "Niskie — post-quantum crypto to najbliższy komercjalizacji segment quantum. Popyt już istnieje."
-    : profile.architecture.includes("Test")
-    ? "Niskie — sprzęt testowy to picks-and-shovels play. Przychody niezależne od sukcesu konkretnej architektury."
-    : "Podwyższone — profil ryzyka zależy od specyfiki technologii."
-
-  // ═══ CASH RUNWAY ═══
-  let cashRunwayQuarters: number | null = null
-  let quarterlyBurn: number | null = null
-  let runwayStatus: "comfortable" | "adequate" | "warning" | "critical" = "adequate"
-
-  const totalCash = stats?.totalCash ?? null
-  const ocf = stats?.operatingCashFlow ?? null
-
-  if (totalCash != null && ocf != null && ocf < 0) {
-    quarterlyBurn = Math.abs(ocf) / 4
-    cashRunwayQuarters = quarterlyBurn > 0 ? Math.round(totalCash / quarterlyBurn) : null
-
-    if (cashRunwayQuarters != null) {
-      if (cashRunwayQuarters < 4) {
-        runwayStatus = "critical"
-        redFlags.push({ category: "financial", severity: "critical", title: `Krytyczny runway: ${cashRunwayQuarters} kwartałów`, description: `Przy obecnym burn rate (${(quarterlyBurn/1e6).toFixed(0)}M/kwartał) gotówka (${(totalCash/1e6).toFixed(0)}M) wystarczy na ${cashRunwayQuarters} kwartałów. Spółka potrzebuje natychmiastowego finansowania.`, metric: `${cashRunwayQuarters}Q runway` })
-      } else if (cashRunwayQuarters < 8) {
-        runwayStatus = "warning"
-        redFlags.push({ category: "financial", severity: "high", title: `Ograniczony runway: ${cashRunwayQuarters} kwartałów`, description: `Gotówka (${(totalCash/1e6).toFixed(0)}M) przy burn ${(quarterlyBurn/1e6).toFixed(0)}M/Q wystarczy na ~${cashRunwayQuarters} kwartałów. Prawdopodobna emisja akcji w ciągu 12 miesięcy.`, metric: `${cashRunwayQuarters}Q runway` })
-      } else if (cashRunwayQuarters >= 12) {
-        runwayStatus = "comfortable"
-      }
-    }
-  } else if (totalCash != null && ocf != null && ocf > 0) {
-    runwayStatus = "comfortable"
-    cashRunwayQuarters = 99 // cash flow positive
-  }
-
-  // ═══ DILUTION RISK ═══
-  let dilutionRisk = "Brak danych o rozwodnieniu"
-  if (earnings) {
-    const bs = (earnings.balanceSheetAnnual ?? []).filter(b => b.sharesOutstanding != null)
-    if (bs.length >= 2) {
-      const s1 = bs[bs.length - 2].sharesOutstanding!
-      const s2 = bs[bs.length - 1].sharesOutstanding!
-      const dilPct = ((s2 - s1) / s1) * 100
-      if (dilPct > 10) {
-        dilutionRisk = `Wysokie ryzyko rozwodnienia: akcje wzrosły ${dilPct.toFixed(1)}% YoY. Capital-intensive model wymaga ciągłego finansowania.`
-        redFlags.push({ category: "financial", severity: "high", title: `Rozwodnienie ${dilPct.toFixed(0)}% YoY`, description: dilutionRisk, metric: `Shares: +${dilPct.toFixed(1)}%` })
-      } else if (dilPct > 3) {
-        dilutionRisk = `Umiarkowane rozwodnienie (${dilPct.toFixed(1)}% YoY). Typowe dla pre-revenue quantum — monitoruj trend.`
-      } else if (dilPct <= 0) {
-        dilutionRisk = `Minimalne rozwodnienie (${dilPct.toFixed(1)}% YoY). Pozytywny sygnał kontroli kapitałowej.`
-      }
-    }
-  }
-
-  // ═══ REVENUE QUALITY ═══
-  let revenueQuality = "Pre-revenue — brak przychodów do oceny"
-  const totalRev = stats?.totalRevenue
-  if (totalRev != null && totalRev > 1e6) {
-    const revPerEmployee = stats?.fullTimeEmployees ? totalRev / stats.fullTimeEmployees : null
-    revenueQuality = `Przychody: $${(totalRev/1e6).toFixed(0)}M. `
-    if (revPerEmployee && revPerEmployee > 200000) {
-      revenueQuality += `Wysoka produktywność ($${(revPerEmployee/1000).toFixed(0)}K/pracownik). `
-    }
-    // Revenue growth
-    const rg = stats?.revenueGrowth
-    if (rg != null) {
-      revenueQuality += rg > 0.3 ? `Silny wzrost ${(rg*100).toFixed(0)}% YoY. ` : rg > 0 ? `Wzrost ${(rg*100).toFixed(0)}% YoY. ` : `Spadek ${(rg*100).toFixed(0)}% YoY — ⚠️ `
-    }
-  }
-
-  // ═══ SCENARIO VALUATION ═══
   const mcap = q.marketCap
-  const sharesOut = stats?.sharesOutstanding ?? (mcap / q.price)
-  const currentPPS = q.price
+  const price = q.price
+  const sharesOut = stats?.sharesOutstanding ?? (mcap > 0 && price > 0 ? mcap / price : 1)
+  const totalCash = stats?.totalCash ?? null
+  const totalRev = stats?.totalRevenue ?? null
+  const ocf = stats?.operatingCashFlow ?? null
+  const trl = profile.trl
+  const ev = stats?.enterpriseValue ?? mcap
+
+  // ═══ MOD10: RUNWAY — central metric ═══
+  let runway: QuantumValuation["runway"] = null
+  if (totalCash != null && ocf != null && ocf < 0) {
+    const burnQ = Math.abs(ocf) / 4
+    const quarters = burnQ > 0 ? Math.round(totalCash / burnQ) : 0
+    const status = quarters >= 16 ? "BEZPIECZNY" as const : quarters >= 8 ? "KOMFORT MINIMALNY" as const : quarters >= 4 ? "UWAGA" as const : "ALARM" as const
+    const yearsLeft = quarters / 4
+    const nextFunding = quarters >= 16 ? `~${(2026 + yearsLeft * 0.6).toFixed(0)}+` : quarters >= 8 ? `~${(2026 + yearsLeft * 0.5).toFixed(0)}` : "W ciągu 12 miesięcy"
+
+    // Dilution check from earnings
+    let dilutionRisk = "Brak danych historycznych"
+    if (earnings) {
+      const bs = (earnings.balanceSheetAnnual ?? []).filter(b => b.sharesOutstanding != null)
+      if (bs.length >= 2) {
+        const dilPct = ((bs[bs.length-1].sharesOutstanding! - bs[bs.length-2].sharesOutstanding!) / bs[bs.length-2].sharesOutstanding!) * 100
+        dilutionRisk = dilPct > 10 ? `WYSOKIE — akcje +${dilPct.toFixed(0)}% YoY` : dilPct > 3 ? `UMIARKOWANE — akcje +${dilPct.toFixed(1)}% YoY` : `NISKIE — akcje ${dilPct.toFixed(1)}% YoY`
+        if (dilPct > 10) redFlags.push({ category: "financial", severity: "high", title: `Rozwodnienie ${dilPct.toFixed(0)}% YoY`, description: `Liczba akcji wzrosła o ${dilPct.toFixed(1)}% rok do roku. Źródło: Yahoo balanceSheetAnnual.sharesOutstanding.`, metric: `+${dilPct.toFixed(1)}%` })
+      }
+    }
+
+    runway = { cashM: totalCash / 1e6, burnPerQuarterM: burnQ / 1e6, quarters, status, nextFundingEstimate: nextFunding, dilutionRisk }
+
+    if (quarters < 4) redFlags.push({ category: "financial", severity: "critical", title: `ALARM: ${quarters} kwartałów runway`, description: `Gotówka ${fmtM(totalCash)} przy burn ${fmtM(burnQ)}/Q. Źródło: Yahoo totalCash, operatingCashFlow.`, metric: `${quarters}Q` })
+    else if (quarters < 8) redFlags.push({ category: "financial", severity: "high", title: `Runway: ${quarters} kwartałów`, description: `Gotówka ${fmtM(totalCash)}, burn ${fmtM(burnQ)}/Q. Prawdopodobna emisja akcji w 12-18 mies.`, metric: `${quarters}Q` })
+  } else if (totalCash != null && ocf != null && ocf >= 0) {
+    runway = { cashM: totalCash / 1e6, burnPerQuarterM: 0, quarters: 99, status: "BEZPIECZNY", nextFundingEstimate: "Nie wymagane (OCF+)", dilutionRisk: "NISKIE — cash flow dodatni" }
+  }
+
+  // ═══ MOD1: RELATIVE VALUATION (replaces P/E fair value) ═══
+  // EV/Forward Revenue N+2
+  const fwd = earnings?.forwardEstimates ?? []
+  const fwdNextYear = fwd.find(f => f.period === "+1y")
+  const fwdRev = fwdNextYear?.revEstimate ?? null
+  const evForwardRevenue = fwdRev != null && fwdRev > 0 ? ev / fwdRev : null
+  const evRPO: number | null = null // RPO not available from Yahoo — show as N/A
+
+  // ═══ MOD3: REVENUE ACCELERATION (replaces Rule of 40) ═══
+  let revenueAcceleration: QuantumValuation["revenueAcceleration"] = null
+  if (earnings) {
+    const qStmts = (earnings.incomeStatements ?? []).filter(s => s.revenue != null && s.revenue > 0).sort((a,b) => a.date.localeCompare(b.date))
+    if (qStmts.length >= 6) {
+      const latest = qStmts[qStmts.length - 1]
+      const prev = qStmts[qStmts.length - 2]
+      const yoyLatest = qStmts.find(s => s.date.slice(5) === latest.date.slice(5) && s.date < latest.date)
+      const yoyPrev = qStmts.find(s => s.date.slice(5) === prev.date.slice(5) && s.date < prev.date)
+      if (yoyLatest && yoyPrev && yoyLatest.revenue && yoyPrev.revenue) {
+        const g1 = ((prev.revenue! - yoyPrev.revenue) / Math.abs(yoyPrev.revenue)) * 100
+        const g2 = ((latest.revenue! - yoyLatest.revenue) / Math.abs(yoyLatest.revenue)) * 100
+        revenueAcceleration = { q1: prev.date, q2: latest.date, q1growth: g1, q2growth: g2, accelerating: g2 > g1 }
+      }
+    }
+  }
+
+  // ═══ MOD5: SCENARIO VALUATION with explicit discount ═══
+  const discountRate = trl >= 7 ? 0.22 : trl >= 5 ? 0.30 : 0.40
+  const horizon = trl >= 7 ? 5 : trl >= 5 ? 7 : 12
+  const pvFactor = 1 / Math.pow(1 + discountRate, horizon)
   const currentRev = totalRev ?? 0
 
-  // Discount rate based on TRL (per Krok 6 methodology)
-  const discountRate = trl >= 7 ? 0.22 : trl >= 5 ? 0.30 : 0.40
-  const years = trl >= 7 ? 5 : trl >= 5 ? 8 : 12
-  const discountFactor = Math.pow(1 + discountRate, years)
+  const exitRevFull = Math.max(currentRev * 8, 500e6)
+  const exitRevNiche = Math.max(currentRev * 3, 200e6)
+  const exitRevPivot = Math.max(currentRev * 1.5, 50e6)
 
-  // FIX #6: Scale exit revenues relative to CURRENT revenue (not arbitrary)
-  // If company already has $130M rev, "niche success" at $100M is regression
-  const exitRevFullSuccess = Math.max(currentRev * 8, 500e6)   // at least 8x current or $500M
-  const exitRevNiche = Math.max(currentRev * 3, 200e6)          // at least 3x current or $200M
-  const exitRevPivot = Math.max(currentRev * 1.5, 50e6)         // at least 1.5x current or $50M
+  // Bankruptcy prob adjusted by runway
+  const bankruptcyProb = !runway ? 20 : runway.quarters >= 20 ? 5 : runway.quarters >= 12 ? 8 : runway.quarters >= 6 ? 15 : 30
 
-  // FIX #7: Bankruptcy probability adjusted by ACTUAL runway
-  const bankruptcyBase = trl < 5 ? 25 : 15
-  let bankruptcyProb: number
-  if (cashRunwayQuarters != null) {
-    if (cashRunwayQuarters >= 20) bankruptcyProb = Math.max(5, bankruptcyBase - 10)  // 20+ quarters = very safe
-    else if (cashRunwayQuarters >= 12) bankruptcyProb = Math.max(8, bankruptcyBase - 5)
-    else if (cashRunwayQuarters >= 6) bankruptcyProb = bankruptcyBase
-    else bankruptcyProb = 35 // < 6 quarters = danger
-  } else if (runwayStatus === "comfortable") {
-    bankruptcyProb = Math.max(5, bankruptcyBase - 10)
-  } else {
-    bankruptcyProb = bankruptcyBase
-  }
-
-  const scenarios: QuantumScenario[] = [
-    {
-      name: "Pełny sukces komercyjny",
-      probability: trl >= 7 ? 15 : trl >= 5 ? 10 : 5,
-      description: `Quantum advantage w kluczowych verticalach. Revenue ${(exitRevFullSuccess/1e9).toFixed(1)}B. Stopa dyskontowa ${(discountRate*100).toFixed(0)}%, horyzont ${years} lat.`,
-      exitRevenue: `$${(exitRevFullSuccess/1e6).toFixed(0)}M–$${(exitRevFullSuccess*2/1e6).toFixed(0)}M`,
-      exitMultiple: "15–25x",
-      impliedValue: (exitRevFullSuccess * 20 / discountFactor) / sharesOut,
-    },
-    {
-      name: "Sukces niszowy",
-      probability: trl >= 7 ? 30 : trl >= 5 ? 25 : 15,
-      description: `Dominacja w 1-2 verticalach (pharma, crypto, optimization). Revenue ${(exitRevNiche/1e6).toFixed(0)}M. Dyskonto ${(discountRate*100).toFixed(0)}%/${years}lat.`,
-      exitRevenue: `$${(exitRevNiche/1e6).toFixed(0)}M–$${(exitRevNiche*1.5/1e6).toFixed(0)}M`,
-      exitMultiple: "8–12x",
-      impliedValue: (exitRevNiche * 10 / discountFactor) / sharesOut,
-    },
-    {
-      name: "Akwizycja przez BigTech",
-      probability: 25,
-      description: "IBM, Google, MSFT lub Amazon przejmuje spółkę dla IP i talentu. Exit 1.5-3x obecnej kapitalizacji zdyskontowany.",
-      exitRevenue: "N/A (akwizycja)",
-      exitMultiple: "1.5–3x MCap",
-      impliedValue: (mcap * 2.0 / discountFactor) / sharesOut,
-    },
-    {
-      name: "Pivot do pokrewnej tech",
-      probability: trl >= 7 ? 15 : 10,
-      description: "Quantum nie dojrzewa — pivot do HPC, AI accelerators lub sensing. Ograniczony upside.",
-      exitRevenue: `$${(exitRevPivot/1e6).toFixed(0)}M`,
-      exitMultiple: "5–8x",
-      impliedValue: (exitRevPivot * 6 / discountFactor) / sharesOut,
-    },
-    {
-      name: "Upadłość / likwidacja",
-      probability: bankruptcyProb,
-      description: `Gotówka się kończy lub technologia nie dojrzewa. Runway: ${cashRunwayQuarters ?? "?"} kwartałów. Wartość: $0.`,
-      exitRevenue: "$0",
-      exitMultiple: "0x",
-      impliedValue: 0,
-    },
+  const rawScenarios = [
+    { name: "Pełny sukces komercyjny", prob: trl >= 7 ? 15 : trl >= 5 ? 10 : 5, exitRev: exitRevFull, mult: 20 },
+    { name: "Sukces niszowy", prob: trl >= 7 ? 30 : trl >= 5 ? 25 : 15, exitRev: exitRevNiche, mult: 10 },
+    { name: "Akwizycja przez BigTech", prob: 25, exitRev: 0, mult: 0 },  // special
+    { name: "Pivot do pokrewnej tech", prob: trl >= 7 ? 15 : 10, exitRev: exitRevPivot, mult: 6 },
+    { name: "Upadłość / likwidacja", prob: bankruptcyProb, exitRev: 0, mult: 0 },
   ]
 
-  // Normalize probabilities to 100
+  const scenarios: QuantumScenario[] = rawScenarios.map(s => {
+    let nominalPerShare: number
+    if (s.name.includes("Akwizycja")) {
+      nominalPerShare = (mcap * 2.0) / sharesOut  // 2x current MCap
+    } else if (s.name.includes("Upadłość")) {
+      nominalPerShare = 0
+    } else {
+      nominalPerShare = (s.exitRev * s.mult) / sharesOut
+    }
+    const discounted = nominalPerShare * pvFactor
+    return {
+      name: s.name, probability: s.prob,
+      description: `Revenue: ${s.exitRev > 0 ? fmtM(s.exitRev) : "N/A"} × ${s.mult > 0 ? s.mult + "x" : "N/A"} → zdyskontowane ${(discountRate*100).toFixed(0)}%/${horizon}lat (PV=${pvFactor.toFixed(3)})`,
+      exitRevenue: s.exitRev > 0 ? fmtM(s.exitRev) : s.name.includes("Akwizycja") ? "2× MCap" : "$0",
+      exitMultiple: s.mult > 0 ? `${s.mult}x` : s.name.includes("Akwizycja") ? "2× MCap" : "0x",
+      impliedValue: discounted, nominalValue: nominalPerShare,
+      discountRate, horizon, pvFactor,
+    }
+  })
+
+  // MOD5 validation: full success MUST be > acquisition
+  if (scenarios[0].impliedValue < scenarios[2].impliedValue) {
+    redFlags.push({ category: "market", severity: "medium", title: "Błąd kalibracji scenariuszy", description: `Wartość 'Pełny sukces' ($${scenarios[0].impliedValue.toFixed(2)}) < 'Akwizycja' ($${scenarios[2].impliedValue.toFixed(2)}). Mnożniki exit mogą być za niskie.`, metric: "Kalibracja" })
+  }
+
+  // Normalize probabilities
   const totalProb = scenarios.reduce((s, sc) => s + sc.probability, 0)
   scenarios.forEach(sc => sc.probability = Math.round(sc.probability / totalProb * 100))
 
   const weightedFairValue = scenarios.reduce((s, sc) => s + (sc.probability / 100) * sc.impliedValue, 0)
-  const currentVsWeighted = weightedFairValue > 0 ? ((currentPPS - weightedFairValue) / weightedFairValue) * 100 : 0
+  const currentVsWeighted = weightedFairValue > 0 ? ((price - weightedFairValue) / weightedFairValue) * 100 : 0
 
-  // FIX #1: Correct implied success probability
-  // What probability of "full success + niche" does current price imply?
-  // Group positive scenarios (full + niche + acquisition) vs negative (pivot + bankruptcy)
-  const positiveScenarios = scenarios.slice(0, 3)  // full, niche, acquisition
-  const avgPositiveValue = positiveScenarios.reduce((s, sc) => s + sc.impliedValue, 0) / positiveScenarios.length
-  const avgNegativeValue = scenarios.slice(3).reduce((s, sc) => s + sc.impliedValue, 0) / Math.max(1, scenarios.slice(3).length)
+  // ═══ MOD4: IMPLIED PROBABILITY (correct math) ═══
+  const vBull = scenarios[0].impliedValue
+  const otherScenarios = scenarios.slice(1)
+  const otherProbTotal = otherScenarios.reduce((s, sc) => s + sc.probability, 0)
+  const vRest = otherProbTotal > 0 ? otherScenarios.reduce((s, sc) => s + (sc.probability / otherProbTotal) * sc.impliedValue, 0) : 0
+  const impliedSuccessProb = vBull > vRest ? clamp(Math.round(((price - vRest) / (vBull - vRest)) * 100), 0, 100) : 0
+  const modelSuccessProb = scenarios[0].probability
+  const probDelta = impliedSuccessProb - modelSuccessProb
 
-  // Solve: price = P(positive) * avgPositive + (1-P(positive)) * avgNegative
-  let impliedSuccessProbability = 0
-  if (avgPositiveValue > avgNegativeValue) {
-    const rawImplied = ((currentPPS - avgNegativeValue) / (avgPositiveValue - avgNegativeValue)) * 100
-    impliedSuccessProbability = Math.max(0, Math.min(100, Math.round(rawImplied)))
-    // If implied > 100%, it means market prices ABOVE even the optimistic scenario
-    // Show capped at 99% with note that market is more optimistic than model
-  }
+  // ═══ MOD2: QUANTUM CHECKLIST ═══
+  const checklist: QuantumChecklistItem[] = []
 
-  // ═══ MOAT FACTORS — WYŁĄCZNIE z danych Yahoo Finance ═══
-  // Każdy score jest obliczany z realnych metryk, NIE hardcoded
-  const industry = stats?.industry ?? ""
-  const summary = stats?.longBusinessSummary ?? ""
-  const employees = stats?.fullTimeEmployees ?? null
-  const beta = q.beta ?? null
-  const shortPctFloat = stats?.shortPercentOfFloat ?? null
-  const instHeld = stats?.heldByInstitutions ?? null
-  const insiderHeld = stats?.heldByInsiders ?? null
+  // 1. Runway > 8 kwartałów
+  checklist.push(runway != null
+    ? { label: "Runway > 8 kwartałów", status: runway.quarters >= 8 ? "pass" : "fail", reason: `${runway.quarters}Q runway (gotówka ${fmtM(runway.cashM * 1e6)}, burn ${fmtM(runway.burnPerQuarterM * 1e6)}/Q). Źródło: Yahoo totalCash / operatingCashFlow.` }
+    : { label: "Runway > 8 kwartałów", status: "nodata", reason: "Brak danych o cash flow." })
+
+  // 2. Revenue trend rosnący
+  const rg = stats?.revenueGrowth
+  checklist.push(rg != null
+    ? { label: "Revenue trend rosnący YoY", status: rg > 0 ? "pass" : "fail", reason: `Revenue growth: ${(rg*100).toFixed(1)}% YoY. Źródło: Yahoo revenueGrowth.` }
+    : { label: "Revenue trend rosnący YoY", status: "nodata", reason: "Brak danych o wzroście przychodów." })
+
+  // 3. RPO / backlog > 2x TTM rev (not available from Yahoo)
+  checklist.push({ label: "RPO / backlog > 2× TTM revenue", status: "nodata", reason: "RPO niedostępne z Yahoo Finance. Sprawdź 10-K/10-Q ręcznie." })
+
+  // 4. Partner BigTech LUB kontrakt rządowy
   const analystCount = q.numberOfAnalysts ?? 0
-  const analystTarget = q.targetMeanPrice ?? null
-  const cr = stats?.currentRatio ?? null
+  const instHeld = stats?.heldByInstitutions ?? null
+  checklist.push(analystCount >= 5 && instHeld != null && instHeld > 0.3
+    ? { label: "Walidacja zewnętrzna (analitycy/instytucje)", status: "pass", reason: `${analystCount} analityków, ${((instHeld ?? 0)*100).toFixed(0)}% instytucji. Proxy dla partnerstw. Źródło: Yahoo.` }
+    : { label: "Walidacja zewnętrzna (analitycy/instytucje)", status: analystCount > 0 ? "pass" : "fail", reason: `${analystCount} analityków. Ograniczone pokrycie.` })
 
-  const moatFactors = [
-    {
-      // Wsparcie instytucjonalne — mierzalne: % held by institutions
-      name: "Wsparcie instytucjonalne",
-      score: instHeld != null ? Math.min(10, Math.round(instHeld * 12)) : 5,
-      description: instHeld != null
-        ? `${(instHeld*100).toFixed(1)}% akcji w rękach instytucji. ${instHeld > 0.5 ? "Silne wsparcie instytucjonalne — walidacja przez smart money." : instHeld > 0.2 ? "Umiarkowane wsparcie instytucjonalne." : "Niskie zainteresowanie instytucji — większe ryzyko."}`
-        : "Brak danych o strukturze właścicielskiej.",
-    },
-    {
-      // Pokrycie analityków — mierzalne: liczba analityków + upside do targetu
-      name: "Pokrycie analityków",
-      score: Math.min(10, Math.round(analystCount * 0.7)),
-      description: analystCount > 0
-        ? `${analystCount} analityków pokrywa spółkę. Konsensus: ${q.recommendationKey ?? "N/A"}. Target: $${analystTarget?.toFixed(0) ?? "N/A"} (${analystTarget && currentPPS > 0 ? ((analystTarget - currentPPS) / currentPPS * 100).toFixed(0) + "% upside" : "N/A"}).`
-        : "Brak pokrycia analityków — wyższe ryzyko informacyjne.",
-    },
-    {
-      // Płynność / Cash buffer — mierzalne: current ratio
-      name: "Bufor gotówkowy",
-      score: cr != null ? Math.min(10, Math.round(Math.min(cr, 10) * 1)) : 3,
-      description: cr != null
-        ? `Current Ratio: ${cr.toFixed(1)}x. Gotówka: $${totalCash ? (totalCash/1e9).toFixed(1) + "B" : "N/A"}. ${cr > 5 ? "Bardzo silny bufor — wieloletni runway." : cr > 2 ? "Solidna pozycja gotówkowa." : cr > 1 ? "Adekwatna płynność." : "Niska płynność — ryzyko."}`
-        : "Brak danych o płynności.",
-    },
-    {
-      // Skala zatrudnienia — mierzalne: employees (proxy dla zdolności R&D)
-      name: "Skala R&D (pracownicy)",
-      score: employees != null ? Math.min(10, Math.round(Math.log10(Math.max(employees, 10)) * 2.5)) : 3,
-      description: employees != null
-        ? `${employees.toLocaleString()} pracowników. ${employees > 1000 ? "Duży zespół — zdolność do równoległego R&D i komercjalizacji." : employees > 200 ? "Średni zespół — fokus na kluczowych projektach." : "Mały zespół — ryzyko key-man dependency."}`
-        : "Brak danych o zatrudnieniu.",
-    },
-    {
-      // Sentyment rynkowy — mierzalne: short interest + beta
-      name: "Sentyment rynkowy",
-      score: (() => {
-        let s = 5
-        if (shortPctFloat != null) s += shortPctFloat > 0.15 ? -2 : shortPctFloat > 0.05 ? -1 : 1
-        if (beta != null) s += beta > 2 ? -1 : beta > 1 ? 0 : 1
-        return Math.max(1, Math.min(10, s))
-      })(),
-      description: `${shortPctFloat != null ? `Short: ${(shortPctFloat*100).toFixed(1)}% float.` : ""} ${beta != null ? `Beta: ${beta.toFixed(2)}.` : ""} ${
-        shortPctFloat != null && shortPctFloat > 0.15 ? "Wysoki short interest — rynek sceptyczny." :
-        shortPctFloat != null && shortPctFloat > 0.05 ? "Umiarkowany short." :
-        "Niski short — brak agresywnej gry na spadki."
-      }`,
-    },
+  // 5. TRL ≥ 5
+  checklist.push({ label: "TRL ≥ 5", status: trl >= 5 ? "pass" : "fail", reason: `TRL ${trl}/9. Źródło: profil architektoniczny spółki.` })
+
+  // 6. Własne IP / patenty
+  checklist.push({ label: "Własne IP / patenty w core tech", status: profile.hardwareIntensity || profile.stackType === "full-stack" ? "pass" : "nodata", reason: profile.hardwareIntensity ? `Spółka buduje własny hardware (${profile.architecturePL}) — implikuje istotne IP.` : "Brak danych o patentach z Yahoo. Sprawdź 10-K." })
+
+  // 7. Implied probability < 40%
+  checklist.push({ label: "Implied P(sukces) < 40%", status: impliedSuccessProb <= 40 ? "pass" : "fail", reason: `Rynek implikuje ${impliedSuccessProb}% prawdopodobieństwo sukcesu. ${impliedSuccessProb > 40 ? "Wycena już dyskontuje sukces." : "Margin of safety obecny."} Obliczenie: (cena - V_rest) / (V_bull - V_rest).` })
+
+  // 8. Brak koncentracji >50% u 1 klienta
+  checklist.push({ label: "Brak koncentracji >50% u 1 klienta", status: "nodata", reason: "Szczegóły klientów niedostępne z Yahoo. Sprawdź 10-K risk factors." })
+
+  // ═══ MOD6: TECH MOAT — 100% data-driven from Yahoo ═══
+  const employees = stats?.fullTimeEmployees ?? null
+  const shortPct = stats?.shortPercentOfFloat ?? null
+  const cr = stats?.currentRatio ?? null
+  const grossMargins = stats?.grossMargins ?? null
+
+  const techMoat = [
+    { name: "Skala R&D (pracownicy)", maxScore: 10,
+      score: employees ? clamp(Math.round(Math.log10(Math.max(employees, 10)) * 2.5), 1, 10) : 3,
+      description: employees ? `${employees.toLocaleString()} pracowników. ${employees > 500 ? "Duży zespół R&D." : "Mały zespół."}` : "Brak danych.",
+      source: "Yahoo: fullTimeEmployees" },
+    { name: "Wsparcie instytucjonalne", maxScore: 10,
+      score: instHeld != null ? clamp(Math.round(instHeld * 12), 1, 10) : 3,
+      description: instHeld != null ? `${(instHeld*100).toFixed(1)}% akcji u instytucji.` : "Brak danych.",
+      source: "Yahoo: heldPercentInstitutions" },
+    { name: "Pokrycie analityków", maxScore: 10,
+      score: clamp(Math.round(analystCount * 0.7), 0, 10),
+      description: `${analystCount} analityków. Rec: ${q.recommendationKey ?? "N/A"}. Target: $${q.targetMeanPrice?.toFixed(0) ?? "N/A"}.`,
+      source: "Yahoo: numberOfAnalystOpinions, recommendationKey" },
+    { name: "Marża brutto (dojrzałość produktu)", maxScore: 10,
+      score: grossMargins != null && grossMargins > 0 ? clamp(Math.round(grossMargins * 12), 1, 10) : 1,
+      description: grossMargins != null ? `Marża brutto: ${(grossMargins*100).toFixed(1)}%. ${grossMargins > 0.5 ? "Silna — produkt ma pricing power." : grossMargins > 0 ? "Dodatnia — wczesna monetyzacja." : "Ujemna — pre-commercial."}` : "Brak danych.",
+      source: "Yahoo: grossMargins" },
+    { name: "Sentyment (short interest)", maxScore: 10,
+      score: shortPct != null ? clamp(10 - Math.round(shortPct * 30), 1, 10) : 5,
+      description: shortPct != null ? `Short: ${(shortPct*100).toFixed(1)}% float. ${shortPct > 0.15 ? "Wysoki — rynek sceptyczny." : shortPct > 0.05 ? "Umiarkowany." : "Niski."}` : "Brak danych.",
+      source: "Yahoo: shortPercentOfFloat" },
+    { name: "Bufor gotówkowy", maxScore: 10,
+      score: cr != null ? clamp(Math.round(Math.min(cr, 10)), 1, 10) : 3,
+      description: cr != null ? `Current Ratio: ${cr.toFixed(1)}x. ${cr > 10 ? "Ekstremalnie silny bufor." : cr > 3 ? "Solidny." : cr > 1 ? "Adekwatny." : "Niska płynność."}` : "Brak danych.",
+      source: "Yahoo: currentRatio" },
   ]
 
-  // ═══ ADDITIONAL RED FLAGS ═══
-  // Revenue declining
-  const rg = stats?.revenueGrowth
-  if (rg != null && rg < -0.1) {
-    redFlags.push({ category: "market", severity: "high", title: `Spadek przychodów ${(rg*100).toFixed(0)}% YoY`, description: "Spadające przychody w pre-komercyjnej fazie to sygnał utraty kontraktów lub klientów pilotażowych.", metric: `Rev: ${(rg*100).toFixed(0)}%` })
-  }
+  const techMoatTotal = Math.round(techMoat.reduce((s, m) => s + m.score, 0) / techMoat.reduce((s, m) => s + m.maxScore, 0) * 100)
 
-  // Very high valuation vs zero/minimal revenue
-  if (totalRev != null && totalRev > 0 && mcap / totalRev > 100) {
-    redFlags.push({ category: "market", severity: "medium", title: `EV/Revenue > ${Math.round(mcap/totalRev)}x`, description: `Wycena ${Math.round(mcap/totalRev)}x przychodów jest ekstremalnie wysoka nawet dla quantum. Rynek wycenia pełny sukces z dużym prawdopodobieństwem.`, metric: `EV/Rev: ${Math.round(mcap/totalRev)}x` })
-  }
+  // ═══ MOD8: SENSING VALUATION ═══
+  const sensingValuation = profile.hasSensing ? {
+    revenue: totalRev && totalRev > 0 ? `Total revenue: ${fmtM(totalRev)} (w tym sensing — brak podziału z Yahoo)` : "Pre-revenue",
+    description: `Spółka posiada segment sensing (${profile.focus.filter(f => f.includes("sensing") || f.includes("clock")).join(", ")}). Yahoo nie dostarcza podziału revenue na segmenty. Sprawdź 10-K/10-Q dla wyodrębnienia wyceny sensing (typowy mnożnik: EV/Rev 8-12x dla dojrzałego hardware defense).`,
+  } : null
 
-  // Net income deeply negative
-  const pm = stats?.profitMargin
-  if (pm != null && pm < -1.0) {
-    redFlags.push({ category: "financial", severity: "medium", title: "Strata netto > 100% przychodów", description: `Marża netto ${(pm*100).toFixed(0)}% — koszty wielokrotnie przewyższają przychody. Normalne dla pre-revenue quantum, ale monitoruj trend.`, metric: `NM: ${(pm*100).toFixed(0)}%` })
-  }
+  // ═══ MOD9: QUANTUM-SPECIFIC RISKS ═══
+  const quantumRisks: QuantumRedFlag[] = [
+    { category: "quantum", severity: "high", title: "Timeline risk — opóźnienie komercjalizacji", description: `TRL ${trl}/9. Komercjalizacja może się przesunąć o 3+ lat. Historia branży quantum pokazuje systematyczne niedoszacowanie czasu.`, metric: `TRL ${trl}` },
+    { category: "quantum", severity: "medium", title: "BigTech displacement", description: "Google (Willow), IBM (Quantum), Microsoft (topological) mają nieograniczone budżety R&D. Ogłoszenie przełomu przez BigTech może zdominować rynek.", metric: "Konkurencja" },
+    { category: "quantum", severity: runway && runway.quarters < 16 ? "high" : "medium", title: "Dilution risk — kolejna emisja przed przychodami", description: `Runway: ${runway?.quarters ?? "?"}Q. ${runway && runway.quarters < 12 ? "Prawdopodobna emisja w ciągu 12-24 mies." : "Runway komfortowy, ale monitoruj ATM programs."}`, metric: `${runway?.quarters ?? "?"}Q` },
+  ]
+  redFlags.push(...quantumRisks)
 
-  // ═══ COMPETITIVE POSITION ═══
-  const competitivePosition = profile.stackType === "components"
-    ? "Picks-and-shovels — dostarcza narzędzia dla całej branży. Mniejsze ryzyko ale mniejszy upside."
-    : profile.architecture.includes("Encryption")
-    ? "Post-quantum crypto — najbliżej komercjalizacji. Popyt regulacyjny napędza adopcję."
-    : trl >= 7
-    ? "Lider komercjalizacji — generuje przychody, walidacja rynkowa. Ryzyko: konkurencja BigTech."
-    : trl >= 5
-    ? "Faza pilotażowa — technologia potwierdzona lab, wchodzi w komercję. Kluczowe 2-4 lata."
-    : "Wczesne R&D — wysoki potencjał ale ekstremalnie wysokie ryzyko. Inwestycja spekulacyjna."
+  // Additional red flags from data
+  if (rg != null && rg < -0.1) redFlags.push({ category: "market", severity: "high", title: `Spadek przychodów ${(rg*100).toFixed(0)}% YoY`, description: `Źródło: Yahoo revenueGrowth.`, metric: `${(rg*100).toFixed(0)}%` })
+  if (totalRev != null && totalRev > 0 && mcap / totalRev > 100) redFlags.push({ category: "market", severity: "medium", title: `EV/Revenue: ${Math.round(mcap/totalRev)}×`, description: `Ekstremalnie wysoka wycena. Źródło: Yahoo marketCap / totalRevenue.`, metric: `${Math.round(mcap/totalRev)}×` })
 
   // ═══ OVERALL SCORE ═══
-  // Weighted: TRL (25%), Runway (25%), Moat (20%), Revenue (15%), Red flags penalty (15%)
-  const trlScore = Math.round((trl / 9) * 25)
-  const runwayScore = runwayStatus === "comfortable" ? 25 : runwayStatus === "adequate" ? 18 : runwayStatus === "warning" ? 10 : 3
-  const moatScore = Math.round(moatFactors.reduce((s, m) => s + m.score, 0) / moatFactors.length / 10 * 20)
-  const revScore = totalRev && totalRev > 10e6 ? 15 : totalRev && totalRev > 1e6 ? 10 : 3
-  const flagPenalty = redFlags.filter(f => f.severity === "critical").length * 10 + redFlags.filter(f => f.severity === "high").length * 5
+  const runwayPts = !runway ? 10 : runway.quarters >= 16 ? 25 : runway.quarters >= 8 ? 18 : runway.quarters >= 4 ? 8 : 2
+  const moatPts = Math.round(techMoatTotal * 0.25)
+  const trlPts = Math.round((trl / 9) * 20)
+  const revPts = totalRev && totalRev > 10e6 ? 15 : totalRev && totalRev > 1e6 ? 8 : 2
+  const flagPenalty = redFlags.filter(f => f.severity === "critical").length * 10 + redFlags.filter(f => f.severity === "high").length * 3
+  const overallScore = clamp(runwayPts + moatPts + trlPts + revPts - flagPenalty, 1, 100)
+  const riskLevel = overallScore >= 65 ? "Umiarkowane (dla quantum)" : overallScore >= 40 ? "Podwyższone" : overallScore >= 20 ? "Wysokie" : "Krytyczne"
 
-  const overallScore = Math.max(1, Math.min(100, trlScore + runwayScore + moatScore + revScore - flagPenalty))
-
-  const riskLevel = overallScore >= 70 ? "Umiarkowane (dla quantum)" : overallScore >= 45 ? "Podwyższone" : overallScore >= 25 ? "Wysokie" : "Krytyczne"
-
-  const evRevMultiple = totalRev && totalRev > 0 ? Math.round(mcap / totalRev) : null
-
-  const verdict = currentVsWeighted > 200
-    ? `${q.name} jest wyceniana ${currentVsWeighted.toFixed(0)}% powyżej ważonej wartości scenariuszowej${evRevMultiple ? ` (EV/Revenue: ${evRevMultiple}x)` : ""}. Rynek implikuje ${impliedSuccessProbability}% prawdopodobieństwo pozytywnego scenariusza. Wycena opiera się na narracji, nie na fundamentach — typowe dla spółek quantum w fazie hype.`
-    : currentVsWeighted > 50
-    ? `${q.name} handluje z premią ${currentVsWeighted.toFixed(0)}% vs model scenariuszowy. Rynek jest optymistyczny (${impliedSuccessProbability}% implied success). Stopa dyskontowa ${(discountRate*100).toFixed(0)}%/${years}lat.`
-    : currentVsWeighted < -20
-    ? `${q.name} handluje ${Math.abs(currentVsWeighted).toFixed(0)}% poniżej ważonej wartości scenariuszowej. Potencjalnie niedowartościowana jeśli timing komercjalizacji się potwierdzi.`
-    : `${q.name} jest wyceniona blisko ważonej wartości scenariuszowej ($${weightedFairValue.toFixed(2)}). Rynek implikuje ${impliedSuccessProbability}% szans na pozytywny scenariusz.`
+  const evRevNote = evForwardRevenue != null ? ` EV/Fwd Revenue (N+2): ${evForwardRevenue.toFixed(1)}x.` : ""
+  const verdict = impliedSuccessProb > 50
+    ? `${q.name}: rynek implikuje ${impliedSuccessProb}% P(sukces) — wycena dyskontuje sukces jako scenariusz bazowy.${evRevNote} Stopa dyskontowa: ${(discountRate*100).toFixed(0)}%, horyzont: ${horizon} lat.`
+    : impliedSuccessProb > 30
+    ? `${q.name}: rynek implikuje ${impliedSuccessProb}% P(sukces) — agresywne ale nie ekstremalne.${evRevNote} Model sugeruje ${modelSuccessProb}%.`
+    : `${q.name}: rynek implikuje ${impliedSuccessProb}% P(sukces) — zbliżone do modelu (${modelSuccessProb}%).${evRevNote} Potencjalny margin of safety.`
 
   return {
-    profile,
-    isQuantum: true,
-    trlScore: trl,
-    trlDescription,
-    architectureRisk,
-    cashRunwayQuarters,
-    runwayStatus,
-    quarterlyBurn,
-    dilutionRisk,
-    revenueQuality,
-    scenarios,
-    weightedFairValue,
-    currentVsWeighted,
-    impliedSuccessProbability,
-    moatFactors,
-    competitivePosition,
-    redFlags,
-    overallScore,
-    riskLevel,
-    verdict,
+    profile, isQuantum: true,
+    evForwardRevenue, evRPO,
+    checklist, revenueAcceleration,
+    impliedSuccessProb, modelSuccessProb, probDelta,
+    scenarios, weightedFairValue, currentVsWeighted, discountRate, horizon,
+    techMoat, techMoatTotal,
+    sensingValuation, quantumRisks,
+    runway, redFlags, overallScore, riskLevel, verdict,
   }
 }
