@@ -5,7 +5,8 @@ import { AlertTriangle, Trophy, Target, Shield, TrendingUp, Zap, Award, ArrowRig
 import type { QuoteData, KeyStatistics } from "@/lib/yahoo"
 import type { FullAnalysis } from "@/lib/analysis"
 import BarCompareChart from "@/components/charts/BarCompareChart"
-import { fmtPrice as fmtCurrencyPrice } from "@/lib/currency"
+import { fmtPrice as fmtCurrencyPrice, fmtBigValue } from "@/lib/currency"
+import { isQuantumStock } from "@/lib/quantumValuation"
 
 import {
   RadarChart as RechartsRadarChart,
@@ -164,6 +165,75 @@ export default function StockCompare() {
               </table>
             </div>
           </div>
+
+          {/* 2B. QUANTUM COMPARISON — if both stocks are quantum */}
+          {isQuantumStock(qA.symbol, sA?.industry, sA?.longBusinessSummary) && isQuantumStock(qB.symbol, sB?.industry, sB?.longBusinessSummary) && (
+            <div className="bg-bloomberg-card border border-purple-500/30 rounded p-4">
+              <div className="text-xs text-purple-400 font-bold mb-3">⚛️ PORÓWNANIE QUANTUM — ASPEKTY TECHNICZNE I STRATEGICZNE</div>
+              <div className="overflow-x-auto">
+                <table className="w-full text-xs">
+                  <thead>
+                    <tr className="border-b border-bloomberg-border">
+                      <th className="text-left py-2 text-muted-foreground">METRYKA QUANTUM</th>
+                      <th className="text-right py-2 text-bloomberg-blue">{qA.symbol}</th>
+                      <th className="text-right py-2 text-bloomberg-amber">{qB.symbol}</th>
+                      <th className="text-center py-2 text-muted-foreground">LEPIEJ</th>
+                      <th className="text-left py-2 text-muted-foreground pl-3">ŹRÓDŁO</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {/* Runway */}
+                    {(() => {
+                      const burnA = sA?.operatingCashFlow && sA.operatingCashFlow < 0 ? Math.abs(sA.operatingCashFlow) / 4 : 0
+                      const burnB = sB?.operatingCashFlow && sB.operatingCashFlow < 0 ? Math.abs(sB.operatingCashFlow) / 4 : 0
+                      const rwA = burnA > 0 && sA?.totalCash ? Math.round(sA.totalCash / burnA) : 99
+                      const rwB = burnB > 0 && sB?.totalCash ? Math.round(sB.totalCash / burnB) : 99
+                      return <CompRow label="Runway (kwartały)" a={rwA >= 99 ? "OCF+" : `${rwA}Q`} b={rwB >= 99 ? "OCF+" : `${rwB}Q`} symA={qA.symbol} symB={qB.symbol} winA={rwA > rwB} />
+                    })()}
+                    {/* Cash */}
+                    <CompRow label="Gotówka" a={sA?.totalCash ? fmtBigValue(sA.totalCash, "USD") : "N/A"} b={sB?.totalCash ? fmtBigValue(sB.totalCash, "USD") : "N/A"} symA={qA.symbol} symB={qB.symbol} winA={(sA?.totalCash ?? 0) > (sB?.totalCash ?? 0)} />
+                    {/* Burn rate */}
+                    {(() => {
+                      const bA = sA?.operatingCashFlow && sA.operatingCashFlow < 0 ? Math.abs(sA.operatingCashFlow) / 4 : 0
+                      const bB = sB?.operatingCashFlow && sB.operatingCashFlow < 0 ? Math.abs(sB.operatingCashFlow) / 4 : 0
+                      return <CompRow label="Burn/kwartał" a={bA > 0 ? fmtBigValue(bA, "USD") : "OCF+" } b={bB > 0 ? fmtBigValue(bB, "USD") : "OCF+"} symA={qA.symbol} symB={qB.symbol} winA={bA < bB} lowerBetter />
+                    })()}
+                    {/* EV/Revenue */}
+                    {(() => {
+                      const evA = sA?.totalRevenue && sA.totalRevenue > 0 ? qA.marketCap / sA.totalRevenue : null
+                      const evB = sB?.totalRevenue && sB.totalRevenue > 0 ? qB.marketCap / sB.totalRevenue : null
+                      return <CompRow label="EV/Revenue" a={evA ? `${evA.toFixed(0)}x` : "N/A"} b={evB ? `${evB.toFixed(0)}x` : "N/A"} symA={qA.symbol} symB={qB.symbol} winA={(evA ?? 9999) < (evB ?? 9999)} lowerBetter />
+                    })()}
+                    {/* Revenue */}
+                    <CompRow label="Przychody" a={sA?.totalRevenue ? fmtBigValue(sA.totalRevenue, "USD") : "N/A"} b={sB?.totalRevenue ? fmtBigValue(sB.totalRevenue, "USD") : "N/A"} symA={qA.symbol} symB={qB.symbol} winA={(sA?.totalRevenue ?? 0) > (sB?.totalRevenue ?? 0)} />
+                    {/* Revenue Growth */}
+                    <CompRow label="Wzrost przychodów" a={sA?.revenueGrowth != null ? `${(sA.revenueGrowth*100).toFixed(0)}%` : "N/A"} b={sB?.revenueGrowth != null ? `${(sB.revenueGrowth*100).toFixed(0)}%` : "N/A"} symA={qA.symbol} symB={qB.symbol} winA={(sA?.revenueGrowth ?? -99) > (sB?.revenueGrowth ?? -99)} />
+                    {/* Gross Margin */}
+                    <CompRow label="Marża brutto" a={sA?.grossMargins != null ? `${(sA.grossMargins*100).toFixed(1)}%` : "N/A"} b={sB?.grossMargins != null ? `${(sB.grossMargins*100).toFixed(1)}%` : "N/A"} symA={qA.symbol} symB={qB.symbol} winA={(sA?.grossMargins ?? 0) > (sB?.grossMargins ?? 0)} />
+                    {/* Employees (R&D scale) */}
+                    <CompRow label="Pracownicy (skala R&D)" a={sA?.fullTimeEmployees?.toLocaleString() ?? "N/A"} b={sB?.fullTimeEmployees?.toLocaleString() ?? "N/A"} symA={qA.symbol} symB={qB.symbol} winA={(sA?.fullTimeEmployees ?? 0) > (sB?.fullTimeEmployees ?? 0)} />
+                    {/* Institutional ownership */}
+                    <CompRow label="% Instytucji" a={sA?.heldByInstitutions != null ? `${(sA.heldByInstitutions*100).toFixed(1)}%` : "N/A"} b={sB?.heldByInstitutions != null ? `${(sB.heldByInstitutions*100).toFixed(1)}%` : "N/A"} symA={qA.symbol} symB={qB.symbol} winA={(sA?.heldByInstitutions ?? 0) > (sB?.heldByInstitutions ?? 0)} />
+                    {/* Short interest */}
+                    <CompRow label="Short Interest" a={sA?.shortPercentOfFloat != null ? `${(sA.shortPercentOfFloat*100).toFixed(1)}%` : "N/A"} b={sB?.shortPercentOfFloat != null ? `${(sB.shortPercentOfFloat*100).toFixed(1)}%` : "N/A"} symA={qA.symbol} symB={qB.symbol} winA={(sA?.shortPercentOfFloat ?? 99) < (sB?.shortPercentOfFloat ?? 99)} lowerBetter />
+                    {/* Analyst coverage */}
+                    <CompRow label="Analitycy (pokrycie)" a={qA.numberOfAnalysts?.toString() ?? "0"} b={qB.numberOfAnalysts?.toString() ?? "0"} symA={qA.symbol} symB={qB.symbol} winA={(qA.numberOfAnalysts ?? 0) > (qB.numberOfAnalysts ?? 0)} />
+                    {/* Analyst recommendation */}
+                    <CompRow label="Rekomendacja" a={qA.recommendationKey?.replace(/_/g, " ") ?? "N/A"} b={qB.recommendationKey?.replace(/_/g, " ") ?? "N/A"} symA={qA.symbol} symB={qB.symbol} winA={(qA.recommendationMean ?? 5) < (qB.recommendationMean ?? 5)} lowerBetter />
+                    {/* Target upside */}
+                    {(() => {
+                      const uA = qA.targetMeanPrice && qA.price > 0 ? ((qA.targetMeanPrice - qA.price) / qA.price * 100) : null
+                      const uB = qB.targetMeanPrice && qB.price > 0 ? ((qB.targetMeanPrice - qB.price) / qB.price * 100) : null
+                      return <CompRow label="Upside do targetu" a={uA != null ? `${uA.toFixed(0)}%` : "N/A"} b={uB != null ? `${uB.toFixed(0)}%` : "N/A"} symA={qA.symbol} symB={qB.symbol} winA={(uA ?? -99) > (uB ?? -99)} />
+                    })()}
+                  </tbody>
+                </table>
+              </div>
+              <div className="mt-2 text-[11px] text-muted-foreground">
+                Wszystkie dane z Yahoo Finance API. Porównanie oparte na: przeżywalności (runway, cash), skali R&D (pracownicy), walidacji rynkowej (instytucje, analitycy, short), wycenie relatywnej (EV/Revenue).
+              </div>
+            </div>
+          )}
 
           {/* 3. RADAR CHART — both stocks overlaid */}
           <div className="bg-bloomberg-card border border-bloomberg-border rounded p-4">
