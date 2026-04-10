@@ -8,26 +8,136 @@ import type { QuoteData, KeyStatistics, EarningsData } from "./yahoo"
 
 // ── Known quantum companies and their profiles ──
 
+export interface QuantumTechSpecs {
+  // Grupa 1: Jakość systemu
+  twoQubitFidelity: { value: string; level: "top" | "solid" | "threshold" | "critical" | "na"; source: string; measured: "production" | "lab" | "unknown" }
+  physicalQubits: { count: number | null; system: string; source: string }
+  logicalQubits: { count: number | null; source: string }
+  coherenceTime: { value: string; source: string }
+  benchmarks: { qv: string; clops: string; aq: string; source: string }
+  // Grupa 2: Skalowalność
+  scalability: { bottleneck: string; currentLimit: string; scalingPath: string }
+  roadmapDelivery: { milestones: { target: string; status: "delivered" | "on_track" | "delayed" | "planned" }[]; reliability: "high" | "medium" | "low" | "no_data" }
+  // Grupa 3: Error Correction
+  errorCorrection: { hasRoadmap: boolean; protocol: string; logicalQubitMilestone: string; faultToleranceMilestone: string; status: "on_track" | "partial" | "none" }
+  // Grupa 4: Trade-off
+  tradeoff: { fidelity: "top" | "solid" | "moderate" | "na"; scalability: "top" | "solid" | "moderate" | "na"; speed: "top" | "solid" | "moderate" | "na"; commercialization: "top" | "solid" | "moderate" | "na" }
+  // Meta
+  lastVerified: string  // date
+  sources: string[]
+}
+
 export interface QuantumProfile {
   architecture: string
   architecturePL: string
   trl: number
   focus: string[]
   stackType: "full-stack" | "hardware" | "software" | "components"
-  hardwareIntensity: boolean  // MOD7: true = physical hardware, false = software/cloud
-  hasSensing: boolean         // MOD8: diversified with sensing business
+  hardwareIntensity: boolean
+  hasSensing: boolean
   keyMetric?: string
+  techSpecs?: QuantumTechSpecs
 }
 
 const QUANTUM_PROFILES: Record<string, QuantumProfile> = {
-  "IONQ": { architecture: "Trapped Ions", architecturePL: "Pułapkowane jony", trl: 6, focus: ["hardware","cloud","enterprise"], stackType: "full-stack", hardwareIntensity: true, hasSensing: false, keyMetric: "#AQ 35 algorithmic qubits" },
-  "RGTI": { architecture: "Superconducting", architecturePL: "Nadprzewodnikowe kubity", trl: 5, focus: ["hardware","cloud","hybrid"], stackType: "full-stack", hardwareIntensity: true, hasSensing: false, keyMetric: "84-qubit Ankaa system" },
-  "QBTS": { architecture: "Quantum Annealing", architecturePL: "Wyżarzanie kwantowe", trl: 7, focus: ["optimization","enterprise","cloud"], stackType: "full-stack", hardwareIntensity: true, hasSensing: false, keyMetric: "5000+ qubit Advantage2" },
+  "IONQ": {
+    architecture: "Trapped Ions", architecturePL: "Pułapkowane jony", trl: 6,
+    focus: ["hardware","cloud","enterprise"], stackType: "full-stack", hardwareIntensity: true, hasSensing: false,
+    keyMetric: "#AQ 64 na 100-kubitowym systemie Tempo",
+    techSpecs: {
+      twoQubitFidelity: { value: "99.99%", level: "top", source: "IonQ press release, Oct 2025 — Electronic Qubit Control (EQC)", measured: "lab" },
+      physicalQubits: { count: 100, system: "Tempo (5. generacja)", source: "IonQ Tempo page, Sept 2025" },
+      logicalQubits: { count: null, source: "12 logicznych qubitów planowanych na 2026" },
+      coherenceTime: { value: "T1: 10-100 sekund", source: "AWS Braket IonQ specification" },
+      benchmarks: { qv: "Nie raportowany", clops: "Nie raportowany", aq: "#AQ 64 (Tempo, Sept 2025)", source: "IonQ Algorithmic Qubits page" },
+      scalability: { bottleneck: "Transport jonów — czas bramek rośnie z liczbą qubitów", currentLimit: "~100 qubitów wysokiej jakości", scalingPath: "Moduły połączone fotonicznie (Oxford Ionics EQC tech)" },
+      roadmapDelivery: { milestones: [
+        { target: "2025: Tempo 100Q, #AQ 64", status: "delivered" },
+        { target: "2025: 99.99% 2Q fidelity (lab)", status: "delivered" },
+        { target: "2026: 256Q, 12 logicznych qubitów", status: "on_track" },
+        { target: "2027: 10,000 fizycznych, 800 logicznych", status: "planned" },
+        { target: "2028: 1,600 logicznych qubitów", status: "planned" },
+      ], reliability: "high" },
+      errorCorrection: { hasRoadmap: true, protocol: "Surface code + EQC", logicalQubitMilestone: "2026: 12 logicznych qubitów", faultToleranceMilestone: "2028: error rate <10⁻⁷", status: "on_track" },
+      tradeoff: { fidelity: "top", scalability: "moderate", speed: "moderate", commercialization: "solid" },
+      lastVerified: "2026-04-10",
+      sources: ["IonQ IR press releases", "IonQ Roadmap page", "AWS Braket", "IonQ blog (#AQ 64)"],
+    },
+  },
+  "RGTI": {
+    architecture: "Superconducting", architecturePL: "Nadprzewodnikowe kubity", trl: 5,
+    focus: ["hardware","cloud","hybrid"], stackType: "full-stack", hardwareIntensity: true, hasSensing: false,
+    keyMetric: "108-kubitowy system Cepheus-1",
+    techSpecs: {
+      twoQubitFidelity: { value: "99.5%", level: "threshold", source: "Rigetti Q3 2025 results — Cepheus-1-36Q median fSim fidelity", measured: "production" },
+      physicalQubits: { count: 108, system: "Cepheus-1 108Q (kwiecień 2026)", source: "Rigetti April 2026 announcement, Amazon Braket" },
+      logicalQubits: { count: null, source: "Brak publicznych celów dot. qubitów logicznych" },
+      coherenceTime: { value: "~100 µs (typowe dla nadprzewodnikowych)", source: "Rigetti technical specs" },
+      benchmarks: { qv: "Nie raportowany", clops: "Nie raportowany", aq: "Nie stosowane", source: "—" },
+      scalability: { bottleneck: "Elektronika sterująca, kriogenika, crosstalk między chipletami", currentLimit: "108 qubitów (4×9 modular chiplets)", scalingPath: "Architektura chipletów — multi-chip scaling do 336Q (Lyra)" },
+      roadmapDelivery: { milestones: [
+        { target: "2025 H1: 36Q modular, 99.5% fidelity", status: "delivered" },
+        { target: "2025 H2: 100+ qubitów", status: "delivered" },
+        { target: "2026 H2: 336Q Lyra, narrow quantum advantage", status: "on_track" },
+        { target: "2027: 1,000+ qubitów, 99.8% fidelity", status: "planned" },
+      ], reliability: "medium" },
+      errorCorrection: { hasRoadmap: false, protocol: "Brak publicznego protokołu", logicalQubitMilestone: "Brak danych", faultToleranceMilestone: "Brak danych", status: "partial" },
+      tradeoff: { fidelity: "moderate", scalability: "solid", speed: "solid", commercialization: "moderate" },
+      lastVerified: "2026-04-10",
+      sources: ["Rigetti Q3 2025 investor release", "Rigetti 108Q announcement April 2026", "Amazon Braket"],
+    },
+  },
+  "QBTS": {
+    architecture: "Quantum Annealing", architecturePL: "Wyżarzanie kwantowe", trl: 7,
+    focus: ["optimization","enterprise","cloud"], stackType: "full-stack", hardwareIntensity: true, hasSensing: false,
+    keyMetric: "4,400+ kubitów Advantage2",
+    techSpecs: {
+      twoQubitFidelity: { value: "N/A (annealing)", level: "na", source: "Annealing nie używa bramek — inne metryki", measured: "unknown" },
+      physicalQubits: { count: 4400, system: "Advantage2 (4,400+ qubitów, 20-way connectivity)", source: "D-Wave press release, Nov 2024" },
+      logicalQubits: { count: null, source: "Nie stosowane w architekturze annealing" },
+      coherenceTime: { value: "2× poprawa vs Advantage (dokładna wartość nieujawniona)", source: "D-Wave Advantage2 specs" },
+      benchmarks: { qv: "Nie stosowane (annealing)", clops: "Nie stosowane", aq: "Nie stosowane", source: "—" },
+      scalability: { bottleneck: "Connectivity topology, ograniczenie do problemów optymalizacyjnych", currentLimit: "4,400+ qubitów, 20-way connectivity", scalingPath: "Advantage3: analog-digital controls, multi-chip scaling" },
+      roadmapDelivery: { milestones: [
+        { target: "2024: Advantage2 calibration 4,400Q", status: "delivered" },
+        { target: "2025: Advantage2 cloud availability", status: "delivered" },
+        { target: "2026: 17Q gate-model system (pierwszy)", status: "on_track" },
+        { target: "2026: Performance Update z nowymi protokołami", status: "on_track" },
+      ], reliability: "high" },
+      errorCorrection: { hasRoadmap: false, protocol: "Annealing nie wymaga gate error correction", logicalQubitMilestone: "Nie stosowane", faultToleranceMilestone: "Nie stosowane", status: "none" },
+      tradeoff: { fidelity: "na", scalability: "top", speed: "solid", commercialization: "top" },
+      lastVerified: "2026-04-10",
+      sources: ["D-Wave Advantage2 press release Nov 2024", "D-Wave CES 2026", "D-Wave Q1 2025 earnings"],
+    },
+  },
   "QUBT": { architecture: "Photonic / Software", architecturePL: "Fotoniczne / Oprogramowanie", trl: 4, focus: ["software","optimization","sensing"], stackType: "software", hardwareIntensity: false, hasSensing: false },
   "ARQQ": { architecture: "Quantum Encryption (QKD)", architecturePL: "Szyfrowanie kwantowe (QKD)", trl: 6, focus: ["post-quantum crypto","enterprise security"], stackType: "software", hardwareIntensity: false, hasSensing: false, keyMetric: "QuantumCloud platform" },
   "FORM": { architecture: "Quantum Test Equipment", architecturePL: "Sprzęt testowy dla quantum", trl: 8, focus: ["components","testing","probing"], stackType: "components", hardwareIntensity: true, hasSensing: false, keyMetric: "Quantum probe stations" },
   "CRI.WA": { architecture: "Quantum Instruments + Space", architecturePL: "Instrumenty kwantowe + Kosmos", trl: 5, focus: ["instruments","space","quantum sensing"], stackType: "components", hardwareIntensity: true, hasSensing: true },
-  "INFQ": { architecture: "Neutral Atoms / Cold Atoms", architecturePL: "Neutralne atomy / Zimne atomy", trl: 5, focus: ["hardware","quantum sensing","quantum clocks","software"], stackType: "full-stack", hardwareIntensity: true, hasSensing: true, keyMetric: "Cold atom QC + precision sensors" },
+  "INFQ": {
+    architecture: "Neutral Atoms / Cold Atoms", architecturePL: "Neutralne atomy / Zimne atomy", trl: 5,
+    focus: ["hardware","quantum sensing","quantum clocks","software"], stackType: "full-stack", hardwareIntensity: true, hasSensing: true,
+    keyMetric: "100Q dostarczony do UK NQCC + Tiqker atomic clock",
+    techSpecs: {
+      twoQubitFidelity: { value: "99.73%", level: "threshold", source: "Entangled Future / Infleqtion profile", measured: "lab" },
+      physicalQubits: { count: 1600, system: "1,600 fizycznych qubitów (demo), 100Q w NQCC UK", source: "Infleqtion architecture roadmap, March 2026 NQCC delivery" },
+      logicalQubits: { count: 12, source: "12 logicznych qubitów z error detection (ahead of 10Q target)" },
+      coherenceTime: { value: "Sekundy (typowe dla neutralnych atomów)", source: "Szacunek z architektury" },
+      benchmarks: { qv: "Nie raportowany", clops: "Nie raportowany", aq: "Nie stosowane", source: "—" },
+      scalability: { bottleneck: "Systemy laserowe, addressing pojedynczych atomów", currentLimit: "1,600 qubitów fizycznych, 12 logicznych", scalingPath: "Spatial multiplexing, 16×16 arrays (256 sites) → 1,000 logicznych do 2030" },
+      roadmapDelivery: { milestones: [
+        { target: "2025: 16×16 array (SQALE/NQCC)", status: "delivered" },
+        { target: "2026 Q1: 100Q system do UK NQCC", status: "delivered" },
+        { target: "2026: 30 logicznych qubitów", status: "on_track" },
+        { target: "2026: Tiqker atomic clock launch", status: "delivered" },
+        { target: "2030: 1,000 logicznych qubitów", status: "planned" },
+      ], reliability: "high" },
+      errorCorrection: { hasRoadmap: true, protocol: "Error detection + loss correction (neutral atom specific)", logicalQubitMilestone: "2026: 30 logicznych qubitów", faultToleranceMilestone: "2030: 1,000 logicznych qubitów", status: "on_track" },
+      tradeoff: { fidelity: "moderate", scalability: "solid", speed: "solid", commercialization: "solid" },
+      lastVerified: "2026-04-10",
+      sources: ["Infleqtion roadmap announcement", "NQCC 100Q delivery March 2026", "Infleqtion Tiqker page", "ARPA-E award March 2026", "Infleqtion 2026 guidance $40M"],
+    },
+  },
   "QMCO": { architecture: "Quantum Biology / Proteomics", architecturePL: "Biologia kwantowa / Proteomika", trl: 4, focus: ["quantum sensing","proteomics","semiconductor"], stackType: "hardware", hardwareIntensity: true, hasSensing: true },
 }
 
@@ -99,7 +209,8 @@ export interface QuantumValuation {
   techMoat: { name: string; score: number; maxScore: number; description: string; source: string }[]
   techMoatTotal: number
 
-  // MOD7: Porter quantum-context (computed in UI from profile)
+  // MOD7: Technical Scorecard
+  techSpecs: QuantumTechSpecs | null
 
   // MOD8: Sensing segment (if applicable)
   sensingValuation: { revenue: string; description: string } | null
@@ -380,6 +491,7 @@ export function computeQuantumValuation(
     impliedSuccessProb, modelSuccessProb, probDelta,
     scenarios, weightedFairValue, currentVsWeighted, discountRate, horizon,
     techMoat, techMoatTotal,
+    techSpecs: profile.techSpecs ?? null,
     sensingValuation, quantumRisks,
     runway, redFlags, overallScore, riskLevel, verdict,
   }
