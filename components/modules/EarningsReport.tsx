@@ -243,27 +243,47 @@ function FinancialReport({ earnings: e, quote: q, currency }: { earnings: Earnin
     }
   }
 
-  // ── ONE-TIME ITEM DETECTION ──
-  // Detect if a value is a one-time/non-recurring anomaly:
+  // ── ONE-TIME / NADZWYCZAJNA POZYCJA DETECTION ──
+  // Detect anomalous P&L items:
   // 1. Compare each value to median of the series
-  // 2. If |value| > 3× median AND significant vs revenue (>5%), flag it
-  // 3. Only flag non-subtotal, non-revenue rows (interest, tax, other)
+  // 2. If |value| > 2.5× median AND significant vs revenue (>2%), flag it
+  // 3. Also flag if YoY change > 200% and absolute change > $10M
   const oneTimeKeys = new Set(["other", "tax", "interest", "sga", "rd", "costOfRevenue"])
-  const isOneTimeItem = (key: string, vals: (number | null)[], idx: number, rev: number | null): boolean => {
-    if (!oneTimeKeys.has(key)) return false
+  type OneTimeInfo = { flagged: boolean; description: string } | null
+  const detectOneTime = (key: string, vals: (number | null)[], idx: number, rev: number | null): OneTimeInfo => {
+    if (!oneTimeKeys.has(key)) return null
     const v = vals[idx]
-    if (v == null || rev == null || rev === 0) return false
-    // Must be significant relative to revenue (>5%)
-    if (Math.abs(v) / Math.abs(rev) < 0.05) return false
-    // Get non-null values for comparison
+    if (v == null || rev == null || rev === 0) return null
+
+    // Check significance vs revenue (lowered to 2%)
+    const pctOfRev = Math.abs(v) / Math.abs(rev) * 100
+    if (pctOfRev < 2) return null
+
     const nonNull = vals.filter((x): x is number => x != null)
-    if (nonNull.length < 3) return false
-    // Calculate median absolute value
+    if (nonNull.length < 2) return null
+
+    // Method 1: vs median (>2.5× anomaly)
     const sorted = nonNull.map(x => Math.abs(x)).sort((a, b) => a - b)
     const median = sorted[Math.floor(sorted.length / 2)]
-    if (median === 0) return Math.abs(v) > 0
-    // Flag if this value is >3× the median
-    return Math.abs(v) / median > 3
+    const medianAnomaly = median > 0 ? Math.abs(v) / median : 0
+
+    // Method 2: vs previous year (>200% change AND >$10M diff)
+    const prev = idx > 0 ? vals[idx - 1] : null
+    let yoyAnomaly = false
+    let yoyPct = 0
+    if (prev != null && prev !== 0) {
+      yoyPct = ((v - prev) / Math.abs(prev)) * 100
+      const absDiff = Math.abs(v - prev)
+      yoyAnomaly = Math.abs(yoyPct) > 200 && absDiff > 10e6
+    }
+
+    if (medianAnomaly > 2.5 || yoyAnomaly) {
+      const desc = yoyAnomaly
+        ? `⚠️ Zmiana ${yoyPct > 0 ? "+" : ""}${yoyPct.toFixed(0)}% YoY (${pctOfRev.toFixed(1)}% przychodów). Pozycja odbiega znacząco od normy — prawdopodobnie jednorazowa lub nadzwyczajna.`
+        : `⚠️ Wartość ${medianAnomaly.toFixed(1)}× powyżej mediany historycznej (${pctOfRev.toFixed(1)}% przychodów). Możliwy odpis, restrukturyzacja lub zdarzenie jednorazowe.`
+      return { flagged: true, description: desc }
+    }
+    return null
   }
 
   // ── BALANCE SHEET rows ──
@@ -442,15 +462,15 @@ function FinancialReport({ earnings: e, quote: q, currency }: { earnings: Earnin
                       {row.label}
                     </td>
                     {vals.map((v, vi) => {
-                      const flagged = isOneTimeItem(row.key, vals, vi, ann[vi].revenue)
+                      const oneTime = detectOneTime(row.key, vals, vi, ann[vi].revenue)
                       return (
-                        <td key={vi} className={`py-1.5 text-right ${row.isBold ? "font-bold" : ""} ${row.isSubtotal ? valColor(v) : v != null && v < 0 ? "text-bloomberg-red/70" : "text-muted-foreground"}`}>
+                        <td key={vi} className={`py-1.5 text-right ${row.isBold ? "font-bold" : ""} ${oneTime?.flagged ? "bg-yellow-500/10" : ""} ${row.isSubtotal ? valColor(v) : v != null && v < 0 ? "text-bloomberg-red/70" : "text-muted-foreground"}`}>
                           {fmtV(v)}
                           {row.isSubtotal && v != null && ann[vi].revenue ? (
                             <span className="text-[13px] text-muted-foreground/60 ml-0.5">({pct(v, ann[vi].revenue)})</span>
                           ) : null}
-                          {flagged && (
-                            <span className="ml-1 text-[13px] text-yellow-400 border border-yellow-400/40 rounded px-0.5" title="Pozycja jednorazowa — odbiega znacząco od normy historycznej">1x</span>
+                          {oneTime?.flagged && (
+                            <span className="ml-1 text-[12px] text-yellow-400 bg-yellow-400/20 border border-yellow-400/40 px-1 py-px font-bold cursor-help" title={oneTime.description}>⚠️ 1x</span>
                           )}
                         </td>
                       )
@@ -466,7 +486,40 @@ function FinancialReport({ earnings: e, quote: q, currency }: { earnings: Earnin
             </tbody>
           </table>
         </div>
-        <Explainer text="Wartości ujemne oznaczają koszty. % w nawiasach to udział w przychodach. YoY = zmiana ostatni rok vs poprzedni. Tag [1x] = pozycja jednorazowa." />
+        <Explainer text="Wartości ujemne oznaczają koszty. % w nawiasach to udział w przychodach. YoY = zmiana ostatni rok vs poprzedni. ⚠️ 1x = pozycja jednorazowa/nadzwyczajna." />
+
+        {/* ── ONE-TIME ITEMS ALERT BANNER ── */}
+        {(() => {
+          const alerts: { year: string; label: string; desc: string }[] = []
+          for (const row of plRows) {
+            const vals = ann.map(a => getPlValue(a, row.key))
+            for (let vi = 0; vi < vals.length; vi++) {
+              const ot = detectOneTime(row.key, vals, vi, ann[vi].revenue)
+              if (ot?.flagged) {
+                alerts.push({ year: yearFromDate(ann[vi].date), label: row.label, desc: ot.description })
+              }
+            }
+          }
+          if (alerts.length === 0) return null
+          // Group by year, show latest first
+          const latestAlerts = alerts.filter(a => a.year === yearFromDate(ann[ann.length - 1].date))
+          const olderAlerts = alerts.filter(a => a.year !== yearFromDate(ann[ann.length - 1].date))
+          return (
+            <div className="mt-3 bg-yellow-500/10 border border-yellow-500/30 p-3">
+              <div className="text-[13px] text-yellow-400 font-bold mb-2">⚠️ WYKRYTE POZYCJE NADZWYCZAJNE ({alerts.length})</div>
+              {latestAlerts.map((a, i) => (
+                <div key={i} className="text-[12px] text-foreground/80 mb-1.5">
+                  <span className="text-yellow-400 font-bold">{a.year} — {a.label}:</span> {a.desc}
+                </div>
+              ))}
+              {olderAlerts.length > 0 && (
+                <div className="text-[11px] text-muted-foreground mt-2 pt-2 border-t border-yellow-500/20">
+                  Wcześniejsze lata: {olderAlerts.map(a => `${a.year} ${a.label}`).join(", ")}
+                </div>
+              )}
+            </div>
+          )
+        })()}
 
         {/* ── P&L VISUAL BAR (stacked for latest year) ── */}
         {latest.revenue != null && latest.revenue > 0 && (
@@ -536,14 +589,14 @@ function FinancialReport({ earnings: e, quote: q, currency }: { earnings: Earnin
                         {row.label}
                       </td>
                       {vals.map((v, vi) => {
-                        const flagged = isOneTimeItem(row.key, vals, vi, qtr[vi].revenue)
+                        const oneTimeQ = detectOneTime(row.key, vals, vi, qtr[vi].revenue)
                         return (
-                          <td key={vi} className={`py-1.5 text-right ${row.isBold ? "font-bold" : ""} ${row.isSubtotal ? valColor(v) : v != null && v < 0 ? "text-bloomberg-red/70" : "text-muted-foreground"}`}>
+                          <td key={vi} className={`py-1.5 text-right ${row.isBold ? "font-bold" : ""} ${oneTimeQ?.flagged ? "bg-yellow-500/10" : ""} ${row.isSubtotal ? valColor(v) : v != null && v < 0 ? "text-bloomberg-red/70" : "text-muted-foreground"}`}>
                             {fmtV(v)}
                             {row.isSubtotal && v != null && qtr[vi].revenue ? (
                               <span className="text-[13px] text-muted-foreground/60 ml-0.5">({pct(v, qtr[vi].revenue)})</span>
                             ) : null}
-                            {flagged && (
+                            {oneTimeQ?.flagged && (
                               <span className="ml-1 text-[13px] text-yellow-400 border border-yellow-400/40 rounded px-0.5" title="Pozycja jednorazowa — odbiega znacząco od normy historycznej">1x</span>
                             )}
                           </td>
