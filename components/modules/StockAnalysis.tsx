@@ -344,6 +344,99 @@ export default function StockAnalysis() {
                   </div>
                 </div>
 
+                {/* QUANTUM TECHNICAL SCORECARD */}
+                {qv.techSpecs && (() => {
+                  const ts = qv.techSpecs
+                  const fidelityEmoji = ts.twoQubitFidelity.level === "top" ? "🔥" : ts.twoQubitFidelity.level === "solid" ? "🟢" : ts.twoQubitFidelity.level === "threshold" ? "🟡" : ts.twoQubitFidelity.level === "critical" ? "🔴" : "⚪"
+                  const tradeoffEmoji = (v: string) => v === "top" ? "🔥" : v === "solid" ? "🟢" : v === "moderate" ? "🟡" : "⚪"
+                  const deliveryEmoji = (s: string) => s === "delivered" ? "✅" : s === "on_track" ? "🔄" : s === "delayed" ? "🔴" : "📋"
+                  const ecEmoji = ts.errorCorrection.status === "on_track" ? "🟢" : ts.errorCorrection.status === "partial" ? "🟡" : "🔴"
+
+                  return (
+                    <div className="bg-purple-500/5 border border-purple-500/20 p-3 space-y-3">
+                      <div className="text-[13px] text-purple-400 font-bold">🔬 QUANTUM TECHNICAL SCORECARD</div>
+                      <div className="text-[11px] text-muted-foreground">Dane zweryfikowane: {ts.lastVerified} | Źródła: {ts.sources.join(", ")}</div>
+
+                      {/* Grupa 1: Jakość systemu */}
+                      <div>
+                        <div className="text-[12px] text-purple-300 font-bold mb-1.5">JAKOŚĆ SYSTEMU</div>
+                        <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+                          <div className="bg-bloomberg-bg p-2 border border-bloomberg-border/30">
+                            <div className="text-[11px] text-muted-foreground">2Q Gate Fidelity</div>
+                            <div className="text-[14px] font-bold">{fidelityEmoji} {ts.twoQubitFidelity.value}</div>
+                            <div className="text-[10px] text-muted-foreground">{ts.twoQubitFidelity.measured === "lab" ? "⚠️ Lab demo" : ts.twoQubitFidelity.measured === "production" ? "✅ System prod." : "❓ Nieokreślone"}</div>
+                          </div>
+                          <div className="bg-bloomberg-bg p-2 border border-bloomberg-border/30">
+                            <div className="text-[11px] text-muted-foreground">Kubity fizyczne</div>
+                            <div className="text-[14px] font-bold">{ts.physicalQubits.count?.toLocaleString() ?? "N/A"}</div>
+                            <div className="text-[10px] text-muted-foreground">{ts.physicalQubits.system}</div>
+                          </div>
+                          <div className="bg-bloomberg-bg p-2 border border-bloomberg-border/30">
+                            <div className="text-[11px] text-muted-foreground">Kubity logiczne</div>
+                            <div className="text-[14px] font-bold">{ts.logicalQubits.count ?? "N/A"}</div>
+                            <div className="text-[10px] text-muted-foreground">{ts.logicalQubits.count == null ? "⚠️ Nie raportowane" : ts.logicalQubits.source}</div>
+                          </div>
+                          <div className="bg-bloomberg-bg p-2 border border-bloomberg-border/30">
+                            <div className="text-[11px] text-muted-foreground">Coherence Time</div>
+                            <div className="text-[13px] font-bold">{ts.coherenceTime.value}</div>
+                          </div>
+                        </div>
+                        {ts.logicalQubits.count == null && ts.physicalQubits.count != null && (
+                          <div className="mt-1.5 text-[11px] text-yellow-400 bg-yellow-400/10 border border-yellow-400/20 p-1.5">
+                            ⚠️ Spółka nie raportuje qubitów logicznych. Liczba fizyczna ({ts.physicalQubits.count?.toLocaleString()}) jest metryką marketingową — rzeczywista moc obliczeniowa może być 100-1000× niższa.
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Grupa 2: Roadmap delivery */}
+                      <div>
+                        <div className="text-[12px] text-purple-300 font-bold mb-1.5">ROADMAPA — HISTORIA DELIVERY</div>
+                        <div className="space-y-1">
+                          {ts.roadmapDelivery.milestones.map((m, i) => (
+                            <div key={i} className="flex items-center gap-2 text-[11px]">
+                              <span>{deliveryEmoji(m.status)}</span>
+                              <span className="text-foreground">{m.target}</span>
+                            </div>
+                          ))}
+                        </div>
+                        <div className={`mt-1.5 text-[11px] font-bold ${ts.roadmapDelivery.reliability === "high" ? "text-bloomberg-green" : ts.roadmapDelivery.reliability === "medium" ? "text-bloomberg-amber" : "text-bloomberg-red"}`}>
+                          Wiarygodność roadmapy: {ts.roadmapDelivery.reliability === "high" ? "🟢 WYSOKA" : ts.roadmapDelivery.reliability === "medium" ? "🟡 ŚREDNIA" : ts.roadmapDelivery.reliability === "low" ? "🔴 NISKA" : "⚪ BRAK DANYCH"}
+                        </div>
+                      </div>
+
+                      {/* Grupa 3: Error Correction */}
+                      <div>
+                        <div className="text-[12px] text-purple-300 font-bold mb-1">ERROR CORRECTION</div>
+                        <div className="text-[11px] text-foreground/80">
+                          {ecEmoji} Status: {ts.errorCorrection.status === "on_track" ? "Na ścieżce komercyjnej" : ts.errorCorrection.status === "partial" ? "Plan bez demo" : "Brak roadmapy — RED FLAG"}
+                          {ts.errorCorrection.protocol && <span className="text-muted-foreground"> | Protokół: {ts.errorCorrection.protocol}</span>}
+                        </div>
+                        <div className="text-[11px] text-muted-foreground">
+                          Logiczne kubity: {ts.errorCorrection.logicalQubitMilestone} | Fault tolerance: {ts.errorCorrection.faultToleranceMilestone}
+                        </div>
+                      </div>
+
+                      {/* Grupa 4: Trade-off matrix */}
+                      <div>
+                        <div className="text-[12px] text-purple-300 font-bold mb-1">TRADE-OFF MATRIX</div>
+                        <div className="flex gap-4 text-[11px]">
+                          <span>Fidelity: {tradeoffEmoji(ts.tradeoff.fidelity)}</span>
+                          <span>Skalowalność: {tradeoffEmoji(ts.tradeoff.scalability)}</span>
+                          <span>Szybkość: {tradeoffEmoji(ts.tradeoff.speed)}</span>
+                          <span>Komercjalizacja: {tradeoffEmoji(ts.tradeoff.commercialization)}</span>
+                        </div>
+                      </div>
+
+                      {/* Scalability bottleneck */}
+                      <div className="text-[11px] text-muted-foreground bg-bloomberg-bg p-2 border border-bloomberg-border/30">
+                        <span className="text-purple-300 font-bold">Bottleneck skalowania:</span> {ts.scalability.bottleneck}
+                        <br /><span className="text-purple-300 font-bold">Limit obecny:</span> {ts.scalability.currentLimit}
+                        <br /><span className="text-purple-300 font-bold">Ścieżka:</span> {ts.scalability.scalingPath}
+                      </div>
+                    </div>
+                  )
+                })()}
+
                 {/* TRL + Architecture */}
                 <div className="grid grid-cols-2 gap-3">
                   <div className="bg-bloomberg-bg p-2.5 border border-bloomberg-border/30">
